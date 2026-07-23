@@ -330,6 +330,28 @@
   (`v3` → `v4`). `classificacao_hh` de todos os 23 códigos permanece
   `NAO_DEFINIDO` — o formulário define o código, não a classificação de
   HH.
+- **Buckets reais de perda de capacidade PCM**
+  (`docs/42_ADR_0015_BUCKETS_REAIS_PCM.md`): o responsável pelo produto
+  forneceu a planilha real de cálculo de PCM da MRS Logística com os 4
+  buckets efetivamente usados. `BucketCapacidade`
+  (`workforce_core/pcm.py`) substituído pelos 4 buckets reais —
+  `HORAS_AUSENTES`, `HORAS_PRESENTES_IMPRODUTIVAS`,
+  `HORAS_PRESENTES_NAO_APONTADAS`,
+  `HORAS_PRESENTES_PRODUTIVAS_NAO_RENTAVEIS` — substituindo os buckets
+  genéricos do Incremento 12 (mudança que quebra compatibilidade, sem
+  problema pois nunca foram usados com dado real). Nova
+  `mapeamento_categoria_bucket_relatorio_1_manutencao()` com o de-para
+  completo dos 20 códigos do Relatório 1 (ADR-0014) para os buckets reais
+  — `EE17`/`EE22` (manutenção em equipamentos/não planejada)
+  deliberadamente fora de qualquer bucket por padrão, porque só contam
+  como perda quando não vinculadas a uma OS planejada válida, checagem
+  que o sistema ainda não faz. Nova
+  `simular_cenario_relatorio_1_manutencao()`: deriva automaticamente
+  `pausas_nao_computaveis`/`improdutividade`/`atividades_nao_aplicaveis`
+  do apontamento real via os buckets — só "ausências externas" (férias/
+  motivos legais, sem fonte no sistema) continua manual.
+  `painel/pages/3_Capacidade_PCM.py` reescrita para usar o catálogo e o
+  mapeamento reais em vez dos exemplos genéricos.
 
 ### Testes
 - `python -m py_compile src/workforce_core/*.py src/workforce_storage/*.py src/workforce_sync/*.py tests/*.py`: OK.
@@ -349,8 +371,9 @@
   (após Incremento 9); 126 passed (após Incremento 10); 141 passed (após
   Incremento 11); 148 passed (após Incremento 12); 158 passed (após
   Incremento 13 — roadmap completo); 159 passed (após motivos de pausa de
-  exemplo); 167 passed (após catálogo real do Relatório de Atividades).
-  `node --test tests/js/motorJornada.test.mjs`: 17 passed (inalterado).
+  exemplo); 167 passed (após catálogo real do Relatório de Atividades);
+  172 passed (após buckets reais de PCM). `node --test
+  tests/js/motorJornada.test.mjs`: 17 passed (inalterado).
 - Caso mínimo obrigatório (seção 7.3) validado com os valores exatos da
   seção 7.4: jornada bruta 4h10, atividade bruta 3h50, pausa 0h20,
   atividade líquida 3h30, tempo não classificado 0h20.
@@ -437,3 +460,10 @@
   responsável pelo produto. Classificação produtiva/improdutiva de todos
   os 23 códigos continua `NAO_DEFINIDO`. 16 dos 23 códigos (deslocamento/
   espera/apoio) estão catalogados mas sem tela na interface de campo.
+- Buckets reais de PCM (ADR-0015): os percentuais da planilha fornecida
+  são de um período específico, não uma meta validada. `EE17`/`EE22`
+  ficam fora de qualquer bucket de perda por padrão porque o sistema não
+  verifica se estão vinculadas a uma OS planejada válida — uma
+  simplificação, não a distinção rentável/não-rentável real. `FÉRIAS` e
+  `MOTIVOS LEGAIS` continuam sem fonte no sistema, exigindo entrada manual
+  no simulador (`painel/pages/3_Capacidade_PCM.py`).

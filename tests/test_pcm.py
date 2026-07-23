@@ -1,7 +1,9 @@
 """Testes do Incremento 12: capacidade PCM.
 
-Cobre a formula e os buckets de docs/15_CAPACIDADE_PCM.md, e a regra
-"sempre mostrar premissas" da secao "Simulacao".
+Cobre a formula de docs/15_CAPACIDADE_PCM.md, a regra "sempre mostrar
+premissas" da secao "Simulacao", e os buckets reais da planilha de PCM da
+MRS Logistica fornecida em 2026-07-23 (ver
+docs/42_ADR_0015_BUCKETS_REAIS_PCM.md).
 """
 
 from datetime import datetime, timedelta
@@ -9,7 +11,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from workforce_core import MotorJornada, TipoEventoSecundario
-from workforce_core.catalogo import Categoria, catalogo_padrao
+from workforce_core.catalogo import Categoria, catalogo_padrao, catalogo_relatorio_1_manutencao
 from workforce_core.consolidacao import resumo_consolidado
 from workforce_core.pcm import (
     BucketCapacidade,
@@ -17,7 +19,9 @@ from workforce_core.pcm import (
     agrupar_por_bucket,
     capacidade_bruta,
     capacidade_efetiva,
+    mapeamento_categoria_bucket_relatorio_1_manutencao,
     simular_cenario,
+    simular_cenario_relatorio_1_manutencao,
 )
 
 
@@ -71,20 +75,21 @@ def test_capacidade_efetiva_nunca_fica_negativa():
     assert efetiva == timedelta()
 
 
-def test_agrupar_por_bucket_mapeia_categoria_e_lacuna():
+def test_agrupar_por_bucket_mapeia_categoria_e_nao_apontado():
     jornada = _jornada_completa()
     resumo = resumo_consolidado([jornada], catalogo_padrao())
 
     mapeamento = {
-        Categoria.ATIVIDADE_PLANEJADA: BucketCapacidade.PRESENTE_PRODUTIVO_APLICAVEL,
-        Categoria.DESLOCAMENTO_RODOVIARIO: BucketCapacidade.DESLOCAMENTO,
+        Categoria.ATIVIDADE_PLANEJADA: BucketCapacidade.HORAS_PRESENTES_PRODUTIVAS_NAO_RENTAVEIS,
+        Categoria.DESLOCAMENTO_RODOVIARIO: BucketCapacidade.HORAS_PRESENTES_PRODUTIVAS_NAO_RENTAVEIS,
     }
 
     buckets = agrupar_por_bucket(resumo, mapeamento)
 
-    assert buckets[BucketCapacidade.PRESENTE_PRODUTIVO_APLICAVEL] == timedelta(hours=2, minutes=50)
-    assert buckets[BucketCapacidade.DESLOCAMENTO] == timedelta(minutes=30)
-    assert buckets[BucketCapacidade.LACUNA_NAO_APONTADO] == timedelta(minutes=30)
+    assert buckets[BucketCapacidade.HORAS_PRESENTES_PRODUTIVAS_NAO_RENTAVEIS] == timedelta(
+        hours=3, minutes=20
+    )
+    assert buckets[BucketCapacidade.HORAS_PRESENTES_NAO_APONTADAS] == timedelta(minutes=30)
     # PAUSA_TESTE (categoria=None no catalogo padrao) cai em "sem bucket conhecido".
     assert buckets[None] == timedelta(minutes=10)
 
@@ -95,7 +100,7 @@ def test_agrupar_por_bucket_sem_lacuna_nao_adiciona_chave():
     resumo = resumo_consolidado([jornada], catalogo_padrao())
 
     buckets = agrupar_por_bucket(resumo, {})
-    assert BucketCapacidade.LACUNA_NAO_APONTADO not in buckets
+    assert BucketCapacidade.HORAS_PRESENTES_NAO_APONTADAS not in buckets
 
 
 def test_simular_cenario_sempre_devolve_premissas():
@@ -112,4 +117,81 @@ def test_simular_cenario_sempre_devolve_premissas():
     assert resultado.premissas is premissas
     assert resultado.capacidade_bruta == timedelta(hours=40)
     assert resultado.capacidade_efetiva == timedelta(hours=39)
-    assert BucketCapacidade.LACUNA_NAO_APONTADO in resultado.por_bucket
+    assert BucketCapacidade.HORAS_PRESENTES_NAO_APONTADAS in resultado.por_bucket
+
+
+# ----------------------------------------------------------------------
+# Mapeamento e simulacao com os buckets reais da MRS (ADR-0015)
+# ----------------------------------------------------------------------
+def _jornada_relatorio_1(matricula="12345"):
+    """Jornada usando os codigos reais do Relatorio 1: deslocamento (EE12),
+    atividade planejada (EE17), pausa para refeicao (EE02), e uma lacuna
+    nao classificada no final.
+    """
+    motor = MotorJornada(matricula)
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_evento_secundario(_dt(8, 0), TipoEventoSecundario.DESLOCAMENTO, "EE12")
+    motor.encerrar_evento_secundario(_dt(8, 30))
+    motor.iniciar_atividade(_dt(8, 30))
+    motor.iniciar_pausa(_dt(9, 0), "EE02")
+    motor.finalizar_pausa(_dt(9, 10))
+    motor.encerrar_atividade(_dt(11, 30))
+    motor.encerrar_jornada(_dt(12, 0))  # 30min de lacuna
+    return motor.jornada
+
+
+def test_mapeamento_real_nao_inclui_atividade_planejada_nem_atendimento_falha():
+    mapeamento = mapeamento_categoria_bucket_relatorio_1_manutencao()
+    assert Categoria.ATIVIDADE_PLANEJADA not in mapeamento
+    assert Categoria.ATENDIMENTO_FALHA not in mapeamento
+
+
+def test_mapeamento_real_refeicao_e_ausente():
+    mapeamento = mapeamento_categoria_bucket_relatorio_1_manutencao()
+    assert mapeamento[Categoria.REFEICAO] == BucketCapacidade.HORAS_AUSENTES
+
+
+def test_mapeamento_real_deslocamento_e_produtivo_nao_rentavel():
+    mapeamento = mapeamento_categoria_bucket_relatorio_1_manutencao()
+    assert (
+        mapeamento[Categoria.DESLOCAMENTO_RODOVIARIO]
+        == BucketCapacidade.HORAS_PRESENTES_PRODUTIVAS_NAO_RENTAVEIS
+    )
+
+
+def test_simular_cenario_relatorio_1_deriva_termos_automaticamente():
+    jornada = _jornada_relatorio_1()
+    resumo = resumo_consolidado([jornada], catalogo_relatorio_1_manutencao())
+
+    resultado = simular_cenario_relatorio_1_manutencao(
+        pessoas_previstas=1,
+        horas_escala=timedelta(hours=8),
+        resumo=resumo,
+    )
+
+    # Refeicao (EE02, 10min) contabilizada automaticamente como ausencia.
+    assert resultado.premissas.ausencias == timedelta(minutes=10)
+    # Lacuna (30min) automaticamente como "pausas_nao_computaveis".
+    assert resultado.premissas.pausas_nao_computaveis == timedelta(minutes=30)
+    # Deslocamento (EE12, 30min) automaticamente como "nao aplicavel ao plano".
+    assert resultado.premissas.atividades_nao_aplicaveis == timedelta(minutes=30)
+    # Nenhum codigo IMPRODUTIVO nesta jornada de exemplo.
+    assert resultado.premissas.improdutividade == timedelta()
+
+    assert resultado.capacidade_bruta == timedelta(hours=8)
+    esperado = timedelta(hours=8) - timedelta(minutes=10) - timedelta(minutes=30) - timedelta(minutes=30)
+    assert resultado.capacidade_efetiva == esperado
+
+
+def test_simular_cenario_relatorio_1_soma_ausencias_externas():
+    jornada = _jornada_relatorio_1()
+    resumo = resumo_consolidado([jornada], catalogo_relatorio_1_manutencao())
+
+    resultado = simular_cenario_relatorio_1_manutencao(
+        pessoas_previstas=1,
+        horas_escala=timedelta(hours=8),
+        resumo=resumo,
+        ausencias_externas=timedelta(hours=1),  # ex.: ferias/motivos legais
+    )
+
+    assert resultado.premissas.ausencias == timedelta(hours=1, minutes=10)

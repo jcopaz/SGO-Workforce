@@ -1,10 +1,11 @@
 """Capacidade PCM - piloto tecnico (Incremento 12).
 
-Formula e buckets de docs/15_CAPACIDADE_PCM.md. Fonte oficial de escala,
-ausencias/ferias e buckets oficiais de perdas sao decisoes pendentes
-(docs/27 secao 15.3) - ver docs/39_ADR_0012_CAPACIDADE_PCM.md. O
-mapeamento categoria->bucket nesta pagina e apenas um EXEMPLO, nunca uma
-classificacao oficial.
+Formula de docs/15_CAPACIDADE_PCM.md. Buckets e mapeamento categoria ->
+bucket vem da planilha real de PCM da MRS Logistica, fornecida pelo
+responsavel pelo produto em 2026-07-23 - ver
+docs/42_ADR_0015_BUCKETS_REAIS_PCM.md. Fonte oficial de escala e de
+ausencias externas (ferias/motivos legais) continuam pendentes
+(docs/27 secao 15.3) - por isso continuam sendo entrada manual aqui.
 """
 
 from __future__ import annotations
@@ -20,17 +21,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import streamlit as st
 
 from dados import carregar_jornadas, formatar_horas, montar_resumo
-from workforce_core.catalogo import Categoria, catalogo_padrao
-from workforce_core.pcm import BucketCapacidade, PremissasCenario, simular_cenario
+from workforce_core.catalogo import catalogo_relatorio_1_manutencao
+from workforce_core.pcm import (
+    mapeamento_categoria_bucket_relatorio_1_manutencao,
+    simular_cenario_relatorio_1_manutencao,
+)
 
 st.set_page_config(page_title="SGO Workforce | Capacidade PCM (piloto)", layout="wide")
 
 st.warning(
-    "Piloto tecnico. Fonte oficial de escala, ausencias/ferias e buckets "
-    "oficiais de perdas ainda sao decisoes pendentes "
-    "(ver docs/39_ADR_0012_CAPACIDADE_PCM.md). O mapeamento categoria -> "
-    "bucket abaixo e um EXEMPLO para demonstrar o simulador, nao uma "
-    "classificacao validada com a operacao."
+    "Piloto tecnico. Os buckets de perda e o mapeamento categoria -> bucket "
+    "abaixo vem da planilha real de PCM da MRS Logistica (ver "
+    "docs/42_ADR_0015_BUCKETS_REAIS_PCM.md), mas fonte oficial de escala e "
+    "de ausencias externas (ferias/motivos legais) ainda sao decisoes "
+    "pendentes (docs/27 secao 15.3) - por isso continuam sendo digitadas "
+    "manualmente aqui."
 )
 
 st.title("SGO Workforce | Capacidade PCM (piloto)")
@@ -51,7 +56,8 @@ if not jornadas:
     st.info("Nenhuma jornada encontrada nesse diretorio.")
     st.stop()
 
-resumo = montar_resumo(jornadas)
+catalogo = catalogo_relatorio_1_manutencao()
+resumo = montar_resumo(jornadas, catalogo)
 
 st.subheader("1. Premissas de escala (sempre exibidas - docs/15, 'Simulacao')")
 col1, col2, col3 = st.columns(3)
@@ -64,45 +70,40 @@ with col2:
         "Horas de escala (por pessoa, no periodo)", min_value=0.0, value=8.0, step=0.5, key="pcm_horas_escala"
     )
 with col3:
-    ausencias_horas = st.number_input(
-        "Ausencias (horas, total do periodo)", min_value=0.0, value=0.0, step=0.5, key="pcm_ausencias"
+    ausencias_externas_horas = st.number_input(
+        "Ausencias externas: ferias + motivos legais (horas) - sem fonte no sistema ainda",
+        min_value=0.0,
+        value=0.0,
+        step=0.5,
+        key="pcm_ausencias_externas",
     )
 
-st.subheader("2. Mapeamento categoria -> bucket (EXEMPLO, nao oficial)")
-_MAPEAMENTO_EXEMPLO = {
-    Categoria.ATIVIDADE_PLANEJADA: BucketCapacidade.PRESENTE_PRODUTIVO_APLICAVEL,
-    Categoria.ATENDIMENTO_FALHA: BucketCapacidade.FALHA_CORRETIVA,
-    Categoria.DESLOCAMENTO_RODOVIARIO: BucketCapacidade.DESLOCAMENTO,
-    Categoria.DESLOCAMENTO_FERROVIARIO: BucketCapacidade.DESLOCAMENTO,
-    Categoria.AGUARDANDO_MATERIAL: BucketCapacidade.ESPERA_OPERACIONAL,
-    Categoria.AGUARDANDO_INTERVALO_LIBERACAO: BucketCapacidade.ESPERA_OPERACIONAL,
-    Categoria.APOIO_OPERACIONAL: BucketCapacidade.PRESENTE_PRODUTIVO_NAO_APLICAVEL,
-    Categoria.REFEICAO: BucketCapacidade.PAUSA_LEGAL_REFEICAO,
-    Categoria.DDS: BucketCapacidade.TREINAMENTO_DDS_REUNIAO,
-    Categoria.REUNIAO: BucketCapacidade.TREINAMENTO_DDS_REUNIAO,
-    Categoria.TREINAMENTO: BucketCapacidade.TREINAMENTO_DDS_REUNIAO,
-    Categoria.ATIVIDADE_ADMINISTRATIVA: BucketCapacidade.PRESENTE_PRODUTIVO_NAO_APLICAVEL,
-}
+st.subheader("2. Mapeamento categoria -> bucket (planilha real MRS, ADR-0015)")
+st.caption(
+    "Manutencao em equipamentos (EE17) e Manutencao nao planejada (EE22) "
+    "nao aparecem aqui: na planilha real, so contam como perda quando NAO "
+    "vinculadas a uma OS planejada valida - o sistema ainda nao verifica "
+    "isso automaticamente, entao ficam fora de qualquer bucket de perda "
+    "por padrao (tratadas como capacidade efetiva)."
+)
+mapeamento = mapeamento_categoria_bucket_relatorio_1_manutencao()
 st.dataframe(
-    [{"categoria": c.value, "bucket": b.value} for c, b in _MAPEAMENTO_EXEMPLO.items()],
+    [{"categoria": c.value, "bucket": b.value} for c, b in mapeamento.items()],
     width="stretch",
 )
 
-resultado = simular_cenario(
-    PremissasCenario(
-        pessoas_previstas=int(pessoas_previstas),
-        horas_escala=timedelta(hours=float(horas_escala)),
-        ausencias=timedelta(hours=float(ausencias_horas)),
-    ),
-    resumo,
-    _MAPEAMENTO_EXEMPLO,
+resultado = simular_cenario_relatorio_1_manutencao(
+    pessoas_previstas=int(pessoas_previstas),
+    horas_escala=timedelta(hours=float(horas_escala)),
+    resumo=resumo,
+    ausencias_externas=timedelta(hours=float(ausencias_externas_horas)),
 )
 
 st.subheader("3. Buckets observados (a partir das jornadas carregadas)")
 st.dataframe(
     [
         {
-            "bucket": (bucket.value if bucket is not None else "SEM_BUCKET_CONHECIDO"),
+            "bucket": (bucket.value if bucket is not None else "SEM_PERDA (produtivo/rentavel)"),
             "horas": formatar_horas(duracao),
         }
         for bucket, duracao in sorted(
@@ -113,14 +114,14 @@ st.dataframe(
 )
 
 st.subheader("4. Resultado")
-col_a, col_b = st.columns(2)
+col_a, col_b, col_c = st.columns(3)
 col_a.metric("Capacidade bruta", formatar_horas(resultado.capacidade_bruta))
-col_b.metric("Capacidade efetiva (so desconta ausencias nesta pagina)", formatar_horas(resultado.capacidade_efetiva))
+col_b.metric("Capacidade efetiva", formatar_horas(resultado.capacidade_efetiva))
+col_c.metric("Ausencias totais (externas + refeicao apontada)", formatar_horas(resultado.premissas.ausencias))
 
 st.caption(
-    "Pausas nao computaveis, improdutividade e atividades nao aplicaveis "
-    "da formula de docs/15 nao sao descontadas automaticamente aqui - "
-    "isso exigiria decidir quais buckets contam como cada termo, o que e "
-    "parte da classificacao produtiva/improdutiva ainda pendente "
-    "(ADR-0005). Use os buckets observados acima para decidir manualmente."
+    "Pausas nao computaveis, improdutividade e atividades nao aplicaveis ao "
+    "plano agora sao derivadas automaticamente do apontamento real via os "
+    "buckets acima (ADR-0015) - so as ausencias externas (ferias/motivos "
+    "legais) continuam manuais, por falta de fonte de RH/escala conectada."
 )
