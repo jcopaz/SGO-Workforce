@@ -29,3 +29,6 @@ dados_locais/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Estado interno do Claude Code (nao e conteudo do projeto)
+.claude/scheduled_tasks.lock

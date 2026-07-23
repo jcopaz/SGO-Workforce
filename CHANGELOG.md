@@ -283,6 +283,19 @@
   `PAUSADA` durante uma pausa em curso, uma segunda tentativa de pausa
   levantava `PausaExigeAtividadeAtivaError` em vez de `PausaJaAtivaError`.
   Ordem invertida para checar `_pausa_ativa` primeiro.
+- **Bug real encontrado no primeiro teste manual em navegador**
+  (`interface_campo/js/app.js`): o botão "Iniciar jornada" quebrava com
+  "Falha inesperada ao registrar o evento" no primeiro uso do app (antes
+  de existir qualquer jornada no IndexedDB), porque tentava chamar
+  `motor.iniciarJornada(...)` com `motor` ainda `null`. Corrigido com
+  `prepararMotorComMatricula()`, chamada no clique do botão para garantir
+  que o motor existe antes de iniciar a jornada (unifica o caminho do
+  primeiro uso com o de "Iniciar nova jornada", que antes usava a função
+  `reiniciar()`, agora removida). `CACHE_VERSAO` do Service Worker
+  incrementada (`v1` → `v2`) para que a correção realmente chegue ao
+  navegador — o Service Worker cacheia `app.js` e não busca a versão nova
+  sozinho sem essa mudança de versão. Detalhes em
+  `docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md`.
 
 ### Testes
 - `python -m py_compile src/workforce_core/*.py src/workforce_storage/*.py src/workforce_sync/*.py tests/*.py`: OK.

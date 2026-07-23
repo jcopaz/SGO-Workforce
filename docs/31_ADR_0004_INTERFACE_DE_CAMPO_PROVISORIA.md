@@ -112,6 +112,51 @@ ser feito manualmente** por alguém com acesso a um navegador (abrir
 `http://localhost:8000` do próprio computador ou de um celular na mesma
 rede) antes de qualquer piloto real com colaboradores.
 
+### Atualização: primeiro teste manual encontrou um bug real (2026-07-23)
+
+O responsável pelo produto testou a interface pela primeira vez em um
+navegador real (`http://localhost:8000`) e reproduziu exatamente o risco
+descrito acima: o botão "Iniciar jornada", no primeiro uso do app (antes
+de qualquer jornada existir no IndexedDB), disparava "Falha inesperada ao
+registrar o evento" em vez de iniciar a jornada.
+
+**Causa raiz**: em `interface_campo/js/app.js`, o botão "Iniciar jornada"
+chamava `motor.iniciarJornada(...)` presumindo que a variável `motor` já
+existia. Isso só é verdade quando uma jornada foi recuperada do IndexedDB
+(`iniciar()`) ou quando o usuário já tinha clicado em "Iniciar nova
+jornada" depois de encerrar uma jornada anterior (`reiniciar()`, que
+criava o `MotorJornada`). No **primeiro uso do app** (nenhuma jornada
+gravada ainda), `motor` permanecia `null`, e `motor.iniciarJornada(...)`
+lançava `TypeError: Cannot read properties of null` — uma exceção comum
+do JavaScript, não uma `Erros.ErroDominio`, então caía direto na mensagem
+genérica de erro do `catch` em `executar()`.
+
+**Corrigido**: o botão "Iniciar jornada" agora chama
+`prepararMotorComMatricula()` antes de iniciar a jornada — essa função
+cria o `MotorJornada` a partir do campo de matrícula sempre que `motor`
+ainda não existe ou está em `NAO_INICIADA`, unificando o caminho do
+primeiro uso com o caminho de "Iniciar nova jornada" (que antes usava a
+função `reiniciar()`, agora removida em favor dessa única função
+compartilhada).
+
+**Efeito colateral encontrado junto**: como o Service Worker cacheia
+`app.js` como parte do app shell (cache-first), corrigir o arquivo no
+disco não é suficiente — o navegador continuaria servindo a cópia antiga
+do cache até a versão do cache mudar. `CACHE_VERSAO` em
+`service-worker.js` foi incrementada (`v1` → `v2`) para forçar a
+invalidação do cache antigo na próxima ativação. Isso é uma lição
+operacional válida para qualquer atualização futura do app shell: **mudar
+algo em `interface_campo/js/` ou `interface_campo/css/` sem incrementar
+`CACHE_VERSAO` faz o Service Worker continuar servindo a versão antiga
+indefinidamente**, mesmo com F5/recarregamento normal.
+
+Este é exatamente o tipo de defeito que a seção "Validação NÃO realizada"
+acima previa não seria pego pelos testes de lógica em Node (que testam
+`motorJornada.js`/`calculo.js` isoladamente, não a integração de
+`app.js` com o DOM) — só apareceu no primeiro teste manual em navegador
+real, confirmando por que essa validação continua sendo obrigatória antes
+de qualquer piloto.
+
 ## Alternativas consideradas
 
 - **Esperar a API real existir antes de construir qualquer interface**:

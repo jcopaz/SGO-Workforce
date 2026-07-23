@@ -108,7 +108,10 @@ function render() {
     els.botoes.appendChild(
       botao(
         "Iniciar jornada",
-        () => executar(() => motor.iniciarJornada(new Date())),
+        () => {
+          if (!prepararMotorComMatricula()) return;
+          executar(() => motor.iniciarJornada(new Date()));
+        },
         { destaque: true }
       )
     );
@@ -120,7 +123,17 @@ function render() {
   if (motor.jornada.estado === "ENCERRADA") {
     els.status.textContent = `Jornada encerrada as ${formatoHora(motor.jornada.fim)}.`;
     renderResumoEncerrado();
-    els.botoes.appendChild(botao("Iniciar nova jornada", () => reiniciar(), { destaque: true }));
+    els.botoes.appendChild(
+      botao(
+        "Iniciar nova jornada",
+        () => {
+          motor = null;
+          limparMensagem();
+          render();
+        },
+        { destaque: true }
+      )
+    );
     return;
   }
 
@@ -179,15 +192,20 @@ async function executar(transicao) {
   render();
 }
 
-function reiniciar() {
+// Cria o motor a partir da matricula digitada, se ainda nao existir um
+// motor para uma jornada nao iniciada. Chamado no clique de "Iniciar
+// jornada" - nao no carregamento da pagina - para sempre usar o valor mais
+// recente do campo de matricula.
+function prepararMotorComMatricula() {
   const matricula = els.matricula.value.trim();
   if (!matricula) {
     mostrarAviso("Informe a matricula antes de iniciar a jornada.");
-    return;
+    return false;
   }
-  motor = new MotorJornada({ colaboradorMatricula: matricula });
-  limparMensagem();
-  render();
+  if (!motor || motor.jornada.estado === "NAO_INICIADA") {
+    motor = new MotorJornada({ colaboradorMatricula: matricula });
+  }
+  return true;
 }
 
 async function iniciar() {
