@@ -23,12 +23,17 @@ from typing import Dict, List, Optional
 
 
 class Categoria(str, Enum):
-    """Categorias iniciais de evento, conforme docs/07_MOTOR_EVENTOS_E_HH.md."""
+    """Categorias iniciais de evento, conforme docs/07_MOTOR_EVENTOS_E_HH.md,
+    estendidas em 2026-07-23 com as categorias do "Relatorio de Atividades
+    Diarias de Manutencao" (Relatorio 1, codigos EE01-EE24) fornecido pelo
+    responsavel pelo produto - ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md.
+    """
 
     ATIVIDADE_PLANEJADA = "ATIVIDADE_PLANEJADA"
     ATENDIMENTO_FALHA = "ATENDIMENTO_FALHA"
     DESLOCAMENTO_RODOVIARIO = "DESLOCAMENTO_RODOVIARIO"
     DESLOCAMENTO_FERROVIARIO = "DESLOCAMENTO_FERROVIARIO"
+    DESLOCAMENTO_A_PE = "DESLOCAMENTO_A_PE"
     REFEICAO = "REFEICAO"
     DDS = "DDS"
     REUNIAO = "REUNIAO"
@@ -38,6 +43,21 @@ class Categoria(str, Enum):
     APOIO_OPERACIONAL = "APOIO_OPERACIONAL"
     ATIVIDADE_ADMINISTRATIVA = "ATIVIDADE_ADMINISTRATIVA"
     OUTROS_CATALOGADOS = "OUTROS_CATALOGADOS"
+
+    # Categorias do Relatorio 1 (EE01-EE24) sem correspondencia acima.
+    PREPARACAO_JORNADA = "PREPARACAO_JORNADA"
+    AGUARDANDO_CCO = "AGUARDANDO_CCO"
+    TREM_PARADO_FRENTE_SERVICO = "TREM_PARADO_FRENTE_SERVICO"
+    RESTRICAO_INFRAESTRUTURA = "RESTRICAO_INFRAESTRUTURA"
+    SERVICO_INTERNO_COORDENACAO = "SERVICO_INTERNO_COORDENACAO"
+    TRABALHO_NAO_DISTRIBUIDO = "TRABALHO_NAO_DISTRIBUIDO"
+    AGUARDANDO_SEQUENCIA_SERVICO = "AGUARDANDO_SEQUENCIA_SERVICO"
+    CONSULTA_DOCUMENTACAO_TECNICA = "CONSULTA_DOCUMENTACAO_TECNICA"
+    PREPARAR_ATIVIDADE = "PREPARAR_ATIVIDADE"
+    DESMONTAR_ATIVIDADE = "DESMONTAR_ATIVIDADE"
+    CARREGAR_VEICULO = "CARREGAR_VEICULO"
+    DESCARREGAR_VEICULO = "DESCARREGAR_VEICULO"
+    SMS = "SMS"
 
 
 class ClassificacaoHH(str, Enum):
@@ -165,3 +185,89 @@ def catalogo_padrao() -> CatalogoMotivos:
         )
     )
     return catalogo
+
+
+# Codigo EE -> (descricao exata do formulario, categoria, tipo de registro).
+# "tipo_registro" indica como o codigo se encaixa no motor de dominio hoje:
+# - "atividade": e a propria Atividade (nao e um motivo de pausa/evento);
+# - "pausa": motivo de Pausa (interrompe uma Atividade em andamento);
+# - "evento_secundario": motivo de Deslocamento/Espera/Apoio (vinculado
+#   diretamente a Jornada, mutuamente exclusivo com a Atividade principal).
+# Ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md para a
+# justificativa codigo a codigo.
+_RELATORIO_1_ENTRADAS = [
+    ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario"),
+    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa"),
+    ("EE03", "Aguardando CCO", Categoria.AGUARDANDO_CCO, "evento_secundario"),
+    ("EE04", "Falta de ferramenta ou material", Categoria.AGUARDANDO_MATERIAL, "evento_secundario"),
+    ("EE05", "Trem parado na frente de serviço", Categoria.TREM_PARADO_FRENTE_SERVICO, "evento_secundario"),
+    ("EE06", "Restrição de infraestrutura", Categoria.RESTRICAO_INFRAESTRUTURA, "evento_secundario"),
+    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa"),
+    ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario"),
+    ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario"),
+    ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario"),
+    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa"),
+    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario"),
+    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario"),
+    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario"),
+    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario"),
+    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario"),
+    ("EE17", "Manutenção em equipamentos", Categoria.ATIVIDADE_PLANEJADA, "atividade"),
+    ("EE18", "Suporte da manutenção", Categoria.APOIO_OPERACIONAL, "evento_secundario"),
+    ("EE19", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario"),
+    ("EE20", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario"),
+    ("EE21", "SMS", Categoria.SMS, "pausa"),
+    ("EE22", "Manutenção não planejada", Categoria.ATENDIMENTO_FALHA, "atividade"),
+    ("EE23", "Treinamento", Categoria.TREINAMENTO, "pausa"),
+    # EE24 "Horas nao apontadas" nao vira entrada de catalogo: e o proprio
+    # conceito de "tempo nao classificado" ja calculado automaticamente a
+    # partir das lacunas entre eventos (workforce_core.calculo), nao um
+    # motivo que alguem escolhe ao iniciar um evento. Ver ADR-0014.
+]
+
+
+def catalogo_relatorio_1_manutencao() -> CatalogoMotivos:
+    """Catalogo baseado no "Relatorio de Atividades Diarias de Manutencao"
+    (Relatorio 1, codigos EE01-EE23) da Gerencia de Manutencao
+    Eletroeletronica, fornecido pelo responsavel pelo produto em
+    2026-07-23 - o formulario que a equipe efetivamente usa hoje (o
+    responsavel confirmou que apenas o Relatorio 1 esta em uso; um
+    segundo formulario mais antigo, com codigos numericos 10-250, nao
+    esta mais em uso e nao foi incorporado aqui).
+
+    Diferente de catalogo_padrao(), estas entradas nao sao um exemplo de
+    teste - sao os codigos e descricoes reais do formulario em papel. Ainda
+    assim, `classificacao_hh` permanece NAO_DEFINIDO para todas: o codigo
+    existir no formulario nao implica uma classificacao
+    produtiva/improdutiva/nao computavel validada - essa continua sendo
+    uma decisao de negocio separada e pendente (docs/27 secao 6, itens 6-9).
+
+    Ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md para a
+    justificativa completa, incluindo por que EE24 nao aparece aqui e por
+    que os codigos "evento_secundario" ainda nao tem tela propria na
+    interface de campo.
+    """
+    catalogo = CatalogoMotivos()
+    for codigo, descricao, categoria, _tipo_registro in _RELATORIO_1_ENTRADAS:
+        catalogo.registrar(
+            EntradaCatalogo(
+                codigo=codigo,
+                descricao=descricao,
+                categoria=categoria,
+                classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+            )
+        )
+    return catalogo
+
+
+def codigos_relatorio_1_por_tipo_registro(tipo_registro: str) -> List[str]:
+    """Lista os codigos EE cujo tipo_registro (ver _RELATORIO_1_ENTRADAS)
+    e o informado - por exemplo, "pausa" para os codigos que interrompem
+    uma atividade em andamento. Usado para alimentar o seletor da
+    interface de campo sem duplicar a classificacao em dois lugares.
+    """
+    return [
+        codigo
+        for codigo, _descricao, _categoria, tipo in _RELATORIO_1_ENTRADAS
+        if tipo == tipo_registro
+    ]

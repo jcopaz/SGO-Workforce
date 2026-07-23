@@ -311,6 +311,25 @@
   `docs/32_ADR_0005_CATALOGO_DESLOCAMENTO_ESPERA_APOIO.md`, seção
   "Atualização". `CACHE_VERSAO` do Service Worker incrementada de novo
   (`v2` → `v3`).
+- **Catálogo real do Relatório de Atividades Diárias de Manutenção**
+  (`docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md`): o
+  responsável pelo produto forneceu o formulário em papel que a equipe da
+  MRS Logística usa hoje (Relatório 1, códigos `EE01`–`EE24`),
+  substituindo os motivos de exemplo genéricos. Adicionado
+  `catalogo_relatorio_1_manutencao()` e
+  `codigos_relatorio_1_por_tipo_registro()` (`workforce_core/catalogo.py`)
+  com os 23 códigos catalogáveis (`EE24` "Horas não apontadas" não vira
+  entrada — já corresponde ao `tempo_nao_classificado` calculado
+  automaticamente), mapeados código a código para `atividade`
+  (`EE17`/`EE22`), `pausa` (`EE02`, `EE07`, `EE11`, `EE21`, `EE23`) ou
+  `evento_secundario` (os outros 16). Nova categoria `DESLOCAMENTO_A_PE`.
+  O seletor de pausa da interface de campo agora usa os 5 códigos reais de
+  pausa em vez dos exemplos genéricos; os 16 códigos de evento secundário
+  ficam catalogados mas sem tela própria ainda (próximo passo natural,
+  não implementado nesta sessão). `CACHE_VERSAO` incrementada de novo
+  (`v3` → `v4`). `classificacao_hh` de todos os 23 códigos permanece
+  `NAO_DEFINIDO` — o formulário define o código, não a classificação de
+  HH.
 
 ### Testes
 - `python -m py_compile src/workforce_core/*.py src/workforce_storage/*.py src/workforce_sync/*.py tests/*.py`: OK.
@@ -330,8 +349,8 @@
   (após Incremento 9); 126 passed (após Incremento 10); 141 passed (após
   Incremento 11); 148 passed (após Incremento 12); 158 passed (após
   Incremento 13 — roadmap completo); 159 passed (após motivos de pausa de
-  exemplo). `node --test tests/js/motorJornada.test.mjs`: 17 passed
-  (inalterado).
+  exemplo); 167 passed (após catálogo real do Relatório de Atividades).
+  `node --test tests/js/motorJornada.test.mjs`: 17 passed (inalterado).
 - Caso mínimo obrigatório (seção 7.3) validado com os valores exatos da
   seção 7.4: jornada bruta 4h10, atividade bruta 3h50, pausa 0h20,
   atividade líquida 3h30, tempo não classificado 0h20.
@@ -412,3 +431,9 @@
   obrigatórios sem valor padrão. GPS não é obrigatório para nenhuma
   transição de jornada/atividade. Retenção, perfis autorizados e validação
   de LGPD continuam pendentes antes de qualquer uso real (ADR-0007).
+- Catálogo real do Relatório de Atividades (ADR-0014): mapeamento
+  código→tipo de registro (pausa/evento secundário/atividade) é
+  interpretação de quem implementou, não confirmada linha a linha com o
+  responsável pelo produto. Classificação produtiva/improdutiva de todos
+  os 23 códigos continua `NAO_DEFINIDO`. 16 dos 23 códigos (deslocamento/
+  espera/apoio) estão catalogados mas sem tela na interface de campo.

@@ -21,27 +21,31 @@ const els = {
 
 let motor = null;
 
-// Exemplos ilustrativos das categorias ja citadas em
-// docs/07_MOTOR_EVENTOS_E_HH.md, adicionados a pedido do responsavel pelo
-// produto em 2026-07-23 apos o primeiro teste manual (ver ADR-0005,
-// secao "Atualizacao"). NAO sao o catalogo oficial de pausas - isso
-// continua pendente de validacao com a operacao (Incremento 5).
-const MOTIVOS_PAUSA_EXEMPLO = [
-  { codigo: "REFEICAO", rotulo: "Refeicao" },
-  { codigo: "DDS", rotulo: "DDS" },
-  { codigo: "REUNIAO", rotulo: "Reuniao" },
-  { codigo: "TREINAMENTO", rotulo: "Treinamento" },
-  { codigo: "PAUSA_TESTE", rotulo: "PAUSA_TESTE (outro)" },
+// Motivos de pausa do "Relatorio de Atividades Diarias de Manutencao"
+// (Relatorio 1, codigos EE01-EE23), o formulario em papel que a equipe
+// realmente usa hoje - fornecido pelo responsavel pelo produto em
+// 2026-07-23 (ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md).
+// Sao os 5 codigos que, no motor de dominio, interrompem uma atividade em
+// andamento (equivalente a workforce_core.catalogo.codigos_relatorio_1_por_tipo_registro("pausa")).
+// Os demais 16 codigos do Relatorio 1 sao "evento secundario"
+// (deslocamento/espera/apoio) e ainda nao tem tela propria aqui - ver ADR.
+// classificacao produtiva/improdutiva continua NAO_DEFINIDO (nao validada).
+const MOTIVOS_PAUSA_RELATORIO_1 = [
+  { codigo: "EE02", rotulo: "Refeição 1 hora" },
+  { codigo: "EE07", rotulo: "Reunião ou ADM" },
+  { codigo: "EE11", rotulo: "Consulta à documentação técnica" },
+  { codigo: "EE21", rotulo: "SMS" },
+  { codigo: "EE23", rotulo: "Treinamento" },
 ];
 
 function criarSeletorMotivoPausa() {
   const select = document.createElement("select");
   select.id = "motivoPausa";
   select.className = "seletor-motivo";
-  for (const motivo of MOTIVOS_PAUSA_EXEMPLO) {
+  for (const motivo of MOTIVOS_PAUSA_RELATORIO_1) {
     const opcao = document.createElement("option");
     opcao.value = motivo.codigo;
-    opcao.textContent = motivo.rotulo;
+    opcao.textContent = `${motivo.codigo} - ${motivo.rotulo}`;
     select.appendChild(opcao);
   }
   return select;
