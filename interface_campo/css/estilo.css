@@ -162,6 +162,15 @@ body {
   font-weight: 600;
 }
 
+.seletor-motivo {
+  font-size: 1.05rem;
+  padding: 0.85rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--cor-borda);
+  background: white;
+  color: var(--cor-texto);
+}
+
 .rodape {
   text-align: center;
   font-size: 0.75rem;

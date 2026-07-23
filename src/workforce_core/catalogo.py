@@ -126,4 +126,42 @@ def catalogo_padrao() -> CatalogoMotivos:
             classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
         )
     )
+    # Motivos de pausa de exemplo, adicionados a pedido do responsavel pelo
+    # produto em 2026-07-23 apos o primeiro teste manual da interface de
+    # campo (ver ADR-0005, secao "Atualizacao"). Usam a categoria ja
+    # documentada em docs/07_MOTOR_EVENTOS_E_HH.md, mas continuam sendo
+    # exemplos ilustrativos - nao o catalogo oficial validado com a
+    # operacao, por isso classificacao_hh permanece NAO_DEFINIDO.
+    catalogo.registrar(
+        EntradaCatalogo(
+            codigo="REFEICAO",
+            descricao="Pausa para refeicao (exemplo de motivo, nao oficial).",
+            categoria=Categoria.REFEICAO,
+            classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+        )
+    )
+    catalogo.registrar(
+        EntradaCatalogo(
+            codigo="DDS",
+            descricao="Dialogo Diario de Seguranca (exemplo de motivo, nao oficial).",
+            categoria=Categoria.DDS,
+            classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+        )
+    )
+    catalogo.registrar(
+        EntradaCatalogo(
+            codigo="REUNIAO",
+            descricao="Reuniao (exemplo de motivo, nao oficial).",
+            categoria=Categoria.REUNIAO,
+            classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+        )
+    )
+    catalogo.registrar(
+        EntradaCatalogo(
+            codigo="TREINAMENTO",
+            descricao="Treinamento (exemplo de motivo, nao oficial).",
+            categoria=Categoria.TREINAMENTO,
+            classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+        )
+    )
     return catalogo

@@ -21,6 +21,32 @@ const els = {
 
 let motor = null;
 
+// Exemplos ilustrativos das categorias ja citadas em
+// docs/07_MOTOR_EVENTOS_E_HH.md, adicionados a pedido do responsavel pelo
+// produto em 2026-07-23 apos o primeiro teste manual (ver ADR-0005,
+// secao "Atualizacao"). NAO sao o catalogo oficial de pausas - isso
+// continua pendente de validacao com a operacao (Incremento 5).
+const MOTIVOS_PAUSA_EXEMPLO = [
+  { codigo: "REFEICAO", rotulo: "Refeicao" },
+  { codigo: "DDS", rotulo: "DDS" },
+  { codigo: "REUNIAO", rotulo: "Reuniao" },
+  { codigo: "TREINAMENTO", rotulo: "Treinamento" },
+  { codigo: "PAUSA_TESTE", rotulo: "PAUSA_TESTE (outro)" },
+];
+
+function criarSeletorMotivoPausa() {
+  const select = document.createElement("select");
+  select.id = "motivoPausa";
+  select.className = "seletor-motivo";
+  for (const motivo of MOTIVOS_PAUSA_EXEMPLO) {
+    const opcao = document.createElement("option");
+    opcao.value = motivo.codigo;
+    opcao.textContent = motivo.rotulo;
+    select.appendChild(opcao);
+  }
+  return select;
+}
+
 function botao(texto, aoClicar, { destaque = false } = {}) {
   const b = document.createElement("button");
   b.textContent = texto;
@@ -150,9 +176,11 @@ function render() {
     );
   } else if (atividade) {
     els.status.textContent = "Atividade em andamento.";
+    const seletorMotivo = criarSeletorMotivoPausa();
+    els.botoes.appendChild(seletorMotivo);
     els.botoes.appendChild(
-      botao("Iniciar pausa (PAUSA_TESTE)", () =>
-        executar(() => motor.iniciarPausa(new Date(), "PAUSA_TESTE"))
+      botao("Iniciar pausa", () =>
+        executar(() => motor.iniciarPausa(new Date(), seletorMotivo.value))
       )
     );
     els.botoes.appendChild(

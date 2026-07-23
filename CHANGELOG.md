@@ -297,6 +297,21 @@
   sozinho sem essa mudança de versão. Detalhes em
   `docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md`.
 
+### Alterado
+- A pedido do responsável pelo produto após o primeiro teste manual, o
+  seletor de motivo de pausa da interface de campo
+  (`interface_campo/js/app.js`) ganhou opções de exemplo — **Refeição,
+  DDS, Reunião, Treinamento** (categorias já citadas em
+  `docs/07_MOTOR_EVENTOS_E_HH.md`) além de `PAUSA_TESTE`. Mesmos códigos
+  adicionados ao `catalogo_padrao()` (`workforce_core/catalogo.py`), com
+  `classificacao_hh=NAO_DEFINIDO` (continuam sendo exemplo, não o
+  catálogo oficial). "Aguardando material/liberação" propositalmente
+  **não** entraram no seletor de pausa — correspondem à categoria de
+  Espera (evento secundário), não a uma pausa; ver
+  `docs/32_ADR_0005_CATALOGO_DESLOCAMENTO_ESPERA_APOIO.md`, seção
+  "Atualização". `CACHE_VERSAO` do Service Worker incrementada de novo
+  (`v2` → `v3`).
+
 ### Testes
 - `python -m py_compile src/workforce_core/*.py src/workforce_storage/*.py src/workforce_sync/*.py tests/*.py`: OK.
 - `python -m pytest`: 43 passed.
@@ -314,7 +329,9 @@
   passed (após Incremento 7); 102 passed (após Incremento 8); 111 passed
   (após Incremento 9); 126 passed (após Incremento 10); 141 passed (após
   Incremento 11); 148 passed (após Incremento 12); 158 passed (após
-  Incremento 13 — roadmap completo).
+  Incremento 13 — roadmap completo); 159 passed (após motivos de pausa de
+  exemplo). `node --test tests/js/motorJornada.test.mjs`: 17 passed
+  (inalterado).
 - Caso mínimo obrigatório (seção 7.3) validado com os valores exatos da
   seção 7.4: jornada bruta 4h10, atividade bruta 3h50, pausa 0h20,
   atividade líquida 3h30, tempo não classificado 0h20.

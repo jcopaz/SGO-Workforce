@@ -115,6 +115,33 @@ negócio acima.
   = produtivo)**: rejeitado explicitamente — é exatamente o tipo de decisão
   que a seção 6 do alinhamento oficial proíbe o agente de inventar.
 
+## Atualização: motivos de pausa de exemplo na interface de campo (2026-07-23)
+
+Após o primeiro teste manual da `interface_campo/` em navegador real, o
+responsável pelo produto observou que o seletor de pausa mostrava apenas
+`PAUSA_TESTE` e pediu para incluir opções mais próximas do uso real.
+Confrontado com a escolha entre (a) fornecer agora a lista real de motivos,
+(b) usar as categorias genéricas já citadas em `docs/07_MOTOR_EVENTOS_E_HH.md`
+como exemplo, ou (c) manter só `PAUSA_TESTE`, o responsável escolheu a
+opção (b).
+
+Adicionado, tanto no catálogo Python (`catalogo_padrao()`) quanto no
+seletor da interface de campo (`interface_campo/js/app.js`,
+`MOTIVOS_PAUSA_EXEMPLO`): **Refeição, DDS, Reunião, Treinamento**, mantendo
+`PAUSA_TESTE` como opção adicional. Note-se que **duas categorias citadas
+na conversa com o responsável pelo produto — "aguardando material" e
+"aguardando liberação" — não entraram no seletor de pausa**: no modelo de
+domínio, essas correspondem à categoria de **Espera** (`TipoEventoSecundario.ESPERA`),
+um evento secundário vinculado à jornada, mutuamente exclusivo com a
+atividade principal — não uma pausa dentro de uma atividade. Misturá-las
+no seletor de pausa estaria incorreto frente ao próprio modelo de domínio
+deste ADR. Continuam sendo um candidato natural para quando
+Deslocamento/Espera/Apoio ganharem uma tela própria na interface de campo
+(ainda não implementada, ver "Deliberadamente fora deste incremento").
+
+Isso continua sendo **exemplo ilustrativo, não o catálogo oficial** —
+`classificacao_hh` de todas as novas entradas permanece `NAO_DEFINIDO`.
+
 ## Validação operacional
 
 Ainda não realizada. Toda a taxonomia de categoria, a classificação de HH e

@@ -224,6 +224,23 @@ def test_round_trip_persistencia_com_evento_secundario_encerrado(tmp_path):
 def test_catalogo_padrao_contem_motivos_de_teste_nao_definidos():
     catalogo = catalogo_padrao()
     codigos = {e.codigo for e in catalogo.todos()}
-    assert {"PAUSA_TESTE", "DESLOCAMENTO_TESTE", "ESPERA_TESTE", "APOIO_TESTE"} <= codigos
+    assert {
+        "PAUSA_TESTE",
+        "DESLOCAMENTO_TESTE",
+        "ESPERA_TESTE",
+        "APOIO_TESTE",
+        "REFEICAO",
+        "DDS",
+        "REUNIAO",
+        "TREINAMENTO",
+    } <= codigos
     for entrada in catalogo.todos():
         assert entrada.classificacao_hh == ClassificacaoHH.NAO_DEFINIDO
+
+
+def test_catalogo_padrao_motivos_de_pausa_exemplo_tem_categoria_correspondente():
+    catalogo = catalogo_padrao()
+    assert catalogo.obter("REFEICAO").categoria == Categoria.REFEICAO
+    assert catalogo.obter("DDS").categoria == Categoria.DDS
+    assert catalogo.obter("REUNIAO").categoria == Categoria.REUNIAO
+    assert catalogo.obter("TREINAMENTO").categoria == Categoria.TREINAMENTO
