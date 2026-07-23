@@ -1,0 +1,20 @@
+{
+  "name": "SGO Workforce - Piloto tecnico",
+  "short_name": "SGO Workforce",
+  "description": "Piloto tecnico de apontamento de jornada, atividade e pausa.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#0f4c81",
+  "orientation": "portrait",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "icons/icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "pacote": "SGO Workforce Blueprint v1.0 Completo",
+  "arquivos": [
+    {
+      "arquivo": ".claude/agents/workforce-analytics.md",
+      "bytes": 267
+    },
+    {
+      "arquivo": ".claude/agents/workforce-dev.md",
+      "bytes": 237
+    },
+    {
+      "arquivo": ".github/copilot-instructions.md",
+      "bytes": 1022
+    },
+    {
+      "arquivo": "CLAUDE.md",
+      "bytes": 3693
+    },
+    {
+      "arquivo": "README.md",
+      "bytes": 1039
+    },
+    {
+      "arquivo": "catalogos/6m_nivel_1.csv",
+      "bytes": 202
+    },
+    {
+      "arquivo": "catalogos/6m_nivel_2.csv",
+      "bytes": 278
+    },
+    {
+      "arquivo": "catalogos/6m_nivel_3.csv",
+      "bytes": 291
+    },
+    {
+      "arquivo": "catalogos/README.md",
+      "bytes": 638
+    },
+    {
+      "arquivo": "catalogos/componentes_causadores.csv",
+      "bytes": 4962
+    },
+    {
+      "arquivo": "catalogos/dicionario_colunas_rasf.csv",
+      "bytes": 1826
+    },
+    {
+      "arquivo": "catalogos/impactos.csv",
+      "bytes": 136
+    },
+    {
+      "arquivo": "catalogos/sintomas.csv",
+      "bytes": 2360
+    },
+    {
+      "arquivo": "catalogos/sistemas.csv",
+      "bytes": 175
+    },
+    {
+      "arquivo": "catalogos/tipos_solicitacao.csv",
+      "bytes": 270
+    },
+    {
+      "arquivo": "database/001_schema_inicial.sql",
+      "bytes": 2432
+    },
+    {
+      "arquivo": "database/002_regras_integridade.md",
+      "bytes": 355
+    },
+    {
+      "arquivo": "docs/00_INDICE.md",
+      "bytes": 808
+    },
+    {
+      "arquivo": "docs/01_IDENTIDADE_E_MISSAO.md",
+      "bytes": 2092
+    },
+    {
+      "arquivo": "docs/02_CONTEXTO_ECOSSISTEMA_SGO.md",
+      "bytes": 976
+    },
+    {
+      "arquivo": "docs/03_VISAO_PRODUTO.md",
+      "bytes": 913
+    },
+    {
+      "arquivo": "docs/04_PERSONAS_E_CASOS_DE_USO.md",
+      "bytes": 763
+    },
+    {
+      "arquivo": "docs/05_ARQUITETURA_ALVO.md",
+      "bytes": 892
+    },
+    {
+      "arquivo": "docs/06_OFFLINE_FIRST_E_SINCRONIZACAO.md",
+      "bytes": 1190
+    },
+    {
+      "arquivo": "docs/07_MOTOR_EVENTOS_E_HH.md",
+      "bytes": 1516
+    },
+    {
+      "arquivo": "docs/08_GPS_PULSOS_E_PRIVACIDADE.md",
+      "bytes": 1335
+    },
+    {
+      "arquivo": "docs/09_ATENDIMENTO_FALHAS_RASF.md",
+      "bytes": 1186
+    },
+    {
+      "arquivo": "docs/10_MODELO_DADOS.md",
+      "bytes": 1065
+    },
+    {
+      "arquivo": "docs/11_TELAS_E_UX.md",
+      "bytes": 842
+    },
+    {
+      "arquivo": "docs/12_DASHBOARDS_ECHARTS.md",
+      "bytes": 1163
+    },
+    {
+      "arquivo": "docs/13_MAPA_OPERACIONAL.md",
+      "bytes": 939
+    },
+    {
+      "arquivo": "docs/14_EXPORTACOES.md",
+      "bytes": 687
+    },
+    {
+      "arquivo": "docs/15_CAPACIDADE_PCM.md",
+      "bytes": 876
+    },
+    {
+      "arquivo": "docs/16_INTEGRACAO_FUTURA_SGO.md",
+      "bytes": 776
+    },
+    {
+      "arquivo": "docs/17_SEGURANCA_GOVERNANCA.md",
+      "bytes": 842
+    },
+    {
+      "arquivo": "docs/18_ROADMAP.md",
+      "bytes": 720
+    },
+    {
+      "arquivo": "docs/19_EPICOS_HISTORIAS_ACEITE.md",
+      "bytes": 1137
+    },
+    {
+      "arquivo": "docs/20_TESTES_E_QUALIDADE.md",
+      "bytes": 786
+    },
+    {
+      "arquivo": "docs/21_APRENDIZADOS_HERDADOS_SGO.md",
+      "bytes": 606
+    },
+    {
+      "arquivo": "docs/22_GLOSSARIO.md",
+      "bytes": 675
+    },
+    {
+      "arquivo": "docs/23_DECISOES_PENDENTES.md",
+      "bytes": 701
+    },
+    {
+      "arquivo": "docs/24_PROMPT_MASTER.md",
+      "bytes": 1261
+    },
+    {
+      "arquivo": "docs/25_GUIA_COPILOT_STUDIO.md",
+      "bytes": 586
+    },
+    {
+      "arquivo": "docs/26_GUIA_VSCODE_CLAUDE.md",
+      "bytes": 593
+    },
+    {
+      "arquivo": "templates/ADR_TEMPLATE.md",
+      "bytes": 130
+    },
+    {
+      "arquivo": "templates/CHANGELOG.md",
+      "bytes": 93
+    }
+  ]
+}

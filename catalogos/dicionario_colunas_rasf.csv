@@ -1,0 +1,78 @@
+﻿ordem,coluna
+1,Ano
+2,Mês
+3,Número da nota
+4,Data da nota
+5,Nº ordem
+6,Centro de trabalho responsável
+7,Gerência
+8,Local Pátio
+9,Descrição Tipo Solicitação
+10,Local de instalação TPLNR
+11,Local de instalação
+12,Nº equipamento
+13,Grupo do ativo
+14,Sistema
+15,Anomalia/Sintoma
+16,Descrição da Origem da Atividade
+17,Texto breve para o código Parte de Objeto
+18,Texto breve para o código Problemas Erro
+19,Texto Longo Nota
+20,Última data ativo
+21,Dias desde última falha ativo
+22,Reincidência 90 dias ativo
+23,Última data sintoma
+24,Dias desde última falha sintoma
+25,Reincidência 90 dias sintoma
+26,Gerador THP (300)
+27,Descricao Justificativa Transporte
+28,Tempo THP 300 (min)
+29,Número de Eventos (300)
+30,Tempo THP 133 (min)
+31,Número de Eventos (133)
+32,Último Ciclo 30
+33,Dias após último C30
+34,Último Ciclo 60
+35,Dias após último C60
+36,Último Ciclo 90
+37,Dias após último C90
+38,Último Ciclo 120
+39,Dias após último C120
+40,Último Ciclo 180
+41,Dias após último C180
+42,Último Ciclo 360
+43,Dias após último C360
+44,Último Ciclo 540
+45,Dias após último C540
+46,Último Ciclo 720
+47,Dias após último C720
+48,Último Ciclo 1080
+49,Dias após último C1080
+50,Último Ciclo 1440
+51,Dias após último C1440
+52,Último Ciclo 1800
+53,Dias após último C1800
+54,Último Ciclo 3600
+55,Dias após último C3600
+56,Status Sistema
+57,Impacta no indicador de confiabilidade?
+58,(Campo) Gatilho
+59,6M Nível 1 - MF
+60,6M Nível 2 - MF
+61,6M Nível 3 - MF
+62,Árvore de Falhas - MF
+63,(Eng) Gatilho
+64,Tipo de falha
+65,6M Nível 1 - Eng
+66,6M Nível 2 - Eng
+67,6M Nível 3 - Eng
+68,Componente Causador
+69,Pendente?
+70,Disposições Reunião
+71,Responsável
+72,Consenso Origem de Atividade?
+73,Origem de Atividade Correta
+74,Item SAC
+75,Justificativa
+76,Divergência THP
+77,Data SAC

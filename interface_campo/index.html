@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SGO Workforce | Apontamento de campo</title>
+<meta name="description" content="Piloto tecnico de apontamento de jornada, atividade e pausa do SGO Workforce." />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icone.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icone.svg" />
+<meta name="theme-color" content="#0f4c81" />
+<link rel="stylesheet" href="css/estilo.css" />
+</head>
+<body>
+<header class="cabecalho">
+  <h1>SGO Workforce</h1>
+  <p class="subtitulo">Piloto tecnico &middot; Incremento 4</p>
+</header>
+
+<main class="conteudo">
+  <p class="aviso-piloto">
+    Este e um piloto tecnico do motor de jornada. Nao ha ainda catalogo
+    oficial de pausas, GPS, atendimento de falhas nem sincronizacao com
+    servidor. Motivo de pausa disponivel: <strong>PAUSA_TESTE</strong>.
+  </p>
+
+  <label class="campo">
+    <span>Matricula</span>
+    <input id="matricula" type="text" inputmode="numeric" placeholder="Ex.: 12345" autocomplete="off" />
+  </label>
+
+  <p id="status" class="status">Carregando...</p>
+
+  <div id="mensagem" class="mensagem" role="alert" aria-live="polite"></div>
+
+  <div id="resumo" class="resumo"></div>
+
+  <div id="botoes" class="botoes"></div>
+</main>
+
+<footer class="rodape">
+  <p>SGO Workforce &middot; separado do SGO durante o MVP.</p>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("service-worker.js").catch(() => {
+        // Falha ao registrar o service worker nao pode quebrar o app: o
+        // app continua funcional online, so perde o cache offline do shell.
+      });
+    });
+  }
+</script>
+</body>
+</html>

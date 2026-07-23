@@ -1,0 +1,382 @@
+"""Motor de transicoes do Incremento 1.
+
+Uma instancia de MotorJornada controla o ciclo de vida de uma unica jornada
+de um colaborador: inicio/fim de jornada, inicio/fim de atividade principal
+e inicio/fim de pausa, aplicando as restricoes da secao 8 do alinhamento
+oficial (docs/27_ALINHAMENTO_OFICIAL_SGO_WORKFORCE_v1_2.md).
+
+Uma transicao repetida (ex.: encerrar a jornada duas vezes) e sempre
+bloqueada com a mesma excecao, nunca corrompe o estado interno - isso
+cobre a exigencia de resiliencia a duplicidade de comando (secao 9.13).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from .entities import Atividade, DadosFalha, EventoSecundario, Jornada, Pausa
+from .enums import (
+    EstadoAtividade,
+    EstadoEventoSecundario,
+    EstadoJornada,
+    EstadoPausa,
+    TipoEventoSecundario,
+)
+from .exceptions import (
+    AtendimentoFalhaCamposObrigatoriosError,
+    AtendimentoFalhaNaoAtivoError,
+    AtividadeEncerramentoComPausaAbertaError,
+    AtividadeExigeNenhumEventoSecundarioAtivoError,
+    AtividadeJaAtivaError,
+    AtividadeNaoAtivaError,
+    EstadoInconsistenteError,
+    EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError,
+    EventoSecundarioJaAtivoError,
+    EventoSecundarioMotivoObrigatorioError,
+    EventoSecundarioNaoAtivoError,
+    EventoSecundarioTipoObrigatorioError,
+    JornadaComAtividadeAbertaError,
+    JornadaComEventoSecundarioAbertoError,
+    JornadaComPausaAbertaError,
+    JornadaJaAbertaError,
+    JornadaNaoAbertaError,
+    PausaExigeAtividadeAtivaError,
+    PausaJaAtivaError,
+    PausaMotivoObrigatorioError,
+    PausaNaoAtivaError,
+    TimestampInvalidoError,
+)
+
+_CAMPOS_OBRIGATORIOS_FALHA = ("nota", "ativo", "sintoma", "causa", "acao", "observacao")
+
+
+def _validar_dados_falha_completos(dados: DadosFalha) -> None:
+    faltantes = [campo for campo in _CAMPOS_OBRIGATORIOS_FALHA if not getattr(dados, campo)]
+    if faltantes:
+        raise AtendimentoFalhaCamposObrigatoriosError(
+            "Atendimento de falha nao pode ser encerrado sem: " + ", ".join(faltantes) + "."
+        )
+
+
+def _identificar_estado_ativo(
+    jornada: Jornada,
+) -> tuple[Atividade | None, Pausa | None, EventoSecundario | None]:
+    """Deriva a atividade principal ativa, a pausa ativa e o evento
+    secundario ativo a partir do estado persistido das entidades, validando
+    as invariantes do dominio.
+
+    Usada na recuperacao de estado (Incremento 2): o estado ativo nunca e
+    persistido separadamente, ele e sempre recalculado a partir dos estados
+    de Atividade, Pausa e EventoSecundario, evitando divergencia entre eles.
+    """
+    atividades_em_andamento = [
+        atividade
+        for atividade in jornada.atividades
+        if atividade.estado in (EstadoAtividade.ATIVA, EstadoAtividade.PAUSADA)
+    ]
+    if len(atividades_em_andamento) > 1:
+        raise EstadoInconsistenteError(
+            "Mais de uma atividade principal ativa ou pausada na mesma jornada."
+        )
+    atividade_ativa = atividades_em_andamento[0] if atividades_em_andamento else None
+
+    pausas_ativas: list[Pausa] = []
+    for atividade in jornada.atividades:
+        encontradas = [pausa for pausa in atividade.pausas if pausa.estado == EstadoPausa.ATIVA]
+        if encontradas and atividade is not atividade_ativa:
+            raise EstadoInconsistenteError(
+                "Pausa ativa vinculada a uma atividade que nao e a atividade "
+                "principal em andamento."
+            )
+        pausas_ativas.extend(encontradas)
+
+    if len(pausas_ativas) > 1:
+        raise EstadoInconsistenteError("Mais de uma pausa ativa na mesma jornada.")
+    pausa_ativa = pausas_ativas[0] if pausas_ativas else None
+
+    if pausa_ativa is not None and (
+        atividade_ativa is None or atividade_ativa.estado != EstadoAtividade.PAUSADA
+    ):
+        raise EstadoInconsistenteError(
+            "Existe pausa ativa, mas a atividade vinculada nao esta com estado PAUSADA."
+        )
+    if (
+        atividade_ativa is not None
+        and atividade_ativa.estado == EstadoAtividade.PAUSADA
+        and pausa_ativa is None
+    ):
+        raise EstadoInconsistenteError(
+            "Atividade esta com estado PAUSADA, mas nao ha pausa ativa correspondente."
+        )
+
+    eventos_ativos = [
+        evento
+        for evento in jornada.eventos_secundarios
+        if evento.estado == EstadoEventoSecundario.ATIVA
+    ]
+    if len(eventos_ativos) > 1:
+        raise EstadoInconsistenteError(
+            "Mais de um evento secundario (deslocamento/espera/apoio) ativo na "
+            "mesma jornada."
+        )
+    evento_secundario_ativo = eventos_ativos[0] if eventos_ativos else None
+
+    if evento_secundario_ativo is not None and atividade_ativa is not None:
+        raise EstadoInconsistenteError(
+            "Evento secundario ativo simultaneamente com atividade principal "
+            "ativa/pausada - essas duas coisas sao mutuamente exclusivas."
+        )
+
+    return atividade_ativa, pausa_ativa, evento_secundario_ativo
+
+
+class MotorJornada:
+    def __init__(self, colaborador_matricula: str | None = None, *, jornada: Jornada | None = None):
+        if jornada is not None:
+            self.jornada = jornada
+        else:
+            if colaborador_matricula is None:
+                raise TypeError(
+                    "colaborador_matricula e obrigatorio ao criar uma jornada nova."
+                )
+            self.jornada = Jornada(colaborador_matricula=colaborador_matricula)
+        self._atividade_ativa: Atividade | None = None
+        self._pausa_ativa: Pausa | None = None
+        self._evento_secundario_ativo: EventoSecundario | None = None
+
+    @classmethod
+    def a_partir_de(cls, jornada: Jornada) -> "MotorJornada":
+        """Reconstroi um MotorJornada a partir de uma Jornada persistida.
+
+        Usada na recuperacao apos fechamento/reinicio (Incremento 2). Nao
+        confia em nenhum campo separado de "ativo agora": recalcula a
+        atividade, a pausa e o evento secundario ativos a partir dos
+        estados das entidades e levanta EstadoInconsistenteError se as
+        invariantes do dominio (secao 8 do alinhamento oficial, mais as
+        regras do Incremento 5) forem violadas.
+        """
+        atividade_ativa, pausa_ativa, evento_secundario_ativo = _identificar_estado_ativo(
+            jornada
+        )
+        motor = cls(jornada=jornada)
+        motor._atividade_ativa = atividade_ativa
+        motor._pausa_ativa = pausa_ativa
+        motor._evento_secundario_ativo = evento_secundario_ativo
+        return motor
+
+    # ------------------------------------------------------------------
+    # Jornada
+    # ------------------------------------------------------------------
+    def iniciar_jornada(self, quando: datetime) -> Jornada:
+        if self.jornada.estado != EstadoJornada.NAO_INICIADA:
+            raise JornadaJaAbertaError(
+                "Ja existe uma jornada iniciada para este colaborador."
+            )
+        self.jornada.inicio = quando
+        self.jornada.estado = EstadoJornada.ABERTA
+        return self.jornada
+
+    def encerrar_jornada(self, quando: datetime) -> Jornada:
+        if self.jornada.estado != EstadoJornada.ABERTA:
+            raise JornadaNaoAbertaError("Nao ha jornada aberta para encerrar.")
+        if self._pausa_ativa is not None:
+            raise JornadaComPausaAbertaError(
+                "Nao e permitido encerrar a jornada com pausa aberta."
+            )
+        if self._atividade_ativa is not None:
+            raise JornadaComAtividadeAbertaError(
+                "Nao e permitido encerrar a jornada com atividade aberta sem "
+                "tratamento explicito."
+            )
+        if self._evento_secundario_ativo is not None:
+            raise JornadaComEventoSecundarioAbertoError(
+                "Nao e permitido encerrar a jornada com deslocamento/espera/apoio aberto."
+            )
+        self._validar_ordem(self.jornada.inicio, quando, "jornada")
+        self.jornada.fim = quando
+        self.jornada.estado = EstadoJornada.ENCERRADA
+        return self.jornada
+
+    # ------------------------------------------------------------------
+    # Atividade
+    # ------------------------------------------------------------------
+    def iniciar_atividade(self, quando: datetime) -> Atividade:
+        self._garantir_jornada_aberta()
+        if self._atividade_ativa is not None:
+            raise AtividadeJaAtivaError(
+                "Ja existe uma atividade principal ativa para este colaborador."
+            )
+        if self._evento_secundario_ativo is not None:
+            raise AtividadeExigeNenhumEventoSecundarioAtivoError(
+                "Nao e permitido iniciar atividade com deslocamento/espera/apoio em andamento."
+            )
+        atividade = Atividade(inicio=quando, estado=EstadoAtividade.ATIVA)
+        self.jornada.atividades.append(atividade)
+        self._atividade_ativa = atividade
+        return atividade
+
+    def encerrar_atividade(self, quando: datetime) -> Atividade:
+        self._garantir_jornada_aberta()
+        if self._pausa_ativa is not None:
+            raise AtividadeEncerramentoComPausaAbertaError(
+                "Nao e permitido encerrar a atividade com pausa aberta."
+            )
+        if self._atividade_ativa is None:
+            raise AtividadeNaoAtivaError("Nao ha atividade ativa para encerrar.")
+        atividade = self._atividade_ativa
+        self._validar_ordem(atividade.inicio, quando, "atividade")
+        if atividade.dados_falha is not None:
+            _validar_dados_falha_completos(atividade.dados_falha)
+        atividade.fim = quando
+        atividade.estado = EstadoAtividade.ENCERRADA
+        self._atividade_ativa = None
+        return atividade
+
+    # ------------------------------------------------------------------
+    # Atendimento de falha (Incremento 6)
+    # ------------------------------------------------------------------
+    def iniciar_atendimento_falha(self, quando: datetime) -> Atividade:
+        """Inicia uma atividade marcada como atendimento de falha.
+
+        Reaproveita integralmente as regras de Atividade (jornada aberta,
+        atividade principal unica, mutuamente exclusiva com evento
+        secundario) - o unico acrescimo e que encerrar_atividade passa a
+        exigir nota, ativo, sintoma, causa, acao e observacao antes de
+        aceitar o encerramento (docs/27 secao 3.5).
+        """
+        atividade = self.iniciar_atividade(quando)
+        atividade.dados_falha = DadosFalha()
+        return atividade
+
+    def registrar_dados_falha(
+        self,
+        *,
+        nota: str | None = None,
+        ativo: str | None = None,
+        sintoma: str | None = None,
+        causa: str | None = None,
+        acao: str | None = None,
+        observacao: str | None = None,
+    ) -> DadosFalha:
+        """Atualiza parcialmente os dados do atendimento de falha em andamento.
+
+        Cada campo so e sobrescrito se for informado (nao-None), permitindo
+        preencher nota/ativo/sintoma no inicio e causa/acao/observacao mais
+        perto do encerramento, conforme o fluxo de
+        docs/09_ATENDIMENTO_FALHAS_RASF.md.
+        """
+        self._garantir_jornada_aberta()
+        if self._atividade_ativa is None or self._atividade_ativa.dados_falha is None:
+            raise AtendimentoFalhaNaoAtivoError(
+                "Nao ha atendimento de falha ativo para registrar dados."
+            )
+        dados = self._atividade_ativa.dados_falha
+        if nota is not None:
+            dados.nota = nota
+        if ativo is not None:
+            dados.ativo = ativo
+        if sintoma is not None:
+            dados.sintoma = sintoma
+        if causa is not None:
+            dados.causa = causa
+        if acao is not None:
+            dados.acao = acao
+        if observacao is not None:
+            dados.observacao = observacao
+        return dados
+
+    # ------------------------------------------------------------------
+    # Pausa
+    # ------------------------------------------------------------------
+    def iniciar_pausa(self, quando: datetime, motivo: str) -> Pausa:
+        self._garantir_jornada_aberta()
+        if not motivo:
+            raise PausaMotivoObrigatorioError("O motivo da pausa e obrigatorio.")
+        if self._pausa_ativa is not None:
+            raise PausaJaAtivaError("Ja existe uma pausa ativa para este colaborador.")
+        if self._atividade_ativa is None or self._atividade_ativa.estado != EstadoAtividade.ATIVA:
+            raise PausaExigeAtividadeAtivaError(
+                "Pausa somente pode ser iniciada com atividade principal ativa."
+            )
+        atividade = self._atividade_ativa
+        self._validar_ordem(atividade.inicio, quando, "pausa")
+        pausa = Pausa(
+            atividade_id=atividade.id,
+            motivo=motivo,
+            inicio=quando,
+            estado=EstadoPausa.ATIVA,
+        )
+        atividade.pausas.append(pausa)
+        atividade.estado = EstadoAtividade.PAUSADA
+        self._pausa_ativa = pausa
+        return pausa
+
+    def finalizar_pausa(self, quando: datetime) -> Pausa:
+        self._garantir_jornada_aberta()
+        if self._pausa_ativa is None:
+            raise PausaNaoAtivaError("Nao ha pausa ativa para finalizar.")
+        pausa = self._pausa_ativa
+        self._validar_ordem(pausa.inicio, quando, "pausa")
+        pausa.fim = quando
+        pausa.estado = EstadoPausa.ENCERRADA
+        self._pausa_ativa = None
+        self._atividade_ativa.estado = EstadoAtividade.ATIVA
+        return pausa
+
+    # ------------------------------------------------------------------
+    # Evento secundario (deslocamento, espera, apoio - Incremento 5)
+    # ------------------------------------------------------------------
+    def iniciar_evento_secundario(
+        self, quando: datetime, tipo: TipoEventoSecundario, motivo: str
+    ) -> EventoSecundario:
+        self._garantir_jornada_aberta()
+        if tipo is None:
+            raise EventoSecundarioTipoObrigatorioError(
+                "O tipo do evento secundario (DESLOCAMENTO/ESPERA/APOIO) e obrigatorio."
+            )
+        if not motivo:
+            raise EventoSecundarioMotivoObrigatorioError(
+                "O motivo do evento secundario e obrigatorio."
+            )
+        if self._evento_secundario_ativo is not None:
+            raise EventoSecundarioJaAtivoError(
+                "Ja existe um deslocamento/espera/apoio ativo para este colaborador."
+            )
+        if self._atividade_ativa is not None:
+            raise EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError(
+                "Nao e permitido iniciar deslocamento/espera/apoio com atividade "
+                "principal em andamento."
+            )
+        evento = EventoSecundario(
+            tipo=tipo, motivo=motivo, inicio=quando, estado=EstadoEventoSecundario.ATIVA
+        )
+        self.jornada.eventos_secundarios.append(evento)
+        self._evento_secundario_ativo = evento
+        return evento
+
+    def encerrar_evento_secundario(self, quando: datetime) -> EventoSecundario:
+        self._garantir_jornada_aberta()
+        if self._evento_secundario_ativo is None:
+            raise EventoSecundarioNaoAtivoError(
+                "Nao ha deslocamento/espera/apoio ativo para encerrar."
+            )
+        evento = self._evento_secundario_ativo
+        self._validar_ordem(evento.inicio, quando, "evento secundario")
+        evento.fim = quando
+        evento.estado = EstadoEventoSecundario.ENCERRADA
+        self._evento_secundario_ativo = None
+        return evento
+
+    # ------------------------------------------------------------------
+    # Auxiliares
+    # ------------------------------------------------------------------
+    def _garantir_jornada_aberta(self) -> None:
+        if self.jornada.estado != EstadoJornada.ABERTA:
+            raise JornadaNaoAbertaError("A operacao exige uma jornada aberta.")
+
+    @staticmethod
+    def _validar_ordem(inicio: datetime, fim: datetime, rotulo: str) -> None:
+        if fim < inicio:
+            raise TimestampInvalidoError(
+                f"O timestamp de fim da {rotulo} nao pode ser anterior ao inicio."
+            )
