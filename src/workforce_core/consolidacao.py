@@ -16,7 +16,7 @@ incrementos correspondentes.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
 from . import calculo
@@ -69,6 +69,87 @@ def resumo_por_categoria(
         _somar(categoria_evento, calculo.duracao_evento_secundario(evento))
 
     return totais
+
+
+# ----------------------------------------------------------------------
+# Linhas de evento classificadas (uma linha por atividade/pausa/evento
+# secundario encerrado) - base para filtros e graficos de detalhamento
+# no painel (por colaborador, por dia, por categoria, por motivo). Mesma
+# classificacao de resumo_por_categoria, so que sem agregar - cada evento
+# vira uma linha, para quem consome poder filtrar antes de somar.
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class LinhaEvento:
+    colaborador_matricula: str
+    data: date
+    categoria: Optional[Categoria]
+    motivo: Optional[str]
+    duracao: timedelta
+    tipo: str  # "ATIVIDADE" | "PAUSA" | "EVENTO_SECUNDARIO"
+
+
+def linhas_eventos_classificadas(
+    jornadas: List[Jornada], catalogo: CatalogoMotivos
+) -> List[LinhaEvento]:
+    """Achata as jornadas encerradas em uma linha por atividade, pausa e
+    evento secundario ja encerrado, cada uma com colaborador, data,
+    categoria e motivo - para os filtros do painel (colaborador, periodo,
+    categoria, motivo/justificativa) operarem sobre eventos individuais,
+    nao só sobre a jornada inteira.
+    """
+    linhas: List[LinhaEvento] = []
+    for jornada in jornadas:
+        if jornada.estado != EstadoJornada.ENCERRADA:
+            continue
+        for atividade in jornada.atividades:
+            if atividade.fim is None:
+                continue
+            categoria_atividade = (
+                Categoria.ATENDIMENTO_FALHA
+                if atividade.dados_falha is not None
+                else Categoria.ATIVIDADE_PLANEJADA
+            )
+            linhas.append(
+                LinhaEvento(
+                    colaborador_matricula=jornada.colaborador_matricula,
+                    data=atividade.inicio.date(),
+                    categoria=categoria_atividade,
+                    motivo=None,
+                    duracao=calculo.duracao_atividade_liquida(atividade),
+                    tipo="ATIVIDADE",
+                )
+            )
+            for pausa in atividade.pausas:
+                if pausa.fim is None:
+                    continue
+                entrada = catalogo.obter(pausa.motivo)
+                linhas.append(
+                    LinhaEvento(
+                        colaborador_matricula=jornada.colaborador_matricula,
+                        data=pausa.inicio.date(),
+                        categoria=entrada.categoria if entrada is not None else None,
+                        motivo=pausa.motivo,
+                        duracao=calculo.duracao_pausa(pausa),
+                        tipo="PAUSA",
+                    )
+                )
+
+        for evento in jornada.eventos_secundarios:
+            if evento.fim is None:
+                continue
+            entrada = catalogo.obter(evento.motivo)
+            linhas.append(
+                LinhaEvento(
+                    colaborador_matricula=jornada.colaborador_matricula,
+                    data=evento.inicio.date(),
+                    categoria=entrada.categoria if entrada is not None else None,
+                    motivo=evento.motivo,
+                    duracao=calculo.duracao_evento_secundario(evento),
+                    tipo="EVENTO_SECUNDARIO",
+                )
+            )
+
+    return linhas
 
 
 # ----------------------------------------------------------------------

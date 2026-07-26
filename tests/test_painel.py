@@ -5,18 +5,30 @@ do Streamlit - validado por smoke test manual (`streamlit run`), ver
 docs/36_ADR_0009_DASHBOARD_ECHARTS_PYECHARTS.md.
 """
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 
-from dados import carregar_jornadas, formatar_horas, gerar_jornadas_exemplo, montar_resumo
+from dados import (
+    agrupar_duracao_por_categoria,
+    carregar_jornadas,
+    formatar_data_hora,
+    formatar_horas,
+    gerar_jornadas_exemplo,
+    montar_linhas_eventos,
+    montar_resumo,
+)
 from graficos import (
     CAMINHO_ECHARTS_JS_LOCAL,
     grafico_distribuicao_pizza,
+    grafico_evolucao_diaria,
     grafico_hh_por_categoria,
+    grafico_hh_por_colaborador,
+    grafico_motivos_treemap,
     renderizar_embutido,
 )
 from workforce_core.catalogo import Categoria
+from workforce_core.consolidacao import LinhaEvento
 from workforce_storage import RepositorioJornadaArquivo
 
 
@@ -24,6 +36,13 @@ def test_formatar_horas():
     assert formatar_horas(timedelta(hours=4, minutes=10)) == "4h10"
     assert formatar_horas(timedelta(minutes=5)) == "0h05"
     assert formatar_horas(timedelta()) == "0h00"
+
+
+def test_formatar_data_hora():
+    from datetime import datetime
+
+    assert formatar_data_hora(datetime(2026, 7, 27, 8, 5, 9)) == "27/07/2026 08:05:09"
+    assert formatar_data_hora(None) == "--"
 
 
 def test_carregar_jornadas_diretorio_vazio(tmp_path):
@@ -52,6 +71,24 @@ def test_montar_resumo_com_dados_de_exemplo(tmp_path):
     assert resumo.jornada_bruta_total > timedelta()
     assert Categoria.DESLOCAMENTO_RODOVIARIO in resumo.por_categoria
     assert Categoria.ATIVIDADE_PLANEJADA in resumo.por_categoria
+
+
+def test_montar_linhas_eventos_e_agrupar_por_categoria_com_dados_de_exemplo(tmp_path):
+    gerar_jornadas_exemplo(tmp_path, quantidade=2)
+    jornadas, _ = carregar_jornadas(tmp_path)
+
+    linhas = montar_linhas_eventos(jornadas)
+    assert len(linhas) > 0
+    assert {linha.colaborador_matricula for linha in linhas} == {
+        j.colaborador_matricula for j in jornadas
+    }
+
+    por_categoria = agrupar_duracao_por_categoria(linhas)
+    assert Categoria.DESLOCAMENTO_RODOVIARIO in por_categoria
+    assert Categoria.ATIVIDADE_PLANEJADA in por_categoria
+    assert sum(por_categoria.values(), timedelta()) == sum(
+        (linha.duracao for linha in linhas), timedelta()
+    )
 
 
 def test_carregar_jornadas_reporta_arquivo_corrompido_sem_apagar(tmp_path):
@@ -100,6 +137,59 @@ def test_grafico_distribuicao_pizza_renderiza_html_autocontido():
 
     assert "<script>" in html
     assert "cdn" not in html.lower()
+
+
+def _linhas_evento_exemplo():
+    return [
+        LinhaEvento(
+            colaborador_matricula="1",
+            data=date(2026, 7, 1),
+            categoria=Categoria.ATIVIDADE_PLANEJADA,
+            motivo=None,
+            duracao=timedelta(hours=3),
+            tipo="ATIVIDADE",
+        ),
+        LinhaEvento(
+            colaborador_matricula="1",
+            data=date(2026, 7, 1),
+            categoria=Categoria.REFEICAO,
+            motivo="EE02",
+            duracao=timedelta(hours=1),
+            tipo="PAUSA",
+        ),
+        LinhaEvento(
+            colaborador_matricula="2",
+            data=date(2026, 7, 2),
+            categoria=Categoria.ATIVIDADE_PLANEJADA,
+            motivo=None,
+            duracao=timedelta(hours=2),
+            tipo="ATIVIDADE",
+        ),
+    ]
+
+
+def test_grafico_evolucao_diaria_renderiza_html_autocontido():
+    html = renderizar_embutido(grafico_evolucao_diaria(_linhas_evento_exemplo()))
+
+    assert "<script>" in html
+    assert "cdn" not in html.lower()
+    assert "01/07/2026" in html
+    assert "02/07/2026" in html
+
+
+def test_grafico_hh_por_colaborador_renderiza_html_autocontido():
+    html = renderizar_embutido(grafico_hh_por_colaborador(_linhas_evento_exemplo()))
+
+    assert "<script>" in html
+    assert "cdn" not in html.lower()
+
+
+def test_grafico_motivos_treemap_ignora_linhas_sem_motivo():
+    html = renderizar_embutido(grafico_motivos_treemap(_linhas_evento_exemplo()))
+
+    assert "<script>" in html
+    assert "cdn" not in html.lower()
+    assert "EE02" in html
 
 
 def test_renderizar_embutido_falha_se_asset_local_ausente(tmp_path, monkeypatch):

@@ -16,6 +16,12 @@
   manual "Sincronizar agora".
 - `painel/dados.py::carregar_jornadas_via_api` e seletor "Fonte de dados"
   (Arquivo local / API (nuvem)) em `painel/app.py`.
+- Filtros no painel (colaborador, período, categoria, motivo/justificativa)
+  e 3 gráficos novos (evolução diária, HH por colaborador, treemap de
+  motivos), baseados em `LinhaEvento`/`linhas_eventos_classificadas`
+  (`src/workforce_core/consolidacao.py`). Ver `docs/45_ADR_0018_FILTROS_E_GRAFICOS_DASHBOARD.md`.
+- `catalogo_completo()` em `src/workforce_core/catalogo.py` (união de
+  `catalogo_padrao()` e `catalogo_relatorio_1_manutencao()`).
 ### Alterado
 - `interface_campo/js/app.js`: as 7 transições do motor de dominio agora usam
   `RelogioSimulado.agora()` em vez de `new Date()`; o resumo em andamento
@@ -27,7 +33,21 @@
 - `requirements.txt`: adiciona `requests` (cliente HTTP do painel).
 - `docs/23_DECISOES_PENDENTES.md`: item 10 (hospedagem/autenticação do
   piloto) marcado como resolvido no escopo do piloto.
+- `painel/dados.py::montar_resumo` usa `catalogo_completo()` por padrão
+  (antes usava `catalogo_padrao()`, só motivos de teste).
+- Data/hora em `dd/mm/aaaa hh:mm:ss` no painel (`formatar_data_hora`,
+  usada em `painel/app.py` e `painel/pages/1_Mapa_Operacional.py`) e na
+  interface de campo (`interface_campo/js/app.js::formatoHora`) - mesmo
+  padrão nos dois lados. Exportações CSV/XLSX continuam em ISO 8601
+  (decisão consciente, ver ADR-0018).
+- Tabela "Jornadas carregadas" no painel: remove coluna `id`, mostra
+  Colaborador/Estado/Início/Fim.
 ### Corrigido
+- Categoria "sem classificação" em toda pausa real sincronizada da
+  interface de campo: `montar_resumo` usava `catalogo_padrao()` (só
+  motivos de teste), que não conhece os códigos reais do Relatório 1
+  (EE02/EE07/EE11/EE21/EE23). Corrigido com `catalogo_completo()`. Ver
+  ADR-0018.
 - Deploy do painel travava em loop no Streamlit Community Cloud
   (`Resolved N packages` e reiniciava sem subir o servidor). Separado
   `requirements.txt` (painel) de `requirements-api.txt` (backend, usado no
@@ -53,7 +73,11 @@
   `SYNC_TOKEN` configurada, upsert idempotente, payload malformado -
   repositório injetado é `RepositorioJornadaArquivo` (sem Postgres real
   neste ambiente).
-- `node --test tests/js`: 30/30 testes. `pytest`: 179/179 testes.
+- `tests/test_consolidacao.py`: 3 novos testes de `linhas_eventos_classificadas`.
+- `tests/test_painel.py`: novos testes de `formatar_data_hora`,
+  `montar_linhas_eventos`/`agrupar_duracao_por_categoria` e dos 3 gráficos
+  novos.
+- `node --test tests/js`: 30/30 testes. `pytest`: 187/187 testes.
 ### Riscos
 - Simulador de tempo é ferramenta de teste: precisa ser removido/bloqueado
   antes de qualquer piloto real com colaboradores (ver ADR-0016).
@@ -67,3 +91,9 @@
   ADR-0017).
 - Teste manual em navegador/celular real deste incremento ainda pendente
   (mesmo gap conhecido do ADR-0004).
+- Login/autenticação de usuário continua adiado (decisão explícita do
+  responsável pelo produto em 2026-07-27, ver ADR-0018) - painel e
+  interface de campo seguem sem login, só com o token de sincronização.
+- Cards de HH produtivo/improdutivo do `docs/12_DASHBOARDS_ECHARTS.md`
+  continuam bloqueados: nenhum motivo do catálogo tem
+  `classificacao_hh` definida ainda (decisão de negócio pendente).

@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import streamlit as st
 from streamlit_folium import st_folium
 
-from dados import carregar_jornadas, carregar_pulsos, gerar_pulsos_exemplo
+from dados import carregar_jornadas, carregar_pulsos, formatar_data_hora, gerar_pulsos_exemplo
 from mapa import construir_mapa
 
 st.set_page_config(page_title="SGO Workforce | Mapa (piloto)", layout="wide")
@@ -64,7 +64,7 @@ if not jornadas:
     st.stop()
 
 opcoes_jornada = {
-    f"{j.colaborador_matricula} - {j.inicio.isoformat() if j.inicio else '?'}": j for j in jornadas
+    f"{j.colaborador_matricula} - {formatar_data_hora(j.inicio)}": j for j in jornadas
 }
 rotulo_selecionado = st.selectbox(
     "Jornada", options=list(opcoes_jornada.keys()), key="painel_mapa_jornada_selecionada"

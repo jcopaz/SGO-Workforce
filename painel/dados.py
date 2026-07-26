@@ -12,13 +12,13 @@ from __future__ import annotations
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import requests
 
 from workforce_core import MotorJornada, TipoEventoSecundario
-from workforce_core.catalogo import CatalogoMotivos, catalogo_completo
-from workforce_core.consolidacao import ResumoConsolidado, resumo_consolidado
+from workforce_core.catalogo import Categoria, CatalogoMotivos, catalogo_completo
+from workforce_core.consolidacao import LinhaEvento, ResumoConsolidado, linhas_eventos_classificadas, resumo_consolidado
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
@@ -84,6 +84,26 @@ def montar_resumo(jornadas: List[Jornada], catalogo: CatalogoMotivos | None = No
     catalogo de teste.
     """
     return resumo_consolidado(jornadas, catalogo or catalogo_completo())
+
+
+def montar_linhas_eventos(
+    jornadas: List[Jornada], catalogo: CatalogoMotivos | None = None
+) -> List[LinhaEvento]:
+    """Base para os filtros do painel (colaborador, periodo, categoria,
+    motivo/justificativa) - uma linha por atividade/pausa/evento
+    secundario encerrado. Mesmo catalogo padrao de montar_resumo()."""
+    return linhas_eventos_classificadas(jornadas, catalogo or catalogo_completo())
+
+
+def agrupar_duracao_por_categoria(linhas: List[LinhaEvento]) -> Dict[Optional[Categoria], timedelta]:
+    """Agrega LinhaEvento por categoria - usado para recalcular os graficos
+    de categoria do painel apos os filtros de categoria/motivo (diferente
+    de ResumoConsolidado.por_categoria, que reflete so o filtro de
+    colaborador/periodo, ja que e derivado das jornadas inteiras)."""
+    totais: Dict[Optional[Categoria], timedelta] = {}
+    for linha in linhas:
+        totais[linha.categoria] = totais.get(linha.categoria, timedelta()) + linha.duracao
+    return totais
 
 
 def formatar_data_hora(data: Optional[datetime]) -> str:

@@ -15,5 +15,10 @@
     produção — ver `docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md`.
 11. Critérios de catálogo novo e aprovação.
 12. Forma de importação periódica do RASF.
+13. Login/autenticação de usuário (painel e interface de campo). Avaliado
+    em 2026-07-27 (reaproveitar a base de usuários do SGO exigiria
+    depender do Postgres de produção dele, antecipando a Fase 5 do
+    roadmap) — responsável pelo produto decidiu adiar por enquanto. Ver
+    `docs/45_ADR_0018_FILTROS_E_GRAFICOS_DASHBOARD.md`.
 
 Nenhuma decisão deve ser inventada pelo agente. Registrar ADR após validação operacional.

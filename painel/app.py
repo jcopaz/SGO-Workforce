@@ -14,6 +14,7 @@ Rodar com: streamlit run painel/app.py
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 _RAIZ_PROJETO = Path(__file__).resolve().parent.parent
@@ -25,14 +26,23 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from dados import (
+    agrupar_duracao_por_categoria,
     carregar_jornadas,
     carregar_jornadas_via_api,
     formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
+    montar_linhas_eventos,
     montar_resumo,
 )
-from graficos import grafico_distribuicao_pizza, grafico_hh_por_categoria, renderizar_embutido
+from graficos import (
+    grafico_distribuicao_pizza,
+    grafico_evolucao_diaria,
+    grafico_hh_por_categoria,
+    grafico_hh_por_colaborador,
+    grafico_motivos_treemap,
+    renderizar_embutido,
+)
 
 
 def _obter_secret_seguro(chave: str, default: str = "") -> str:
@@ -150,11 +160,129 @@ else:
         )
         st.stop()
 
-resumo = montar_resumo(jornadas)
+st.subheader("Filtros")
+
+_rotulo_sem_categoria = "SEM_CATEGORIA"
+
+
+def _rotulo_categoria(categoria):
+    return categoria.value if categoria is not None else _rotulo_sem_categoria
+
+
+def _sanitizar_multiselect_state(chave, opcoes_validas):
+    """Evita StreamlitAPIException quando as opcoes de um multiselect
+    mudam entre reruns (ex.: trocar a fonte de dados muda a lista de
+    colaboradores) e o valor salvo em session_state tem algo que nao
+    existe mais nas opcoes atuais - poda o que nao e mais valido em vez de
+    deixar o widget quebrar."""
+    if chave in st.session_state:
+        valido = [v for v in st.session_state[chave] if v in opcoes_validas]
+        st.session_state[chave] = valido or list(opcoes_validas)
+
+
+def _sanitizar_periodo_state(chave, minimo, maximo):
+    """Mesma ideia de _sanitizar_multiselect_state, para o date_input de
+    periodo: se o valor salvo ficou fora do novo intervalo min/max
+    disponivel, volta para o intervalo completo."""
+    if chave in st.session_state:
+        valor = st.session_state[chave]
+        fora_do_intervalo = not (
+            isinstance(valor, tuple)
+            and len(valor) == 2
+            and minimo <= valor[0] <= maximo
+            and minimo <= valor[1] <= maximo
+        )
+        if fora_do_intervalo:
+            st.session_state[chave] = (minimo, maximo)
+
+
+colaboradores_disponiveis = sorted({j.colaborador_matricula for j in jornadas})
+datas_jornada = [j.inicio.date() for j in jornadas if j.inicio is not None]
+data_min = min(datas_jornada) if datas_jornada else date.today()
+data_max = max(datas_jornada) if datas_jornada else date.today()
+
+_sanitizar_multiselect_state("painel_filtro_colaborador", colaboradores_disponiveis)
+_sanitizar_periodo_state("painel_filtro_periodo", data_min, data_max)
+
+col_f1, col_f2 = st.columns(2)
+with col_f1:
+    colaboradores_selecionados = st.multiselect(
+        "Colaborador",
+        colaboradores_disponiveis,
+        default=colaboradores_disponiveis,
+        key="painel_filtro_colaborador",
+    )
+with col_f2:
+    intervalo_datas = st.date_input(
+        "Período (data de início da jornada)",
+        value=(data_min, data_max),
+        min_value=data_min,
+        max_value=data_max,
+        key="painel_filtro_periodo",
+    )
+
+# st.date_input com intervalo pode devolver so 1 data enquanto o usuario
+# ainda esta escolhendo o fim do periodo - usa o intervalo completo nesse
+# meio tempo em vez de quebrar o filtro.
+if isinstance(intervalo_datas, tuple) and len(intervalo_datas) == 2:
+    data_inicio_filtro, data_fim_filtro = intervalo_datas
+else:
+    data_inicio_filtro, data_fim_filtro = data_min, data_max
+
+jornadas_filtradas = [
+    j
+    for j in jornadas
+    if j.colaborador_matricula in colaboradores_selecionados
+    and j.inicio is not None
+    and data_inicio_filtro <= j.inicio.date() <= data_fim_filtro
+]
+
+if not jornadas_filtradas:
+    st.warning("Nenhuma jornada corresponde aos filtros de colaborador/período selecionados.")
+    st.stop()
+
+resumo = montar_resumo(jornadas_filtradas)
 
 if resumo.quantidade_jornadas == 0:
-    st.info("Ha jornadas no diretorio, mas nenhuma esta encerrada ainda.")
+    st.info("Ha jornadas no periodo filtrado, mas nenhuma esta encerrada ainda.")
     st.stop()
+
+linhas = montar_linhas_eventos(jornadas_filtradas)
+
+categorias_disponiveis = sorted({_rotulo_categoria(linha.categoria) for linha in linhas})
+motivos_disponiveis = sorted({linha.motivo for linha in linhas if linha.motivo is not None})
+
+_sanitizar_multiselect_state("painel_filtro_categoria", categorias_disponiveis)
+_sanitizar_multiselect_state("painel_filtro_motivo", motivos_disponiveis)
+
+col_f3, col_f4 = st.columns(2)
+with col_f3:
+    categorias_selecionadas = st.multiselect(
+        "Categoria",
+        categorias_disponiveis,
+        default=categorias_disponiveis,
+        key="painel_filtro_categoria",
+    )
+with col_f4:
+    motivos_selecionados = st.multiselect(
+        "Motivo/justificativa (pausas e deslocamento/espera/apoio)",
+        motivos_disponiveis,
+        default=motivos_disponiveis,
+        key="painel_filtro_motivo",
+    )
+
+linhas_filtradas = [
+    linha
+    for linha in linhas
+    if _rotulo_categoria(linha.categoria) in categorias_selecionadas
+    and (linha.motivo is None or linha.motivo in motivos_selecionados)
+]
+
+if not linhas_filtradas:
+    st.warning("Nenhum evento corresponde aos filtros de categoria/motivo selecionados.")
+    st.stop()
+
+por_categoria_filtrado = agrupar_duracao_por_categoria(linhas_filtradas)
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Jornadas encerradas", resumo.quantidade_jornadas)
@@ -166,16 +294,38 @@ st.subheader("Distribuicao de HH por categoria")
 col_barra, col_pizza = st.columns(2)
 with col_barra:
     components.html(
-        renderizar_embutido(grafico_hh_por_categoria(resumo.por_categoria)),
+        renderizar_embutido(grafico_hh_por_categoria(por_categoria_filtrado)),
         height=440,
         scrolling=False,
     )
 with col_pizza:
     components.html(
-        renderizar_embutido(grafico_distribuicao_pizza(resumo.por_categoria)),
+        renderizar_embutido(grafico_distribuicao_pizza(por_categoria_filtrado)),
         height=440,
         scrolling=False,
     )
+
+st.subheader("Evolução diária e por colaborador")
+col_evolucao, col_colaborador = st.columns(2)
+with col_evolucao:
+    components.html(
+        renderizar_embutido(grafico_evolucao_diaria(linhas_filtradas)),
+        height=440,
+        scrolling=False,
+    )
+with col_colaborador:
+    components.html(
+        renderizar_embutido(grafico_hh_por_colaborador(linhas_filtradas)),
+        height=440,
+        scrolling=False,
+    )
+
+st.subheader("HH por motivo/justificativa")
+components.html(
+    renderizar_embutido(grafico_motivos_treemap(linhas_filtradas)),
+    height=440,
+    scrolling=False,
+)
 
 st.subheader("Jornadas carregadas")
 st.dataframe(
@@ -186,7 +336,7 @@ st.dataframe(
             "Início": formatar_data_hora(j.inicio),
             "Fim": formatar_data_hora(j.fim),
         }
-        for j in jornadas
+        for j in jornadas_filtradas
     ],
     width="stretch",
 )

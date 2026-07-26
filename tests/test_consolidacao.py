@@ -88,6 +88,56 @@ def test_resumo_por_categoria_ignora_atividade_e_pausa_em_andamento():
 
 
 # ----------------------------------------------------------------------
+# Linhas de evento classificadas (base dos filtros do painel)
+# ----------------------------------------------------------------------
+def test_linhas_eventos_classificadas_uma_linha_por_evento_encerrado():
+    jornada = _jornada_completa("12345")
+    catalogo = catalogo_padrao()
+
+    linhas = consolidacao.linhas_eventos_classificadas([jornada], catalogo)
+
+    # 1 evento secundario + 1 atividade + 1 pausa + 1 atendimento de falha.
+    assert len(linhas) == 4
+    assert all(linha.colaborador_matricula == "12345" for linha in linhas)
+    assert all(linha.data == _dt(8, 0).date() for linha in linhas)
+
+    por_tipo = {linha.tipo: linha for linha in linhas if linha.tipo != "ATIVIDADE"}
+    assert por_tipo["EVENTO_SECUNDARIO"].categoria == Categoria.DESLOCAMENTO_RODOVIARIO
+    assert por_tipo["EVENTO_SECUNDARIO"].motivo == "DESLOCAMENTO_TESTE"
+    assert por_tipo["EVENTO_SECUNDARIO"].duracao == timedelta(minutes=30)
+
+    assert por_tipo["PAUSA"].categoria is None  # PAUSA_TESTE sem categoria no catalogo padrao
+    assert por_tipo["PAUSA"].motivo == "PAUSA_TESTE"
+    assert por_tipo["PAUSA"].duracao == timedelta(minutes=10)
+
+    atividades = [linha for linha in linhas if linha.tipo == "ATIVIDADE"]
+    categorias_atividade = {linha.categoria for linha in atividades}
+    assert categorias_atividade == {Categoria.ATIVIDADE_PLANEJADA, Categoria.ATENDIMENTO_FALHA}
+    assert all(linha.motivo is None for linha in atividades)
+
+
+def test_linhas_eventos_classificadas_ignora_jornada_nao_encerrada():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atividade(_dt(8, 0))
+    # jornada permanece aberta.
+
+    linhas = consolidacao.linhas_eventos_classificadas([motor.jornada], catalogo_padrao())
+    assert linhas == []
+
+
+def test_linhas_eventos_classificadas_varias_jornadas_mantem_colaborador_por_linha():
+    j1 = _jornada_completa("1")
+    j2 = _jornada_completa("2")
+
+    linhas = consolidacao.linhas_eventos_classificadas([j1, j2], catalogo_padrao())
+
+    colaboradores = {linha.colaborador_matricula for linha in linhas}
+    assert colaboradores == {"1", "2"}
+    assert len(linhas) == 8  # 4 linhas por jornada
+
+
+# ----------------------------------------------------------------------
 # Consolidacao multi-jornada
 # ----------------------------------------------------------------------
 def test_resumo_consolidado_soma_varias_jornadas():

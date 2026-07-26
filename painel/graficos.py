@@ -14,14 +14,15 @@ acesso externo so para desenhar um grafico.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from pyecharts import options as opts
-from pyecharts.charts import Bar, Pie
+from pyecharts.charts import Bar, Line, Pie, TreeMap
 
 from workforce_core.catalogo import Categoria
+from workforce_core.consolidacao import LinhaEvento
 
 _DIRETORIO_MODULO = Path(__file__).resolve().parent
 CAMINHO_ECHARTS_JS_LOCAL = _DIRETORIO_MODULO / "assets" / "echarts.min.js"
@@ -63,6 +64,75 @@ def grafico_distribuicao_pizza(por_categoria: Dict[Optional[Categoria], timedelt
         .add("HH", dados)
         .set_global_opts(title_opts=opts.TitleOpts(title="Distribuicao de HH"))
         .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {d}%"))
+    )
+
+
+def grafico_evolucao_diaria(linhas: List[LinhaEvento]) -> Line:
+    """Serie temporal de HH por dia - "tendencia" recomendada em
+    docs/12_DASHBOARDS_ECHARTS.md, aba Distribuicao de HH."""
+    totais_por_dia: Dict[date, timedelta] = {}
+    for linha in linhas:
+        totais_por_dia[linha.data] = totais_por_dia.get(linha.data, timedelta()) + linha.duracao
+
+    dias_ordenados = sorted(totais_por_dia)
+    rotulos = [dia.strftime("%d/%m/%Y") for dia in dias_ordenados]
+    valores = [_horas(totais_por_dia[dia]) for dia in dias_ordenados]
+
+    return (
+        Line(init_opts=opts.InitOpts(width="100%", height="420px"))
+        .add_xaxis(rotulos)
+        .add_yaxis("HH (horas)", valores, is_smooth=True)
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title="Evolucao diaria de HH"),
+            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30)),
+            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+        )
+    )
+
+
+def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:
+    """Barras empilhadas por colaborador x categoria - permite comparar
+    colaboradores, nao so o total geral."""
+    colaboradores = sorted({linha.colaborador_matricula for linha in linhas})
+    categorias = sorted({_rotulo_categoria(linha.categoria) for linha in linhas})
+
+    totais: Dict[str, Dict[str, timedelta]] = {categoria: {} for categoria in categorias}
+    for linha in linhas:
+        rotulo = _rotulo_categoria(linha.categoria)
+        totais[rotulo][linha.colaborador_matricula] = (
+            totais[rotulo].get(linha.colaborador_matricula, timedelta()) + linha.duracao
+        )
+
+    grafico = Bar(init_opts=opts.InitOpts(width="100%", height="420px")).add_xaxis(colaboradores)
+    for categoria in categorias:
+        valores = [_horas(totais[categoria].get(colaborador, timedelta())) for colaborador in colaboradores]
+        grafico.add_yaxis(categoria, valores, stack="total")
+    grafico.set_global_opts(
+        title_opts=opts.TitleOpts(title="HH por colaborador"),
+        tooltip_opts=opts.TooltipOpts(trigger="axis"),
+        legend_opts=opts.LegendOpts(type_="scroll"),
+    )
+    return grafico
+
+
+def grafico_motivos_treemap(linhas: List[LinhaEvento]) -> TreeMap:
+    """Treemap de HH por motivo/justificativa (pausas e deslocamento/espera/
+    apoio - atividades nao tem motivo, ver LinhaEvento)."""
+    totais: Dict[str, timedelta] = {}
+    for linha in linhas:
+        if linha.motivo is None:
+            continue
+        totais[linha.motivo] = totais.get(linha.motivo, timedelta()) + linha.duracao
+
+    dados = [
+        {"name": motivo, "value": _horas(duracao)}
+        for motivo, duracao in sorted(totais.items(), key=lambda item: item[1], reverse=True)
+    ]
+
+    return (
+        TreeMap(init_opts=opts.InitOpts(width="100%", height="420px"))
+        .add("HH por motivo", dados)
+        .set_global_opts(title_opts=opts.TitleOpts(title="HH por motivo/justificativa"))
     )
 
 
