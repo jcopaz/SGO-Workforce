@@ -37,6 +37,12 @@
   instalação. Corrigido fixando Python 3.12 nas Advanced settings do app
   (exige recriar o app - a versão do Python não é editável depois de
   criado). Ver ADR-0017.
+- Sincronização nunca acontecia mesmo com backend e token corretos:
+  `configSincronizacao.js` foi atualizado com a URL/token reais sem
+  incrementar `CACHE_VERSAO` do Service Worker, então o navegador
+  continuava servindo a versão antiga (placeholder) em cache - exatamente
+  a armadilha já registrada no ADR-0004. `CACHE_VERSAO` incrementada de
+  `v6` para `v7`.
 ### Testes
 - `tests/js/relogioSimulado.test.mjs` (7 casos): avançar, definir data exata,
   voltar ao tempo real e formatação do deslocamento exibido.
