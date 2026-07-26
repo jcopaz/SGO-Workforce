@@ -226,6 +226,26 @@ _RELATORIO_1_ENTRADAS = [
 ]
 
 
+def catalogo_completo() -> CatalogoMotivos:
+    """Uniao de catalogo_padrao() (motivos de teste/exemplo, ex.: PAUSA_TESTE)
+    com catalogo_relatorio_1_manutencao() (codigos reais EE01-EE23).
+
+    Usado onde jornadas de exemplo/teste e jornadas reais da interface de
+    campo precisam ser classificadas pelo mesmo catalogo (ex.:
+    painel/dados.py::montar_resumo) - sem isso, um consumidor precisaria
+    saber de antemao se os dados sao de teste ou reais para escolher o
+    catalogo certo, e jornadas com os dois tipos de motivo (ex.: uma de
+    exemplo e uma sincronizada de verdade) nunca classificariam ambas
+    corretamente com um catalogo so.
+    """
+    completo = CatalogoMotivos()
+    for entrada in catalogo_padrao().todos():
+        completo.registrar(entrada)
+    for entrada in catalogo_relatorio_1_manutencao().todos():
+        completo.registrar(entrada)
+    return completo
+
+
 def catalogo_relatorio_1_manutencao() -> CatalogoMotivos:
     """Catalogo baseado no "Relatorio de Atividades Diarias de Manutencao"
     (Relatorio 1, codigos EE01-EE23) da Gerencia de Manutencao

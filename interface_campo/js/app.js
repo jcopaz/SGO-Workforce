@@ -132,9 +132,17 @@ function renderStatusSincronizacao() {
   els.statusSincronizacao.className = `status-sincronizacao status-sincronizacao-${sufixo}`;
 }
 
+// Formato dd/mm/aaaa hh:mm:ss, mesmo padrao adotado no painel
+// (painel/dados.py::formatar_data_hora) - construido manualmente (nao
+// toLocaleString) para o formato nao variar entre navegadores/locales.
+// Mostrar a data completa (nao so a hora) importa desde que o simulador
+// de tempo permite testar jornadas que atravessam dias (ADR-0016).
 function formatoHora(data) {
-  if (!data) return "--:--";
-  return data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (!data) return "--";
+  const dois = (n) => String(n).padStart(2, "0");
+  const dataStr = `${dois(data.getDate())}/${dois(data.getMonth() + 1)}/${data.getFullYear()}`;
+  const horaStr = `${dois(data.getHours())}:${dois(data.getMinutes())}:${dois(data.getSeconds())}`;
+  return `${dataStr} ${horaStr}`;
 }
 
 function linhaResumo(rotulo, valor) {

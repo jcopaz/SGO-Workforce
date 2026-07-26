@@ -12,12 +12,12 @@ from __future__ import annotations
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import requests
 
 from workforce_core import MotorJornada, TipoEventoSecundario
-from workforce_core.catalogo import CatalogoMotivos, catalogo_padrao
+from workforce_core.catalogo import CatalogoMotivos, catalogo_completo
 from workforce_core.consolidacao import ResumoConsolidado, resumo_consolidado
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
@@ -76,7 +76,22 @@ def carregar_jornadas_via_api(url_base: str, token: str) -> Tuple[List[Jornada],
 
 
 def montar_resumo(jornadas: List[Jornada], catalogo: CatalogoMotivos | None = None) -> ResumoConsolidado:
-    return resumo_consolidado(jornadas, catalogo or catalogo_padrao())
+    """Usa catalogo_completo() por padrao (motivos de teste + codigos reais
+    EE01-EE23, ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md).
+    Usar so catalogo_padrao() aqui fazia toda pausa registrada de verdade
+    pela interface de campo (codigos EE02/EE07/EE11/EE21/EE23) cair em
+    "sem categoria conhecida", porque esses codigos nao estavam no
+    catalogo de teste.
+    """
+    return resumo_consolidado(jornadas, catalogo or catalogo_completo())
+
+
+def formatar_data_hora(data: Optional[datetime]) -> str:
+    """Formato dd/mm/aaaa hh:mm:ss para exibicao - nunca usado como fonte
+    de calculo, so apresentacao de um datetime ja persistido."""
+    if data is None:
+        return "--"
+    return data.strftime("%d/%m/%Y %H:%M:%S")
 
 
 def formatar_horas(duracao: timedelta) -> str:

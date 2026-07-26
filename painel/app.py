@@ -27,6 +27,7 @@ import streamlit.components.v1 as components
 from dados import (
     carregar_jornadas,
     carregar_jornadas_via_api,
+    formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
     montar_resumo,
@@ -180,11 +181,10 @@ st.subheader("Jornadas carregadas")
 st.dataframe(
     [
         {
-            "id": str(j.id),
-            "colaborador": j.colaborador_matricula,
-            "estado": j.estado.value,
-            "inicio": j.inicio.isoformat() if j.inicio else None,
-            "fim": j.fim.isoformat() if j.fim else None,
+            "Colaborador": j.colaborador_matricula,
+            "Estado": j.estado.value,
+            "Início": formatar_data_hora(j.inicio),
+            "Fim": formatar_data_hora(j.fim),
         }
         for j in jornadas
     ],
