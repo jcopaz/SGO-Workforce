@@ -9,7 +9,10 @@
 7. Obrigatoriedade de GPS para iniciar/encerrar.
 8. Evidência fotográfica em falhas.
 9. Nível de detalhe do mapa por perfil.
-10. Hospedagem e autenticação do piloto.
+10. ~~Hospedagem e autenticação do piloto.~~ Resolvido no escopo do piloto
+    em 2026-07-26: backend FastAPI no Render + Postgres hospedado + token
+    fixo (`SYNC_TOKEN`). Não é o desenho de autenticação final de
+    produção — ver `docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md`.
 11. Critérios de catálogo novo e aprovação.
 12. Forma de importação periódica do RASF.
 

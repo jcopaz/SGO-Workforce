@@ -1,8 +1,10 @@
 // Interface operacional simples para celular (Incremento 4).
 //
 // Piloto tecnico: apenas Jornada + Atividade + Pausa, sem autenticacao,
-// sem GPS, sem RASF, sem sincronizacao com servidor (nao existe API real
-// ainda - ver docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
+// sem GPS, sem RASF. Sincronizacao com o backend real existe (ver
+// sincronizacao.js e docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md)
+// mas e best-effort: uma falha de rede nunca impede o registro local do
+// evento (offline-first).
 // Motivo de pausa fixo em PAUSA_TESTE, conforme decisao provisoria do
 // Incremento 1 (catalogo oficial e Incremento 5).
 
@@ -11,10 +13,12 @@ import * as calculo from "./calculo.js";
 import * as Erros from "./erros.js";
 import { carregarJornada, listarJornadasAbertas, salvarJornada } from "./armazenamento.js";
 import * as RelogioSimulado from "./relogioSimulado.js";
+import * as Sincronizacao from "./sincronizacao.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
   status: document.getElementById("status"),
+  statusSincronizacao: document.getElementById("statusSincronizacao"),
   mensagem: document.getElementById("mensagem"),
   resumo: document.getElementById("resumo"),
   botoes: document.getElementById("botoes"),
@@ -30,6 +34,9 @@ const els = {
 };
 
 let motor = null;
+// { ok: boolean|null, mensagem: string } | null - null antes de qualquer
+// tentativa de sincronizacao nesta sessao do app. ok:null == "em andamento".
+let ultimoStatusSincronizacao = null;
 
 // Motivos de pausa do "Relatorio de Atividades Diarias de Manutencao"
 // (Relatorio 1, codigos EE01-EE23), o formulario em papel que a equipe
@@ -86,6 +93,43 @@ function mostrarAviso(texto) {
 
 async function persistir() {
   await salvarJornada(motor.jornada);
+  dispararSincronizacao();
+}
+
+// Sincronizacao best-effort e assincrona: dispara sem bloquear a resposta
+// local ao colaborador (offline-first) e so atualiza a tela de status
+// quando a chamada termina. Nunca lanca (sincronizacao.js garante isso).
+function dispararSincronizacao() {
+  if (!motor) return;
+  const jornadaNoMomento = motor.jornada;
+  ultimoStatusSincronizacao = { ok: null, mensagem: "Sincronizando..." };
+  renderStatusSincronizacao();
+  Sincronizacao.sincronizar(jornadaNoMomento).then((resultado) => {
+    // So atualiza se ainda estivermos olhando para a mesma jornada (evita
+    // mostrar o resultado de uma sincronizacao antiga apos o colaborador
+    // ja ter iniciado outra jornada).
+    if (motor && motor.jornada === jornadaNoMomento) {
+      ultimoStatusSincronizacao = resultado;
+      renderStatusSincronizacao();
+    }
+  });
+}
+
+function renderStatusSincronizacao() {
+  if (!els.statusSincronizacao) return;
+  if (!ultimoStatusSincronizacao) {
+    els.statusSincronizacao.textContent = "";
+    els.statusSincronizacao.className = "status-sincronizacao";
+    return;
+  }
+  els.statusSincronizacao.textContent = ultimoStatusSincronizacao.mensagem;
+  const sufixo =
+    ultimoStatusSincronizacao.ok === null
+      ? "pendente"
+      : ultimoStatusSincronizacao.ok
+        ? "ok"
+        : "erro";
+  els.statusSincronizacao.className = `status-sincronizacao status-sincronizacao-${sufixo}`;
 }
 
 function formatoHora(data) {
@@ -165,6 +209,7 @@ function render() {
   els.botoes.replaceChildren();
   els.resumo.replaceChildren();
   renderFaixaSimulacao();
+  renderStatusSincronizacao();
 
   if (!motor || motor.jornada.estado === "NAO_INICIADA") {
     els.status.textContent = "Nenhuma jornada em andamento.";
@@ -183,6 +228,7 @@ function render() {
   }
 
   els.matricula.disabled = true;
+  els.botoes.appendChild(botao("Sincronizar agora", () => dispararSincronizacao()));
 
   if (motor.jornada.estado === "ENCERRADA") {
     els.status.textContent = `Jornada encerrada as ${formatoHora(motor.jornada.fim)}.`;

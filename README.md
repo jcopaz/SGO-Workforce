@@ -230,6 +230,42 @@ desde já. Decisões e o fechamento do roadmap completo em
 
 Testes: `tests/test_integracao_sgo.py`.
 
+## Sincronização real: app de campo → backend → painel
+
+`src/workforce_api/`: API mínima (FastAPI + Postgres hospedado) que
+recebe jornadas do `interface_campo/` e as devolve para o `painel/`
+consumir via "Fonte de dados: API (nuvem)". Token fixo (`SYNC_TOKEN`) como
+autenticação de escopo-piloto. Decisões, o que fica fora de escopo e
+instruções de deploy (Render) em
+`docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md`.
+
+### Como rodar o backend localmente
+
+Exige um Postgres acessível (local ou já hospedado):
+
+```bash
+export DATABASE_URL="postgresql://usuario:senha@host:5432/banco"
+export SYNC_TOKEN="escolha-um-token"
+export ORIGENS_PERMITIDAS="http://localhost:8000"
+PYTHONPATH=src python -m uvicorn workforce_api.app:app --reload
+```
+
+Testes (sem precisar de Postgres real — usam `RepositorioJornadaArquivo`
+injetado no lugar do Postgres):
+
+```bash
+python -m pip install httpx  # dependencia so dos testes (TestClient)
+python -m pytest tests/test_workforce_api.py -v
+```
+
+Para a interface de campo sincronizar de verdade, preencha
+`interface_campo/js/configSincronizacao.js` com a URL do backend e o mesmo
+`SYNC_TOKEN`. Para o painel usar a API em vez do arquivo local, selecione
+"API (nuvem)" na tela e informe a mesma URL/token (ou configure
+`SYNC_API_URL`/`SYNC_TOKEN` em "Secrets", se estiver no Streamlit Cloud).
+
+Testes: `tests/test_workforce_api.py`, `tests/js/sincronizacao.test.mjs`.
+
 ## Status do roadmap
 
 Os 13 incrementos de `docs/27_ALINHAMENTO_OFICIAL_SGO_WORKFORCE_v1_2.md`

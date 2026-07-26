@@ -146,6 +146,24 @@ body {
   margin: 1rem 0 0.5rem;
 }
 
+.status-sincronizacao {
+  font-size: 0.8rem;
+  margin: 0 0 0.5rem;
+  min-height: 1rem;
+}
+
+.status-sincronizacao-ok {
+  color: #1e6b3a;
+}
+
+.status-sincronizacao-erro {
+  color: var(--cor-erro);
+}
+
+.status-sincronizacao-pendente {
+  color: #4a5a68;
+}
+
 .mensagem {
   min-height: 1.5rem;
   margin: 0.5rem 0;

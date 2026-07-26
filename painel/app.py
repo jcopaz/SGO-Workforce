@@ -20,11 +20,28 @@ _RAIZ_PROJETO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_RAIZ_PROJETO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-from dados import carregar_jornadas, formatar_horas, gerar_jornadas_exemplo, montar_resumo
+from dados import (
+    carregar_jornadas,
+    carregar_jornadas_via_api,
+    formatar_horas,
+    gerar_jornadas_exemplo,
+    montar_resumo,
+)
 from graficos import grafico_distribuicao_pizza, grafico_hh_por_categoria, renderizar_embutido
+
+
+def _obter_secret_seguro(chave: str, default: str = "") -> str:
+    """Le st.secrets sem derrubar o painel se nao houver secrets.toml
+    configurado (uso local, sem Streamlit Cloud)."""
+    try:
+        return st.secrets.get(chave, default)
+    except Exception:
+        return default
+
 
 st.set_page_config(page_title="SGO Workforce | Painel (piloto)", layout="wide")
 
@@ -38,39 +55,99 @@ st.warning(
 
 st.title("SGO Workforce | Painel gerencial (piloto)")
 
-if "painel_diretorio_jornadas" not in st.session_state:
-    st.session_state.painel_diretorio_jornadas = str(_RAIZ_PROJETO / "dados_locais" / "jornadas")
+if "painel_fonte_dados" not in st.session_state:
+    st.session_state.painel_fonte_dados = "Arquivo local"
 
-diretorio = st.text_input(
-    "Diretorio de jornadas persistidas",
-    key="painel_diretorio_jornadas",
+fonte_dados = st.radio(
+    "Fonte de dados",
+    ["Arquivo local", "API (nuvem)"],
+    key="painel_fonte_dados",
+    horizontal=True,
+    help=(
+        "'Arquivo local' le dados_locais/jornadas nesta maquina. "
+        "'API (nuvem)' busca as jornadas sincronizadas pela interface de "
+        "campo no backend real (docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md)."
+    ),
 )
 
-if not diretorio:
-    st.warning("Informe um diretorio de jornadas para continuar.")
-    st.stop()
+jornadas = []
+com_erro = []
 
-coluna_exemplo, _coluna_vazia = st.columns([1, 3])
-with coluna_exemplo:
-    if st.button("Gerar dados de exemplo (teste)"):
-        gerar_jornadas_exemplo(diretorio)
-        st.success("Dados de exemplo gravados. Os numeros abaixo ja refletem isso.")
+if fonte_dados == "Arquivo local":
+    if "painel_diretorio_jornadas" not in st.session_state:
+        st.session_state.painel_diretorio_jornadas = str(
+            _RAIZ_PROJETO / "dados_locais" / "jornadas"
+        )
 
-jornadas, com_erro = carregar_jornadas(diretorio)
-
-if com_erro:
-    st.error(
-        f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem "
-        f"serem apagados: {', '.join(com_erro)}"
+    diretorio = st.text_input(
+        "Diretorio de jornadas persistidas",
+        key="painel_diretorio_jornadas",
     )
 
-if not jornadas:
-    st.info(
-        "Nenhuma jornada encerrada encontrada nesse diretorio. Use o botao "
-        "acima para gerar dados de exemplo, ou aponte para um diretorio "
-        "gravado pelo motor de dominio (workforce_storage.RepositorioJornadaArquivo)."
+    if not diretorio:
+        st.warning("Informe um diretorio de jornadas para continuar.")
+        st.stop()
+
+    coluna_exemplo, _coluna_vazia = st.columns([1, 3])
+    with coluna_exemplo:
+        if st.button("Gerar dados de exemplo (teste)"):
+            gerar_jornadas_exemplo(diretorio)
+            st.success("Dados de exemplo gravados. Os numeros abaixo ja refletem isso.")
+
+    jornadas, com_erro = carregar_jornadas(diretorio)
+
+    if com_erro:
+        st.error(
+            f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem "
+            f"serem apagados: {', '.join(com_erro)}"
+        )
+
+    if not jornadas:
+        st.info(
+            "Nenhuma jornada encerrada encontrada nesse diretorio. Use o botao "
+            "acima para gerar dados de exemplo, ou aponte para um diretorio "
+            "gravado pelo motor de dominio (workforce_storage.RepositorioJornadaArquivo)."
+        )
+        st.stop()
+else:
+    if "painel_api_url" not in st.session_state:
+        st.session_state.painel_api_url = _obter_secret_seguro("SYNC_API_URL")
+    if "painel_api_token" not in st.session_state:
+        st.session_state.painel_api_token = _obter_secret_seguro("SYNC_TOKEN")
+
+    url_api = st.text_input(
+        "URL do backend (ex.: https://sgo-workforce-api.onrender.com)",
+        key="painel_api_url",
     )
-    st.stop()
+    token_api = st.text_input(
+        "Token de sincronizacao (SYNC_TOKEN)",
+        key="painel_api_token",
+        type="password",
+    )
+
+    if not url_api or not token_api:
+        st.warning("Informe a URL do backend e o token de sincronizacao para continuar.")
+        st.stop()
+
+    try:
+        jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+    except requests.exceptions.RequestException as exc:
+        st.error(f"Nao foi possivel buscar dados do backend: {exc}")
+        st.stop()
+
+    if com_erro:
+        st.error(
+            f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura "
+            f"invalida, ignorada(s): {', '.join(com_erro)}"
+        )
+
+    if not jornadas:
+        st.info(
+            "Nenhuma jornada encerrada no backend ainda. Registre e sincronize "
+            "uma jornada pela interface de campo, ou toque em 'Sincronizar "
+            "agora' la se ja tiver uma em andamento."
+        )
+        st.stop()
 
 resumo = montar_resumo(jornadas)
 

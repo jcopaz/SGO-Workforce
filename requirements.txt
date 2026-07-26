@@ -9,6 +9,7 @@ folium>=0.17,<1
 streamlit-folium>=0.23,<1
 python-multipart>=0.0.9,<1
 python-dotenv>=1.0,<2
+requests>=2.31,<3
 
 # streamlit-echarts foi substituido por pyecharts (Incremento 9): a versao
 # do Streamlit disponivel neste ambiente (1.57+) quebra a integracao de

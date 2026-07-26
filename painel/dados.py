@@ -14,12 +14,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple, Union
 
+import requests
+
 from workforce_core import MotorJornada, TipoEventoSecundario
 from workforce_core.catalogo import CatalogoMotivos, catalogo_padrao
 from workforce_core.consolidacao import ResumoConsolidado, resumo_consolidado
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
+from workforce_storage.serializacao import jornada_de_dict
 
 
 def carregar_jornadas(diretorio: Union[str, Path]) -> Tuple[List[Jornada], List[str]]:
@@ -37,6 +40,34 @@ def carregar_jornadas(diretorio: Union[str, Path]) -> Tuple[List[Jornada], List[
             jornadas.append(repo.carregar(jornada_id))
         except ArquivoCorrompidoError:
             com_erro.append(str(jornada_id))
+    return jornadas, com_erro
+
+
+def carregar_jornadas_via_api(url_base: str, token: str) -> Tuple[List[Jornada], List[str]]:
+    """Busca as jornadas do backend real (workforce_api) em vez de ler
+    arquivos locais - usado quando o painel esta configurado com a fonte
+    de dados "API (nuvem)" (docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md).
+
+    Mesma assinatura de retorno de carregar_jornadas() (jornadas validas,
+    ids/identificadores com erro) para o resto do painel nao precisar saber
+    de qual fonte os dados vieram. Erros de rede/autenticacao (backend
+    fora do ar, token errado) propagam como requests.exceptions.RequestException
+    - quem chama decide como exibir isso (nunca escondido silenciosamente).
+    """
+    resposta = requests.get(
+        f"{url_base.rstrip('/')}/jornadas",
+        headers={"X-Sync-Token": token},
+        timeout=10,
+    )
+    resposta.raise_for_status()
+
+    jornadas: List[Jornada] = []
+    com_erro: List[str] = []
+    for item in resposta.json():
+        try:
+            jornadas.append(jornada_de_dict(item))
+        except (KeyError, ValueError, TypeError):
+            com_erro.append(str(item.get("id", "desconhecido")))
     return jornadas, com_erro
 
 
