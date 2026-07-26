@@ -60,16 +60,20 @@ test("paraPayloadSincronizacao trata jornada em andamento (fim nulo)", () => {
   assert.equal(payload.atividades.length, 0);
 });
 
-test("sincronizar() sem configuracao real (placeholder) nao tenta chamar fetch", async () => {
+test("sincronizar() com configurada:false nao tenta chamar fetch", async () => {
   let chamado = false;
   const fetchFalso = async () => {
     chamado = true;
     return { ok: true };
   };
 
-  // Sem sobrescrever `configurada`, usa configSincronizacao.js real - que
-  // neste repositorio ainda tem os valores placeholder (nao preenchidos).
-  const resultado = await sincronizar(jornadaEncerradaComPausa(), { fetchImpl: fetchFalso });
+  // configurada explicito (nao depende de configSincronizacao.js real ter
+  // ou nao valores preenchidos - evita um teste fragil que muda de
+  // resultado conforme o ambiente e configurado para producao).
+  const resultado = await sincronizar(jornadaEncerradaComPausa(), {
+    fetchImpl: fetchFalso,
+    configurada: false,
+  });
 
   assert.equal(chamado, false);
   assert.equal(resultado.ok, false);

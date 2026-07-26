@@ -12,8 +12,8 @@
 // impedir que alguem que descubra a URL do backend por acaso escreva
 // dados aleatorios nela - nao protege contra quem leia o codigo do site.
 
-export const URL_BASE_API = "https://SEU-BACKEND.onrender.com";
-export const TOKEN_SINCRONIZACAO = "SEU-TOKEN-AQUI";
+export const URL_BASE_API = "https://sgo-workforce.onrender.com";
+export const TOKEN_SINCRONIZACAO = "jPQssLcPij6vQBBcedgEQenft9I3jTZ6tln3COSK1vU";
 
 // Enquanto os valores acima nao forem preenchidos de verdade, a
 // sincronizacao fica desligada (sincronizacao.js nao tenta nenhuma
