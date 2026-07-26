@@ -18,6 +18,8 @@
 </header>
 
 <main class="conteudo">
+  <p id="faixaSimulacao" class="faixa-simulacao" hidden></p>
+
   <p class="aviso-piloto">
     Este e um piloto tecnico do motor de jornada. GPS, atendimento de
     falhas e sincronizacao com servidor ainda nao existem aqui. Os motivos
@@ -27,6 +29,28 @@
     nao tem tela propria neste piloto. <strong>A classificacao de cada
     codigo como produtivo/improdutivo ainda nao foi validada.</strong>
   </p>
+
+  <details class="simulador">
+    <summary>Simulador de tempo (somente teste)</summary>
+    <p class="simulador-aviso">
+      Ferramenta de teste para adiantar o relogio usado pelo app, e assim
+      testar jornadas de varios dias sem esperar o tempo real passar.
+      <strong>Nunca deve ser usada em operacao real.</strong>
+    </p>
+    <p id="simuladorStatus" class="simulador-status"></p>
+    <div class="simulador-botoes">
+      <button id="simAvancar15m" type="button" class="botao">+15 min</button>
+      <button id="simAvancar1h" type="button" class="botao">+1 hora</button>
+      <button id="simAvancar8h" type="button" class="botao">+8 horas</button>
+      <button id="simAvancar1d" type="button" class="botao">+1 dia</button>
+    </div>
+    <label class="campo">
+      <span>Definir data e hora exata</span>
+      <input id="simDataHora" type="datetime-local" />
+    </label>
+    <button id="simAplicarData" type="button" class="botao">Aplicar data/hora</button>
+    <button id="simReiniciar" type="button" class="botao">Voltar para tempo real</button>
+  </details>
 
   <label class="campo">
     <span>Matricula</span>

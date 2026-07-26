@@ -52,6 +52,69 @@ body {
   margin: 0 auto;
 }
 
+.faixa-simulacao {
+  background: #3d2b00;
+  color: #ffd27a;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.simulador {
+  border: 1px dashed var(--cor-borda);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+
+.simulador summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.35rem 0;
+}
+
+.simulador-aviso {
+  color: var(--cor-aviso);
+  background: var(--cor-aviso-fundo);
+  border: 1px solid #f0dc8c;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin: 0.5rem 0;
+  line-height: 1.4;
+}
+
+.simulador-status {
+  font-variant-numeric: tabular-nums;
+  margin: 0.5rem 0;
+}
+
+.simulador-botoes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.simulador-botoes .botao {
+  font-size: 0.9rem;
+  padding: 0.6rem;
+}
+
+.simulador .campo input {
+  font-size: 1rem;
+}
+
+.simulador > .botao {
+  width: 100%;
+  font-size: 0.9rem;
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
 .aviso-piloto {
   background: var(--cor-aviso-fundo);
   color: var(--cor-aviso);

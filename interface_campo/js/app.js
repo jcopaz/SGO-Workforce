@@ -10,6 +10,7 @@ import { MotorJornada } from "./motorJornada.js";
 import * as calculo from "./calculo.js";
 import * as Erros from "./erros.js";
 import { carregarJornada, listarJornadasAbertas, salvarJornada } from "./armazenamento.js";
+import * as RelogioSimulado from "./relogioSimulado.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
@@ -17,6 +18,15 @@ const els = {
   mensagem: document.getElementById("mensagem"),
   resumo: document.getElementById("resumo"),
   botoes: document.getElementById("botoes"),
+  faixaSimulacao: document.getElementById("faixaSimulacao"),
+  simuladorStatus: document.getElementById("simuladorStatus"),
+  simAvancar15m: document.getElementById("simAvancar15m"),
+  simAvancar1h: document.getElementById("simAvancar1h"),
+  simAvancar8h: document.getElementById("simAvancar8h"),
+  simAvancar1d: document.getElementById("simAvancar1d"),
+  simDataHora: document.getElementById("simDataHora"),
+  simAplicarData: document.getElementById("simAplicarData"),
+  simReiniciar: document.getElementById("simReiniciar"),
 };
 
 let motor = null;
@@ -107,20 +117,27 @@ function renderResumoEncerrado() {
 
 function renderResumoEmAndamento() {
   // Indicativo apenas: a duracao oficial e sempre recalculada a partir dos
-  // timestamps persistidos quando os eventos forem encerrados. Isto aqui
-  // e so para o colaborador ter uma nocao de tempo decorrido em tela.
-  const agora = new Date();
+  // timestamps persistidos quando os eventos forem encerrados. O "decorrido"
+  // abaixo usa o mesmo relogio (real ou simulado) que sera gravado se o
+  // colaborador clicar em algum botao agora - nao e um relogio visual
+  // desconectado do que fica persistido.
+  const agora = RelogioSimulado.agora();
   const partes = [];
   if (motor.jornada.inicio) {
-    partes.push(`Jornada iniciada as ${formatoHora(motor.jornada.inicio)}`);
+    const decorridoJornada = calculo.formatarDuracao(agora.getTime() - motor.jornada.inicio.getTime());
+    partes.push(`Jornada iniciada as ${formatoHora(motor.jornada.inicio)} (decorrido: ${decorridoJornada})`);
   }
   const atividade = motor._atividadeAtiva;
   if (atividade) {
-    partes.push(`Atividade iniciada as ${formatoHora(atividade.inicio)}`);
+    const decorridoAtividade = calculo.formatarDuracao(agora.getTime() - atividade.inicio.getTime());
+    partes.push(`Atividade iniciada as ${formatoHora(atividade.inicio)} (decorrido: ${decorridoAtividade})`);
   }
   const pausa = motor._pausaAtiva;
   if (pausa) {
-    partes.push(`Pausa iniciada as ${formatoHora(pausa.inicio)} (motivo: ${pausa.motivo})`);
+    const decorridoPausa = calculo.formatarDuracao(agora.getTime() - pausa.inicio.getTime());
+    partes.push(
+      `Pausa iniciada as ${formatoHora(pausa.inicio)} (motivo: ${pausa.motivo}, decorrido: ${decorridoPausa})`
+    );
   }
   const paragrafo = document.createElement("p");
   paragrafo.className = "em-andamento";
@@ -128,9 +145,26 @@ function renderResumoEmAndamento() {
   els.resumo.replaceChildren(paragrafo);
 }
 
+// Faixa de aviso sempre visivel (fora do <details> do simulador) quando o
+// relogio esta adiantado - nunca deve ficar escondido que o app esta fora
+// do tempo real, mesmo com o painel do simulador recolhido.
+function renderFaixaSimulacao() {
+  if (RelogioSimulado.estaSimulando()) {
+    els.faixaSimulacao.textContent = `Simulacao de tempo ativa (${RelogioSimulado.descreverDeslocamento()}) - isto NAO e o relogio real.`;
+    els.faixaSimulacao.hidden = false;
+  } else {
+    els.faixaSimulacao.textContent = "";
+    els.faixaSimulacao.hidden = true;
+  }
+  if (els.simuladorStatus) {
+    els.simuladorStatus.textContent = `Relogio efetivo: ${formatoHora(RelogioSimulado.agora())} (${RelogioSimulado.descreverDeslocamento()})`;
+  }
+}
+
 function render() {
   els.botoes.replaceChildren();
   els.resumo.replaceChildren();
+  renderFaixaSimulacao();
 
   if (!motor || motor.jornada.estado === "NAO_INICIADA") {
     els.status.textContent = "Nenhuma jornada em andamento.";
@@ -140,7 +174,7 @@ function render() {
         "Iniciar jornada",
         () => {
           if (!prepararMotorComMatricula()) return;
-          executar(() => motor.iniciarJornada(new Date()));
+          executar(() => motor.iniciarJornada(RelogioSimulado.agora()));
         },
         { destaque: true }
       )
@@ -174,7 +208,7 @@ function render() {
   if (pausa) {
     els.status.textContent = "Em pausa.";
     els.botoes.appendChild(
-      botao("Finalizar pausa", () => executar(() => motor.finalizarPausa(new Date())), {
+      botao("Finalizar pausa", () => executar(() => motor.finalizarPausa(RelogioSimulado.agora())), {
         destaque: true,
       })
     );
@@ -184,23 +218,23 @@ function render() {
     els.botoes.appendChild(seletorMotivo);
     els.botoes.appendChild(
       botao("Iniciar pausa", () =>
-        executar(() => motor.iniciarPausa(new Date(), seletorMotivo.value))
+        executar(() => motor.iniciarPausa(RelogioSimulado.agora(), seletorMotivo.value))
       )
     );
     els.botoes.appendChild(
-      botao("Encerrar atividade", () => executar(() => motor.encerrarAtividade(new Date())), {
+      botao("Encerrar atividade", () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())), {
         destaque: true,
       })
     );
   } else {
     els.status.textContent = "Jornada aberta, sem atividade em andamento.";
     els.botoes.appendChild(
-      botao("Iniciar atividade", () => executar(() => motor.iniciarAtividade(new Date())), {
+      botao("Iniciar atividade", () => executar(() => motor.iniciarAtividade(RelogioSimulado.agora())), {
         destaque: true,
       })
     );
     els.botoes.appendChild(
-      botao("Encerrar jornada", () => executar(() => motor.encerrarJornada(new Date())))
+      botao("Encerrar jornada", () => executar(() => motor.encerrarJornada(RelogioSimulado.agora())))
     );
   }
 
@@ -240,6 +274,49 @@ function prepararMotorComMatricula() {
   return true;
 }
 
+// Liga os controles do painel "Simulador de tempo (somente teste)". So
+// mexe no relogio (RelogioSimulado) - nunca chama o motor de dominio
+// diretamente, entao funciona independente de haver ou nao jornada aberta.
+function configurarSimulador() {
+  if (!els.simAvancar15m) return; // painel nao presente no HTML (defensivo)
+
+  els.simAvancar15m.addEventListener("click", () => {
+    RelogioSimulado.avancar(15 * RelogioSimulado.UM_MINUTO_MS);
+    render();
+  });
+  els.simAvancar1h.addEventListener("click", () => {
+    RelogioSimulado.avancar(RelogioSimulado.UMA_HORA_MS);
+    render();
+  });
+  els.simAvancar8h.addEventListener("click", () => {
+    RelogioSimulado.avancar(8 * RelogioSimulado.UMA_HORA_MS);
+    render();
+  });
+  els.simAvancar1d.addEventListener("click", () => {
+    RelogioSimulado.avancar(RelogioSimulado.UM_DIA_MS);
+    render();
+  });
+  els.simAplicarData.addEventListener("click", () => {
+    const valor = els.simDataHora.value;
+    if (!valor) {
+      mostrarAviso("Informe uma data e hora antes de aplicar.");
+      return;
+    }
+    const dataAlvo = new Date(valor);
+    if (Number.isNaN(dataAlvo.getTime())) {
+      mostrarAviso("Data/hora invalida.");
+      return;
+    }
+    limparMensagem();
+    RelogioSimulado.definir(dataAlvo);
+    render();
+  });
+  els.simReiniciar.addEventListener("click", () => {
+    RelogioSimulado.voltarParaTempoReal();
+    render();
+  });
+}
+
 async function iniciar() {
   const abertas = await listarJornadasAbertas();
   if (abertas.length > 1) {
@@ -267,4 +344,5 @@ async function iniciar() {
   render();
 }
 
+configurarSimulador();
 iniciar();
