@@ -241,9 +241,13 @@ instruções de deploy (Render) em
 
 ### Como rodar o backend localmente
 
-Exige um Postgres acessível (local ou já hospedado):
+As dependências do backend (FastAPI, uvicorn, psycopg2-binary) ficam em
+`requirements-api.txt`, separadas de `requirements.txt` (painel) - o
+painel só fala com o backend por HTTP, nunca precisa instalar essas
+bibliotecas. Exige um Postgres acessível (local ou já hospedado):
 
 ```bash
+python -m pip install -r requirements-api.txt
 export DATABASE_URL="postgresql://usuario:senha@host:5432/banco"
 export SYNC_TOKEN="escolha-um-token"
 export ORIGENS_PERMITIDAS="http://localhost:8000"

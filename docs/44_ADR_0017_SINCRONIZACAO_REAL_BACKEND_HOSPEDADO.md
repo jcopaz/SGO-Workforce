@@ -140,6 +140,41 @@ ADR-0016) para o que este ambiente de desenvolvimento não consegue validar
 sozinho — fica como tarefa explícita do responsável pelo produto antes de
 usar os dados sincronizados para qualquer decisão.
 
+### Atualização: painel travado em loop de deploy no Streamlit Cloud (2026-07-26)
+
+O responsável pelo produto reportou que o deploy do painel no Streamlit
+Community Cloud ficava preso num ciclo — clonava o repositório, processava
+dependências (`Resolved 61 packages`) e reiniciava o processo inteiro do
+zero, sem nunca chegar a subir o servidor Streamlit nem mostrar um erro
+explícito.
+
+**Causa provável**: `requirements.txt` era compartilhado pelos dois
+serviços (painel no Streamlit Cloud e backend no Render), então o painel
+tentava instalar `fastapi`, `uvicorn` e `psycopg2-binary` — que ele nunca
+importa, já que fala com o backend só por HTTP (`requests`). O
+`psycopg2-binary` em particular é conhecido por falhar/travar builds
+quando não há uma wheel pré-compilada pronta para a versão exata de Python
+do ambiente (o log mostrava Python 3.14.6, uma versão recente o
+suficiente para isso ser plausível), exigindo compilar a partir do
+código-fonte sem as bibliotecas de desenvolvimento do Postgres
+(`libpq-dev`) disponíveis no container do Streamlit Cloud.
+
+**Correção**: dependências separadas em dois arquivos —
+`requirements.txt` (painel: Streamlit, pandas, openpyxl, pyecharts,
+Folium, streamlit-folium, python-dotenv, requests) e
+`requirements-api.txt` (backend: FastAPI, uvicorn, psycopg2-binary,
+python-multipart). O build command do Web Service no Render precisou ser
+atualizado manualmente pelo responsável pelo produto para
+`pip install -r requirements-api.txt` em vez de `requirements.txt`.
+
+**Validação NÃO realizada**: não foi possível confirmar neste ambiente que
+essa era de fato a causa raiz (sem acesso ao Streamlit Cloud nem ao log
+completo/traceback) - é a causa mais provável dado o sintoma (loop sem
+erro visível logo após "Processing dependencies") e o fato de remover
+dependências não utilizadas pelo painel ser uma melhoria válida de
+qualquer forma. Fica pendente confirmar se o deploy do painel completou
+com sucesso após essa mudança.
+
 ## Alternativas consideradas
 
 - **Ponte manual de exportar/importar JSON** (proposta inicialmente,
@@ -160,7 +195,9 @@ usar os dados sincronizados para qualquer decisão.
 
 1. Render → New → PostgreSQL (plano free) → copiar a "Internal Database URL".
 2. Render → New → Web Service, repositório `jcopaz/SGO-Workforce`:
-   - Build command: `pip install -r requirements.txt`.
+   - Build command: `pip install -r requirements-api.txt` (não
+     `requirements.txt` — esse é o do painel, tem Streamlit/pandas/Folium
+     que o backend não usa e só deixa o build mais pesado à toa).
    - Start command: `PYTHONPATH=src uvicorn workforce_api.app:app --host 0.0.0.0 --port $PORT`.
    - Variáveis de ambiente: `DATABASE_URL` (passo 1), `SYNC_TOKEN`
      (escolher uma string aleatória), `ORIGENS_PERMITIDAS`

@@ -1,0 +1,9 @@
+# Dependencias exclusivas do backend de sincronizacao (src/workforce_api/),
+# hospedado separadamente no Render - nao instalar isso no painel
+# (Streamlit Cloud), que so fala com o backend via HTTP (requests, ja em
+# requirements.txt). Ver docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md.
+
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+psycopg2-binary>=2.9,<3
+python-multipart>=0.0.9,<1

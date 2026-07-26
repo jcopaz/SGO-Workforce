@@ -28,6 +28,12 @@
 - `docs/23_DECISOES_PENDENTES.md`: item 10 (hospedagem/autenticação do
   piloto) marcado como resolvido no escopo do piloto.
 ### Corrigido
+- Deploy do painel travava em loop no Streamlit Community Cloud
+  (`Resolved 61 packages` e reiniciava sem subir o servidor). Causa
+  provável: `requirements.txt` era compartilhado com o backend e incluía
+  `fastapi`/`uvicorn`/`psycopg2-binary`, que o painel não usa - separado em
+  `requirements.txt` (painel) e `requirements-api.txt` (backend, usado no
+  build command do Render). Ver ADR-0017.
 ### Testes
 - `tests/js/relogioSimulado.test.mjs` (7 casos): avançar, definir data exata,
   voltar ao tempo real e formatação do deslocamento exibido.
