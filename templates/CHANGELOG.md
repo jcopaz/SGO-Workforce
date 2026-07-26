@@ -29,11 +29,14 @@
   piloto) marcado como resolvido no escopo do piloto.
 ### Corrigido
 - Deploy do painel travava em loop no Streamlit Community Cloud
-  (`Resolved 61 packages` e reiniciava sem subir o servidor). Causa
-  provável: `requirements.txt` era compartilhado com o backend e incluía
-  `fastapi`/`uvicorn`/`psycopg2-binary`, que o painel não usa - separado em
-  `requirements.txt` (painel) e `requirements-api.txt` (backend, usado no
-  build command do Render). Ver ADR-0017.
+  (`Resolved N packages` e reiniciava sem subir o servidor). Separado
+  `requirements.txt` (painel) de `requirements-api.txt` (backend, usado no
+  build command do Render) - melhoria válida, mas não era a causa raiz.
+  Causa raiz confirmada: Python 3.14 (padrão da plataforma) era recente
+  demais para o ecossistema de pacotes ter wheels prontas, travando a
+  instalação. Corrigido fixando Python 3.12 nas Advanced settings do app
+  (exige recriar o app - a versão do Python não é editável depois de
+  criado). Ver ADR-0017.
 ### Testes
 - `tests/js/relogioSimulado.test.mjs` (7 casos): avançar, definir data exata,
   voltar ao tempo real e formatação do deslocamento exibido.

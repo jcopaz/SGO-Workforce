@@ -148,32 +148,36 @@ dependências (`Resolved 61 packages`) e reiniciava o processo inteiro do
 zero, sem nunca chegar a subir o servidor Streamlit nem mostrar um erro
 explícito.
 
-**Causa provável**: `requirements.txt` era compartilhado pelos dois
-serviços (painel no Streamlit Cloud e backend no Render), então o painel
-tentava instalar `fastapi`, `uvicorn` e `psycopg2-binary` — que ele nunca
-importa, já que fala com o backend só por HTTP (`requests`). O
-`psycopg2-binary` em particular é conhecido por falhar/travar builds
-quando não há uma wheel pré-compilada pronta para a versão exata de Python
-do ambiente (o log mostrava Python 3.14.6, uma versão recente o
-suficiente para isso ser plausível), exigindo compilar a partir do
-código-fonte sem as bibliotecas de desenvolvimento do Postgres
-(`libpq-dev`) disponíveis no container do Streamlit Cloud.
+**Primeira hipótese (parcialmente certa, mas não a causa raiz)**:
+`requirements.txt` era compartilhado pelos dois serviços (painel no
+Streamlit Cloud e backend no Render), então o painel tentava instalar
+`fastapi`, `uvicorn` e `psycopg2-binary` — que ele nunca importa, já que
+fala com o backend só por HTTP (`requests`). Corrigido separando em dois
+arquivos: `requirements.txt` (painel) e `requirements-api.txt` (backend,
+usado no build command do Web Service no Render). Essa separação é uma
+melhoria válida por si só (build mais enxuto para os dois lados), mas
+**não resolveu o travamento** — o painel continuou preso no mesmo ponto
+mesmo já sem essas três dependências (log foi de 61 para 54 pacotes
+resolvidos, mesmo loop).
 
-**Correção**: dependências separadas em dois arquivos —
-`requirements.txt` (painel: Streamlit, pandas, openpyxl, pyecharts,
-Folium, streamlit-folium, python-dotenv, requests) e
-`requirements-api.txt` (backend: FastAPI, uvicorn, psycopg2-binary,
-python-multipart). O build command do Web Service no Render precisou ser
-atualizado manualmente pelo responsável pelo produto para
-`pip install -r requirements-api.txt` em vez de `requirements.txt`.
+**Causa raiz confirmada**: a versão do Python usada pelo Streamlit Cloud
+para esse app era `3.14.6` — recém-lançada demais para o ecossistema de
+pacotes (pandas, Streamlit, Folium etc.) ter cobertura confiável de
+wheels pré-compiladas, travando/demorando indefinidamente na etapa de
+instalação (`uv pip install` nunca chegava a imprimir "Installed N
+packages"). A versão do Python só pode ser escolhida na criação do app
+(campo "Python version" em "Advanced settings"), não depois — não havia
+essa opção nas configurações do app já criado. **Correção**: apagar o app
+e recriá-lo do zero, desta vez fixando a versão em **3.12** nas Advanced
+settings. Confirmado pelo responsável pelo produto em 2026-07-26: com
+Python 3.12, o deploy completou e o painel subiu normalmente.
 
-**Validação NÃO realizada**: não foi possível confirmar neste ambiente que
-essa era de fato a causa raiz (sem acesso ao Streamlit Cloud nem ao log
-completo/traceback) - é a causa mais provável dado o sintoma (loop sem
-erro visível logo após "Processing dependencies") e o fato de remover
-dependências não utilizadas pelo painel ser uma melhoria válida de
-qualquer forma. Fica pendente confirmar se o deploy do painel completou
-com sucesso após essa mudança.
+**Recomendação para deploys futuros deste projeto** (painel ou qualquer
+outro serviço Python): sempre fixar explicitamente a versão do Python nas
+Advanced settings ao criar o app no Streamlit Cloud (ou o equivalente nas
+outras plataformas) em vez de aceitar o padrão da plataforma - o padrão
+pode mudar para uma versão muito recente antes do ecossistema de pacotes
+acompanhar.
 
 ## Alternativas consideradas
 
