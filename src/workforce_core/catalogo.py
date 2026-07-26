@@ -80,6 +80,17 @@ class EntradaCatalogo:
     descricao: str
     categoria: Optional[Categoria] = None
     classificacao_hh: ClassificacaoHH = ClassificacaoHH.NAO_DEFINIDO
+    # "pausa" | "evento_secundario" | "atividade" - mesmo vocabulario ja
+    # usado em _RELATORIO_1_ENTRADAS/codigos_relatorio_1_por_tipo_registro,
+    # agora carregado no proprio objeto (nao so na tupla interna) para o
+    # catalogo dinamico (Incremento de catalogo real, ver
+    # docs/46_ADR_0019_CATALOGO_DINAMICO.md) saber montar o seletor certo
+    # na interface de campo sem precisar de uma segunda fonte de verdade.
+    tipo_registro: str = "pausa"
+    # Desativar nunca apaga - mesmo principio de "correcao nunca apaga o
+    # evento original" (docs/17_SEGURANCA_GOVERNANCA.md), aplicado a
+    # motivos de catalogo.
+    ativo: bool = True
 
 
 class CatalogoMotivos:
@@ -268,13 +279,14 @@ def catalogo_relatorio_1_manutencao() -> CatalogoMotivos:
     interface de campo.
     """
     catalogo = CatalogoMotivos()
-    for codigo, descricao, categoria, _tipo_registro in _RELATORIO_1_ENTRADAS:
+    for codigo, descricao, categoria, tipo_registro in _RELATORIO_1_ENTRADAS:
         catalogo.registrar(
             EntradaCatalogo(
                 codigo=codigo,
                 descricao=descricao,
                 categoria=categoria,
                 classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+                tipo_registro=tipo_registro,
             )
         )
     return catalogo

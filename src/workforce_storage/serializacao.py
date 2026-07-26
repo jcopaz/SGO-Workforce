@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
+from workforce_core.catalogo import Categoria, ClassificacaoHH, EntradaCatalogo
 from workforce_core.entities import (
     Atividade,
     DadosFalha,
@@ -224,4 +225,29 @@ def pulso_gps_de_dict(dados: Dict[str, Any]) -> PulsoGps:
         bateria_percentual=dados.get("bateria_percentual"),
         timestamp_recebimento_servidor=_str_para_dt(dados.get("timestamp_recebimento_servidor")),
         qualidade=QualidadePulso(dados.get("qualidade", QualidadePulso.NAO_AVALIADO.value)),
+    )
+
+
+def entrada_catalogo_para_dict(entrada: EntradaCatalogo) -> Dict[str, Any]:
+    return {
+        "codigo": entrada.codigo,
+        "descricao": entrada.descricao,
+        "categoria": entrada.categoria.value if entrada.categoria is not None else None,
+        "classificacao_hh": entrada.classificacao_hh.value,
+        "tipo_registro": entrada.tipo_registro,
+        "ativo": entrada.ativo,
+    }
+
+
+def entrada_catalogo_de_dict(dados: Dict[str, Any]) -> EntradaCatalogo:
+    categoria_bruta = dados.get("categoria")
+    return EntradaCatalogo(
+        codigo=dados["codigo"],
+        descricao=dados["descricao"],
+        categoria=Categoria(categoria_bruta) if categoria_bruta else None,
+        classificacao_hh=ClassificacaoHH(
+            dados.get("classificacao_hh", ClassificacaoHH.NAO_DEFINIDO.value)
+        ),
+        tipo_registro=dados.get("tipo_registro", "pausa"),
+        ativo=dados.get("ativo", True),
     )

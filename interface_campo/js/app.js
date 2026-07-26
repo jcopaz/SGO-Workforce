@@ -4,9 +4,9 @@
 // sem GPS, sem RASF. Sincronizacao com o backend real existe (ver
 // sincronizacao.js e docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md)
 // mas e best-effort: uma falha de rede nunca impede o registro local do
-// evento (offline-first).
-// Motivo de pausa fixo em PAUSA_TESTE, conforme decisao provisoria do
-// Incremento 1 (catalogo oficial e Incremento 5).
+// evento (offline-first). Catalogo de motivos de pausa buscado
+// dinamicamente do backend (ver catalogoMotivos.js e
+// docs/46_ADR_0019_CATALOGO_DINAMICO.md).
 
 import { MotorJornada } from "./motorJornada.js";
 import * as calculo from "./calculo.js";
@@ -14,6 +14,7 @@ import * as Erros from "./erros.js";
 import { carregarJornada, listarJornadasAbertas, salvarJornada } from "./armazenamento.js";
 import * as RelogioSimulado from "./relogioSimulado.js";
 import * as Sincronizacao from "./sincronizacao.js";
+import * as CatalogoMotivos from "./catalogoMotivos.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
@@ -37,32 +38,19 @@ let motor = null;
 // { ok: boolean|null, mensagem: string } | null - null antes de qualquer
 // tentativa de sincronizacao nesta sessao do app. ok:null == "em andamento".
 let ultimoStatusSincronizacao = null;
-
-// Motivos de pausa do "Relatorio de Atividades Diarias de Manutencao"
-// (Relatorio 1, codigos EE01-EE23), o formulario em papel que a equipe
-// realmente usa hoje - fornecido pelo responsavel pelo produto em
-// 2026-07-23 (ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md).
-// Sao os 5 codigos que, no motor de dominio, interrompem uma atividade em
-// andamento (equivalente a workforce_core.catalogo.codigos_relatorio_1_por_tipo_registro("pausa")).
-// Os demais 16 codigos do Relatorio 1 sao "evento secundario"
-// (deslocamento/espera/apoio) e ainda nao tem tela propria aqui - ver ADR.
-// classificacao produtiva/improdutiva continua NAO_DEFINIDO (nao validada).
-const MOTIVOS_PAUSA_RELATORIO_1 = [
-  { codigo: "EE02", rotulo: "Refeição 1 hora" },
-  { codigo: "EE07", rotulo: "Reunião ou ADM" },
-  { codigo: "EE11", rotulo: "Consulta à documentação técnica" },
-  { codigo: "EE21", rotulo: "SMS" },
-  { codigo: "EE23", rotulo: "Treinamento" },
-];
+// Motivos de pausa (catalogo dinamico) - populado em iniciar() antes do
+// primeiro render(). Nunca fica vazio: catalogoMotivos.js sempre devolve
+// pelo menos a lista minima embutida como ultimo recurso offline.
+let motivosPausa = [];
 
 function criarSeletorMotivoPausa() {
   const select = document.createElement("select");
   select.id = "motivoPausa";
   select.className = "seletor-motivo";
-  for (const motivo of MOTIVOS_PAUSA_RELATORIO_1) {
+  for (const motivo of motivosPausa) {
     const opcao = document.createElement("option");
     opcao.value = motivo.codigo;
-    opcao.textContent = `${motivo.codigo} - ${motivo.rotulo}`;
+    opcao.textContent = `${motivo.codigo} - ${motivo.descricao}`;
     select.appendChild(opcao);
   }
   return select;
@@ -372,7 +360,11 @@ function configurarSimulador() {
 }
 
 async function iniciar() {
-  const abertas = await listarJornadasAbertas();
+  const [abertas, motivos] = await Promise.all([
+    listarJornadasAbertas(),
+    CatalogoMotivos.obterMotivosPausa(),
+  ]);
+  motivosPausa = motivos;
   if (abertas.length > 1) {
     // Nunca deveria acontecer (regra de ouro: uma jornada aberta por vez).
     // Se acontecer, e sinal de dado corrompido/adulterado - nao decide

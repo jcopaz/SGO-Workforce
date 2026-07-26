@@ -39,6 +39,19 @@ def test_catalogo_relatorio_1_categorias_estruturais_corretas():
     assert catalogo.obter("EE14").categoria == Categoria.DESLOCAMENTO_A_PE
 
 
+def test_catalogo_relatorio_1_entrada_carrega_tipo_registro():
+    # EntradaCatalogo.tipo_registro precisa bater com
+    # codigos_relatorio_1_por_tipo_registro (mesma fonte,
+    # _RELATORIO_1_ENTRADAS) - agora carregado no proprio objeto para o
+    # catalogo dinamico (Incremento de catalogo real) nao precisar de uma
+    # segunda fonte de verdade so pra saber o tipo de um codigo.
+    catalogo = catalogo_relatorio_1_manutencao()
+    assert catalogo.obter("EE02").tipo_registro == "pausa"
+    assert catalogo.obter("EE01").tipo_registro == "evento_secundario"
+    assert catalogo.obter("EE17").tipo_registro == "atividade"
+    assert all(entrada.ativo for entrada in catalogo.todos())
+
+
 def test_codigos_relatorio_1_por_tipo_registro_pausa():
     codigos_pausa = codigos_relatorio_1_por_tipo_registro("pausa")
     assert set(codigos_pausa) == {"EE02", "EE07", "EE11", "EE21", "EE23"}

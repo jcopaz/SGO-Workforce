@@ -29,8 +29,14 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from workforce_storage.exceptions import ArquivoCorrompidoError
-from workforce_storage.serializacao import jornada_de_dict, jornada_para_dict
+from workforce_storage.serializacao import (
+    entrada_catalogo_de_dict,
+    entrada_catalogo_para_dict,
+    jornada_de_dict,
+    jornada_para_dict,
+)
 
+from .repositorio_catalogo_postgres import RepositorioCatalogoPostgres
 from .repositorio_postgres import RepositorioJornadaPostgres
 
 app = FastAPI(title="SGO Workforce - API de sincronizacao (piloto)")
@@ -69,6 +75,24 @@ def obter_repositorio() -> RepositorioJornadaPostgres:
             )
         _repositorio_cache = RepositorioJornadaPostgres(dsn)
     return _repositorio_cache
+
+
+_repositorio_catalogo_cache: RepositorioCatalogoPostgres | None = None
+
+
+def obter_repositorio_catalogo() -> RepositorioCatalogoPostgres:
+    """Mesmo padrao de obter_repositorio() - construido na primeira
+    chamada, sobrescrito em testes via app.dependency_overrides."""
+    global _repositorio_catalogo_cache
+    if _repositorio_catalogo_cache is None:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise HTTPException(
+                status_code=503,
+                detail="Backend sem DATABASE_URL configurada - nao pode persistir.",
+            )
+        _repositorio_catalogo_cache = RepositorioCatalogoPostgres(dsn)
+    return _repositorio_catalogo_cache
 
 
 def exigir_token(x_sync_token: str = Header(default="")) -> None:
@@ -116,3 +140,27 @@ def listar_jornadas(
             continue
         resultado.append(jornada_para_dict(jornada))
     return resultado
+
+
+@app.get("/catalogo", dependencies=[Depends(exigir_token)])
+def listar_catalogo(
+    repositorio: RepositorioCatalogoPostgres = Depends(obter_repositorio_catalogo),
+) -> List[Dict[str, Any]]:
+    """So retorna motivos ativos - a interface de campo nao deve oferecer
+    um motivo desativado pelo admin."""
+    return [entrada_catalogo_para_dict(entrada) for entrada in repositorio.listar(somente_ativos=True)]
+
+
+@app.post("/catalogo", dependencies=[Depends(exigir_token)])
+def upsert_catalogo(
+    dados: Dict[str, Any],
+    repositorio: RepositorioCatalogoPostgres = Depends(obter_repositorio_catalogo),
+) -> Dict[str, str]:
+    """Upsert por codigo (mesma garantia de idempotencia do ADR-0003) -
+    usado pela tela de administracao do catalogo no painel."""
+    try:
+        entrada = entrada_catalogo_de_dict(dados)
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Motivo malformado: {exc}") from exc
+    repositorio.salvar(entrada)
+    return {"status": "salvo", "codigo": entrada.codigo}

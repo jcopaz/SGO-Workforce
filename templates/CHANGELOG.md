@@ -22,14 +22,21 @@
   (`src/workforce_core/consolidacao.py`). Ver `docs/45_ADR_0018_FILTROS_E_GRAFICOS_DASHBOARD.md`.
 - `catalogo_completo()` em `src/workforce_core/catalogo.py` (união de
   `catalogo_padrao()` e `catalogo_relatorio_1_manutencao()`).
+- Catálogo dinâmico de motivos: `GET`/`POST /catalogo` no backend
+  (`src/workforce_api/repositorio_catalogo_postgres.py`, com seed
+  automático dos 23 códigos reais), consumido pela interface de campo
+  (`interface_campo/js/catalogoMotivos.js`, com cache offline e fallback
+  mínimo) e administrado em `painel/pages/4_Catalogo.py`. Ver
+  `docs/46_ADR_0019_CATALOGO_DINAMICO.md`.
 ### Alterado
 - `interface_campo/js/app.js`: as 7 transições do motor de dominio agora usam
   `RelogioSimulado.agora()` em vez de `new Date()`; o resumo em andamento
   passou a mostrar o tempo decorrido de jornada/atividade/pausa; toda
   transição agora também dispara sincronização best-effort com o backend.
 - `interface_campo/service-worker.js`: `CACHE_VERSAO` incrementada de `v4`
-  para `v6` (novos arquivos `relogioSimulado.js`, `configSincronizacao.js`
-  e `sincronizacao.js` no app shell).
+  para `v8` ao longo destas sessões (novos arquivos `relogioSimulado.js`,
+  `configSincronizacao.js`, `sincronizacao.js` e `catalogoMotivos.js` no
+  app shell).
 - `requirements.txt`: adiciona `requests` (cliente HTTP do painel).
 - `docs/23_DECISOES_PENDENTES.md`: item 10 (hospedagem/autenticação do
   piloto) marcado como resolvido no escopo do piloto.
@@ -42,6 +49,12 @@
   (decisão consciente, ver ADR-0018).
 - Tabela "Jornadas carregadas" no painel: remove coluna `id`, mostra
   Colaborador/Estado/Início/Fim.
+- `interface_campo/js/app.js`: motivos de pausa do seletor deixam de vir
+  hardcoded (`MOTIVOS_PAUSA_RELATORIO_1` removida) e passam a vir do
+  catálogo dinâmico buscado em `iniciar()`.
+- `EntradaCatalogo` (`src/workforce_core/catalogo.py`) ganha
+  `tipo_registro` e `ativo`; `catalogo_relatorio_1_manutencao()` popula
+  `tipo_registro` de verdade no objeto (antes só existia na tupla interna).
 ### Corrigido
 - Categoria "sem classificação" em toda pausa real sincronizada da
   interface de campo: `montar_resumo` usava `catalogo_padrao()` (só
@@ -77,7 +90,13 @@
 - `tests/test_painel.py`: novos testes de `formatar_data_hora`,
   `montar_linhas_eventos`/`agrupar_duracao_por_categoria` e dos 3 gráficos
   novos.
-- `node --test tests/js`: 30/30 testes. `pytest`: 187/187 testes.
+- `tests/test_serializacao_catalogo.py` (novo, 4 casos): round-trip de
+  `entrada_catalogo_para_dict`/`entrada_catalogo_de_dict`.
+- `tests/test_workforce_api.py`: 5 novos casos de `/catalogo` (token,
+  upsert idempotente, inativos omitidos, payload malformado).
+- `tests/js/catalogoMotivos.test.mjs` (6 casos): fallback mínimo, cache
+  offline, erro HTTP, token no header.
+- `node --test tests/js`: 36/36 testes. `pytest`: 197/197 testes.
 ### Riscos
 - Simulador de tempo é ferramenta de teste: precisa ser removido/bloqueado
   antes de qualquer piloto real com colaboradores (ver ADR-0016).
@@ -97,3 +116,6 @@
 - Cards de HH produtivo/improdutivo do `docs/12_DASHBOARDS_ECHARTS.md`
   continuam bloqueados: nenhum motivo do catálogo tem
   `classificacao_hh` definida ainda (decisão de negócio pendente).
+- Catálogo dinâmico (`motivos_catalogo`) não foi testado contra Postgres
+  real neste ambiente (mesma limitação já registrada para `jornadas` no
+  ADR-0017) - só validado com repositório falso em memória. Ver ADR-0019.

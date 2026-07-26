@@ -239,6 +239,12 @@ autenticação de escopo-piloto. Decisões, o que fica fora de escopo e
 instruções de deploy (Render) em
 `docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md`.
 
+O mesmo backend também expõe `GET`/`POST /catalogo` (catálogo dinâmico de
+motivos de pausa, com seed automático dos 23 códigos reais do Relatório
+1) — administrado em `painel/pages/4_Catalogo.py` e consumido pela
+interface de campo com cache offline. Ver
+`docs/46_ADR_0019_CATALOGO_DINAMICO.md`.
+
 ### Como rodar o backend localmente
 
 As dependências do backend (FastAPI, uvicorn, psycopg2-binary) ficam em
