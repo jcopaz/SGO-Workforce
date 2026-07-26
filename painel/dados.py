@@ -57,7 +57,11 @@ def carregar_jornadas_via_api(url_base: str, token: str) -> Tuple[List[Jornada],
     resposta = requests.get(
         f"{url_base.rstrip('/')}/jornadas",
         headers={"X-Sync-Token": token},
-        timeout=10,
+        # Render free tier "dorme" o backend apos ~15 min sem uso - a
+        # primeira chamada depois disso pode levar dezenas de segundos
+        # para acordar o servico. Timeout generoso para nao falhar so por
+        # causa do cold start (nao e erro de verdade, e so lentidao).
+        timeout=60,
     )
     resposta.raise_for_status()
 
