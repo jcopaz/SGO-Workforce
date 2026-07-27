@@ -28,8 +28,17 @@ CREATE TABLE IF NOT EXISTS motivos_catalogo (
     classificacao_hh TEXT NOT NULL DEFAULT 'NAO_DEFINIDO',
     tipo_registro TEXT NOT NULL,
     ativo BOOLEAN NOT NULL DEFAULT true,
-    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    tipo_evento_secundario TEXT NULL
 )
+"""
+
+# CREATE TABLE IF NOT EXISTS nao adiciona coluna a uma tabela que ja existe
+# em producao (Render) - mesma licao aprendida no ADR-0023 para a tabela
+# inteira. Por isso a coluna nova tambem entra via ALTER, idempotente
+# (IF NOT EXISTS), rodado sempre que o repositorio inicializa.
+_ALTER_TABELA_SQL = """
+ALTER TABLE motivos_catalogo ADD COLUMN IF NOT EXISTS tipo_evento_secundario TEXT NULL
 """
 
 
@@ -46,6 +55,7 @@ class RepositorioCatalogoPostgres:
         with self._conectar() as conexao:
             with conexao.cursor() as cursor:
                 cursor.execute(_CRIAR_TABELA_SQL)
+                cursor.execute(_ALTER_TABELA_SQL)
             conexao.commit()
 
     def _semear_se_vazio(self) -> None:
@@ -69,14 +79,15 @@ class RepositorioCatalogoPostgres:
                 cursor.execute(
                     """
                     INSERT INTO motivos_catalogo
-                        (codigo, descricao, categoria, classificacao_hh, tipo_registro, ativo, atualizado_em)
-                    VALUES (%s, %s, %s, %s, %s, %s, now())
+                        (codigo, descricao, categoria, classificacao_hh, tipo_registro, ativo, tipo_evento_secundario, atualizado_em)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, now())
                     ON CONFLICT (codigo) DO UPDATE SET
                         descricao = EXCLUDED.descricao,
                         categoria = EXCLUDED.categoria,
                         classificacao_hh = EXCLUDED.classificacao_hh,
                         tipo_registro = EXCLUDED.tipo_registro,
                         ativo = EXCLUDED.ativo,
+                        tipo_evento_secundario = EXCLUDED.tipo_evento_secundario,
                         atualizado_em = now()
                     """,
                     [
@@ -86,13 +97,14 @@ class RepositorioCatalogoPostgres:
                         dados["classificacao_hh"],
                         dados["tipo_registro"],
                         dados["ativo"],
+                        dados["tipo_evento_secundario"],
                     ],
                 )
             conexao.commit()
 
     def listar(self, *, somente_ativos: bool = True) -> List[EntradaCatalogo]:
         query = (
-            "SELECT codigo, descricao, categoria, classificacao_hh, tipo_registro, ativo "
+            "SELECT codigo, descricao, categoria, classificacao_hh, tipo_registro, ativo, tipo_evento_secundario "
             "FROM motivos_catalogo"
         )
         if somente_ativos:
@@ -111,6 +123,7 @@ class RepositorioCatalogoPostgres:
                     "classificacao_hh": linha[3],
                     "tipo_registro": linha[4],
                     "ativo": linha[5],
+                    "tipo_evento_secundario": linha[6],
                 }
             )
             for linha in linhas

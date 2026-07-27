@@ -53,6 +53,26 @@ export function duracaoAtividadeLiquida(atividade) {
   return duracaoAtividadeBruta(atividade) - duracaoPausasAtividade(atividade);
 }
 
+export function duracaoEventoSecundario(evento) {
+  if (!evento.inicio || !evento.fim) {
+    throw new Erros.TimestampInvalidoError(
+      "Evento secundario sem inicio e fim definidos nao pode ser calculado."
+    );
+  }
+  if (evento.fim.getTime() < evento.inicio.getTime()) {
+    throw new Erros.TimestampInvalidoError("Evento secundario com fim anterior ao inicio.");
+  }
+  return evento.fim.getTime() - evento.inicio.getTime();
+}
+
+export function duracaoEventosSecundarios(jornada) {
+  let total = 0;
+  for (const evento of jornada.eventosSecundarios) {
+    total += duracaoEventoSecundario(evento);
+  }
+  return total;
+}
+
 export function duracaoJornadaBruta(jornada) {
   if (!jornada.inicio || !jornada.fim) {
     throw new Erros.TimestampInvalidoError(
@@ -71,11 +91,21 @@ export function tempoClassificadoJornada(jornada) {
     total += duracaoAtividadeLiquida(atividade);
     total += duracaoPausasAtividade(atividade);
   }
+  total += duracaoEventosSecundarios(jornada);
   return total;
 }
 
 export function tempoNaoClassificado(jornada) {
   return duracaoJornadaBruta(jornada) - tempoClassificadoJornada(jornada);
+}
+
+export function resumoEventoSecundario(evento) {
+  return {
+    id: evento.id,
+    tipo: evento.tipo,
+    motivo: evento.motivo,
+    duracao: duracaoEventoSecundario(evento),
+  };
 }
 
 export function resumoJornada(jornada) {
@@ -89,6 +119,7 @@ export function resumoJornada(jornada) {
       pausas: duracaoPausasAtividade(atividade),
       liquida: duracaoAtividadeLiquida(atividade),
     })),
+    eventosSecundarios: jornada.eventosSecundarios.map(resumoEventoSecundario),
   };
 }
 

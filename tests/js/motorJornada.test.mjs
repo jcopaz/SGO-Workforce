@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { MotorJornada } from "../../interface_campo/js/motorJornada.js";
 import * as calculo from "../../interface_campo/js/calculo.js";
 import * as Erros from "../../interface_campo/js/erros.js";
+import { TipoEventoSecundario } from "../../interface_campo/js/enums.js";
 
 function dt(hora, minuto, dia = 1) {
   return new Date(2026, 0, dia, hora, minuto, 0, 0);
@@ -420,4 +421,170 @@ test("atendimento de falha pode ter pausa normalmente", () => {
 
   assert.equal(calculo.duracaoPausasAtividade(atividade), 10 * 60000);
   assert.equal(calculo.duracaoAtividadeLiquida(atividade), 40 * 60000);
+});
+
+// ----------------------------------------------------------------------
+// Evento secundario (ADR-0005, espelha tests/test_eventos_secundarios.py) -
+// portado para JS no incremento de Evento Secundario na interface de campo.
+// ----------------------------------------------------------------------
+test("iniciar e encerrar deslocamento", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  const evento = motor.iniciarEventoSecundario(dt(8, 10), TipoEventoSecundario.DESLOCAMENTO, "EE12");
+  assert.equal(evento.estado, "ATIVA");
+
+  motor.encerrarEventoSecundario(dt(8, 40));
+  assert.equal(evento.estado, "ENCERRADA");
+  assert.equal(calculo.duracaoEventoSecundario(evento), 30 * 60000);
+});
+
+test("iniciar e encerrar espera e apoio", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+
+  const espera = motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.ESPERA, "EE03");
+  motor.encerrarEventoSecundario(dt(8, 15));
+
+  const apoio = motor.iniciarEventoSecundario(dt(8, 15), TipoEventoSecundario.APOIO, "EE01");
+  motor.encerrarEventoSecundario(dt(8, 45));
+
+  assert.equal(calculo.duracaoEventoSecundario(espera), 15 * 60000);
+  assert.equal(calculo.duracaoEventoSecundario(apoio), 30 * 60000);
+});
+
+test("evento secundario: tipo obrigatorio", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.iniciarEventoSecundario(dt(8, 0), null, "EE12"),
+    Erros.EventoSecundarioTipoObrigatorioError
+  );
+});
+
+test("evento secundario: motivo obrigatorio", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.DESLOCAMENTO, ""),
+    Erros.EventoSecundarioMotivoObrigatorioError
+  );
+});
+
+test("bloqueia segundo evento secundario simultaneo", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.DESLOCAMENTO, "EE12");
+
+  assert.throws(
+    () => motor.iniciarEventoSecundario(dt(8, 5), TipoEventoSecundario.APOIO, "EE01"),
+    Erros.EventoSecundarioJaAtivoError
+  );
+});
+
+test("encerrar evento secundario sem nenhum ativo", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.encerrarEventoSecundario(dt(8, 10)),
+    Erros.EventoSecundarioNaoAtivoError
+  );
+});
+
+test("evento secundario mutuamente exclusivo: evento apos atividade", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+
+  assert.throws(
+    () => motor.iniciarEventoSecundario(dt(8, 20), TipoEventoSecundario.DESLOCAMENTO, "EE12"),
+    Erros.EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError
+  );
+});
+
+test("evento secundario mutuamente exclusivo: atividade apos evento", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.ESPERA, "EE03");
+
+  assert.throws(
+    () => motor.iniciarAtividade(dt(8, 20)),
+    Erros.AtividadeExigeNenhumEventoSecundarioAtivoError
+  );
+});
+
+test("bloqueia encerrar jornada com evento secundario aberto", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.APOIO, "EE01");
+
+  assert.throws(
+    () => motor.encerrarJornada(dt(9, 0)),
+    Erros.JornadaComEventoSecundarioAbertoError
+  );
+});
+
+test("timestamp invalido no evento secundario", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 30), TipoEventoSecundario.DESLOCAMENTO, "EE12");
+  assert.throws(
+    () => motor.encerrarEventoSecundario(dt(8, 0)),
+    Erros.TimestampInvalidoError
+  );
+});
+
+test("fluxo com evento secundario entra no tempo classificado", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.DESLOCAMENTO, "EE12");
+  motor.encerrarEventoSecundario(dt(8, 30));
+
+  motor.iniciarAtividade(dt(8, 30));
+  motor.encerrarAtividade(dt(10, 30));
+
+  motor.encerrarJornada(dt(10, 30));
+
+  const resumo = calculo.resumoJornada(motor.jornada);
+  assert.equal(resumo.jornadaBruta, (2 * 60 + 30) * 60000);
+  assert.equal(resumo.tempoClassificado, (2 * 60 + 30) * 60000);
+  assert.equal(resumo.tempoNaoClassificado, 0);
+  assert.equal(resumo.eventosSecundarios.length, 1);
+  assert.equal(resumo.eventosSecundarios[0].tipo, TipoEventoSecundario.DESLOCAMENTO);
+  assert.equal(resumo.eventosSecundarios[0].duracao, 30 * 60000);
+});
+
+test("recuperacao de estado com evento secundario ativo", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 0), TipoEventoSecundario.ESPERA, "EE03");
+
+  const recuperado = MotorJornada.aPartirDe(motor.jornada);
+  recuperado.encerrarEventoSecundario(dt(8, 20));
+  recuperado.iniciarAtividade(dt(8, 20));
+  recuperado.encerrarAtividade(dt(9, 0));
+  recuperado.encerrarJornada(dt(9, 0));
+
+  assert.equal(recuperado.jornada.eventosSecundarios[0].fim.getTime(), dt(8, 20).getTime());
+});
+
+test("estado inconsistente: evento e atividade ativos juntos", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 0));
+  // Adultera diretamente a entidade para simular corrupcao/adulteracao, ja
+  // que o motor nunca permite chegar a este estado por transicoes normais
+  // (mesmo caso de tests/test_eventos_secundarios.py).
+  motor.jornada.eventosSecundarios.push({
+    id: "evento-adulterado",
+    tipo: TipoEventoSecundario.APOIO,
+    motivo: "EE01",
+    inicio: dt(8, 0),
+    fim: null,
+    estado: "ATIVA",
+  });
+
+  assert.throws(
+    () => MotorJornada.aPartirDe(motor.jornada),
+    Erros.EstadoInconsistenteError
+  );
 });

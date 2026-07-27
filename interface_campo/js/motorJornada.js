@@ -6,9 +6,15 @@
 // regra de negocio deve ser replicada nos dois lados ate existir uma
 // unica fonte de verdade (ver docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
 
-import { EstadoAtividade, EstadoJornada, EstadoPausa } from "./enums.js";
+import { EstadoAtividade, EstadoEventoSecundario, EstadoJornada, EstadoPausa } from "./enums.js";
 import * as Erros from "./erros.js";
-import { novaAtividade, novaJornada, novaPausa, novoDadosFalha } from "./entidades.js";
+import {
+  novaAtividade,
+  novaJornada,
+  novaPausa,
+  novoDadosFalha,
+  novoEventoSecundario,
+} from "./entidades.js";
 
 function validarOrdem(inicio, fim, rotulo) {
   if (fim.getTime() < inicio.getTime()) {
@@ -68,7 +74,24 @@ export function identificarEstadoAtivo(jornada) {
     );
   }
 
-  return { atividadeAtiva, pausaAtiva };
+  const eventosAtivos = jornada.eventosSecundarios.filter(
+    (e) => e.estado === EstadoEventoSecundario.ATIVA
+  );
+  if (eventosAtivos.length > 1) {
+    throw new Erros.EstadoInconsistenteError(
+      "Mais de um evento secundario (deslocamento/espera/apoio) ativo na mesma jornada."
+    );
+  }
+  const eventoSecundarioAtivo = eventosAtivos[0] ?? null;
+
+  if (eventoSecundarioAtivo && atividadeAtiva) {
+    throw new Erros.EstadoInconsistenteError(
+      "Evento secundario ativo simultaneamente com atividade principal ativa/pausada - " +
+        "essas duas coisas sao mutuamente exclusivas."
+    );
+  }
+
+  return { atividadeAtiva, pausaAtiva, eventoSecundarioAtivo };
 }
 
 export class MotorJornada {
@@ -83,13 +106,15 @@ export class MotorJornada {
     }
     this._atividadeAtiva = null;
     this._pausaAtiva = null;
+    this._eventoSecundarioAtivo = null;
   }
 
   static aPartirDe(jornada) {
-    const { atividadeAtiva, pausaAtiva } = identificarEstadoAtivo(jornada);
+    const { atividadeAtiva, pausaAtiva, eventoSecundarioAtivo } = identificarEstadoAtivo(jornada);
     const motor = new MotorJornada({ jornada });
     motor._atividadeAtiva = atividadeAtiva;
     motor._pausaAtiva = pausaAtiva;
+    motor._eventoSecundarioAtivo = eventoSecundarioAtivo;
     return motor;
   }
 
@@ -124,6 +149,11 @@ export class MotorJornada {
         "Nao e permitido encerrar a jornada com atividade aberta sem tratamento explicito."
       );
     }
+    if (this._eventoSecundarioAtivo) {
+      throw new Erros.JornadaComEventoSecundarioAbertoError(
+        "Nao e permitido encerrar a jornada com deslocamento/espera/apoio aberto."
+      );
+    }
     validarOrdem(this.jornada.inicio, quando, "jornada");
     this.jornada.fim = quando;
     this.jornada.estado = EstadoJornada.ENCERRADA;
@@ -135,6 +165,11 @@ export class MotorJornada {
     if (this._atividadeAtiva) {
       throw new Erros.AtividadeJaAtivaError(
         "Ja existe uma atividade principal ativa para este colaborador."
+      );
+    }
+    if (this._eventoSecundarioAtivo) {
+      throw new Erros.AtividadeExigeNenhumEventoSecundarioAtivoError(
+        "Nao e permitido iniciar atividade com deslocamento/espera/apoio em andamento."
       );
     }
     const atividade = novaAtividade({ inicio: quando });
@@ -268,5 +303,54 @@ export class MotorJornada {
     this._pausaAtiva = null;
     this._atividadeAtiva.estado = EstadoAtividade.ATIVA;
     return pausa;
+  }
+
+  // Deslocamento, espera ou apoio (ADR-0005) - espelha
+  // src/workforce_core/engine.py::iniciar_evento_secundario /
+  // encerrar_evento_secundario. Vinculado direto a Jornada, mutuamente
+  // exclusivo com a Atividade principal (validado nos dois sentidos:
+  // aqui e em iniciarAtividade).
+  iniciarEventoSecundario(quando, tipo, motivo) {
+    this._garantirJornadaAberta();
+    if (!tipo) {
+      throw new Erros.EventoSecundarioTipoObrigatorioError(
+        "O tipo do evento secundario (DESLOCAMENTO/ESPERA/APOIO) e obrigatorio."
+      );
+    }
+    if (!motivo) {
+      throw new Erros.EventoSecundarioMotivoObrigatorioError(
+        "O motivo do evento secundario e obrigatorio."
+      );
+    }
+    if (this._eventoSecundarioAtivo) {
+      throw new Erros.EventoSecundarioJaAtivoError(
+        "Ja existe um deslocamento/espera/apoio ativo para este colaborador."
+      );
+    }
+    if (this._atividadeAtiva) {
+      throw new Erros.EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError(
+        "Nao e permitido iniciar deslocamento/espera/apoio com atividade principal em andamento."
+      );
+    }
+    const evento = novoEventoSecundario({ tipo, motivo, inicio: quando });
+    evento.estado = EstadoEventoSecundario.ATIVA;
+    this.jornada.eventosSecundarios.push(evento);
+    this._eventoSecundarioAtivo = evento;
+    return evento;
+  }
+
+  encerrarEventoSecundario(quando) {
+    this._garantirJornadaAberta();
+    if (!this._eventoSecundarioAtivo) {
+      throw new Erros.EventoSecundarioNaoAtivoError(
+        "Nao ha deslocamento/espera/apoio ativo para encerrar."
+      );
+    }
+    const evento = this._eventoSecundarioAtivo;
+    validarOrdem(evento.inicio, quando, "evento secundario");
+    evento.fim = quando;
+    evento.estado = EstadoEventoSecundario.ENCERRADA;
+    this._eventoSecundarioAtivo = null;
+    return evento;
   }
 }

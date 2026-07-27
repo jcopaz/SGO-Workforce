@@ -84,6 +84,26 @@ test("paraPayloadSincronizacao envia dados_falha de verdade quando ha atendiment
   assert.equal(dadosFalha.foto_caminho, "atendimentos/foo.jpg");
 });
 
+test("paraPayloadSincronizacao serializa eventos_secundarios (incremento de Evento Secundario)", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarEventoSecundario(dt(8, 0), "DESLOCAMENTO", "EE12");
+  motor.encerrarEventoSecundario(dt(8, 30));
+  motor.iniciarAtividade(dt(8, 30));
+  motor.encerrarAtividade(dt(9, 0));
+  motor.encerrarJornada(dt(9, 0));
+
+  const payload = paraPayloadSincronizacao(motor.jornada);
+
+  assert.equal(payload.eventos_secundarios.length, 1);
+  const evento = payload.eventos_secundarios[0];
+  assert.equal(evento.tipo, "DESLOCAMENTO");
+  assert.equal(evento.motivo, "EE12");
+  assert.equal(evento.estado, "ENCERRADA");
+  assert.equal(evento.inicio, dt(8, 0).toISOString());
+  assert.equal(evento.fim, dt(8, 30).toISOString());
+});
+
 test("paraPayloadSincronizacao trata jornada em andamento (fim nulo)", () => {
   const motor = new MotorJornada({ colaboradorMatricula: "99999" });
   motor.iniciarJornada(dt(8, 0));

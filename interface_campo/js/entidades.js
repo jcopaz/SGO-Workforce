@@ -64,5 +64,19 @@ export function novaJornada({ colaboradorMatricula }) {
     fim: null,
     estado: "NAO_INICIADA",
     atividades: [],
+    eventosSecundarios: [],
+  };
+}
+
+// Deslocamento, espera ou apoio (ADR-0005) - vinculado direto a Jornada,
+// mutuamente exclusivo com a Atividade principal (ver motorJornada.js).
+export function novoEventoSecundario({ tipo, motivo, inicio = null }) {
+  return {
+    id: gerarId(),
+    tipo,
+    motivo,
+    inicio,
+    fim: null,
+    estado: "CRIADA",
   };
 }

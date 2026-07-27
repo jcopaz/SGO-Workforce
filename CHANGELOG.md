@@ -406,8 +406,9 @@
 - Catálogo de motivos (Incremento 5) não tem nenhum conteúdo oficial:
   todas as entradas têm `classificacao_hh = NAO_DEFINIDO` e são apenas
   placeholders de teste (`*_TESTE`). `EventoSecundario` (deslocamento,
-  espera, apoio) não foi portado para `interface_campo/js/` — só existe no
-  motor Python.
+  espera, apoio) **foi portado para `interface_campo/js/` no ADR-0024**
+  (2026-07-28) — este risco não se aplica mais, ver seção mais recente
+  no fim deste arquivo.
 - Catálogo RASF (`catalogos/`) declaradamente **não é catálogo oficial de
   produção** (ver `catalogos/README.md`) — precisa de governança e
   validação da Eletroeletrônica antes de uso real.
@@ -458,8 +459,9 @@
   código→tipo de registro (pausa/evento secundário/atividade) é
   interpretação de quem implementou, não confirmada linha a linha com o
   responsável pelo produto. Classificação produtiva/improdutiva de todos
-  os 23 códigos continua `NAO_DEFINIDO`. 16 dos 23 códigos (deslocamento/
-  espera/apoio) estão catalogados mas sem tela na interface de campo.
+  os 23 códigos foi validada no ADR-0023 (2026-07-27). Os 15 códigos de
+  deslocamento/espera/apoio **ganharam tela na interface de campo no
+  ADR-0024** (2026-07-28).
 - Buckets reais de PCM (ADR-0015): os percentuais da planilha fornecida
   são de um período específico, não uma meta validada. `EE17`/`EE22`
   ficam fora de qualquer bucket de perda por padrão porque o sistema não
@@ -467,3 +469,53 @@
   simplificação, não a distinção rentável/não-rentável real. `FÉRIAS` e
   `MOTIVOS LEGAIS` continuam sem fonte no sistema, exigindo entrada manual
   no simulador (`painel/pages/3_Capacidade_PCM.py`).
+
+## [2026-07-28] Evento Secundário na interface de campo (ADR-0024)
+
+Este changelog não acompanhou as sessões entre o Incremento 13 e esta
+data (ADR-0016 a ADR-0023 — simulador de tempo, sincronização real,
+filtros de dashboard, catálogo dinâmico, reorganização do painel,
+atendimento de falha e sua evolução com GPS/foto/transferência,
+reclassificação do catálogo). Esta entrada documenta apenas o incremento
+atual; ver `docs/51_ADR_0024_EVENTO_SECUNDARIO_INTERFACE_DE_CAMPO.md`
+para a decisão completa e os ADRs 0016-0023 para o que ficou de fora
+deste arquivo.
+
+### Adicionado
+- `EntradaCatalogo.tipo_evento_secundario` (`src/workforce_core/catalogo.py`):
+  mapeia cada um dos 15 códigos `evento_secundario` do Relatório 1 para
+  `TipoEventoSecundario.DESLOCAMENTO/ESPERA/APOIO` (mapeamento do
+  ADR-0014, exceto `EE01` classificado como `APOIO` nesta sessão).
+  Persistido no catálogo dinâmico (`repositorio_catalogo_postgres.py`,
+  nova coluna via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — a tabela já
+  existe em produção).
+- `EventoSecundario` portado para `interface_campo/js/` com paridade
+  completa do motor Python (ADR-0005): `enums.js`, `entidades.js`,
+  `erros.js` (7 exceções), `motorJornada.js`
+  (`iniciarEventoSecundario`/`encerrarEventoSecundario`, exclusão mútua
+  com Atividade nos dois sentidos, recuperação de estado), `calculo.js`
+  (duração entra no tempo classificado da jornada).
+- `catalogoMotivos.js`: nova `obterEventosSecundarios()` (mesmo
+  cache/fallback offline de `obterMotivosPausa()`).
+- `app.js`: nova tela "Iniciar deslocamento/espera/apoio" / "Encerrar
+  evento", mutuamente exclusiva por construção com as telas de
+  atividade/pausa.
+- Testes novos: `tests/test_catalogo_relatorio_1.py`,
+  `tests/test_serializacao_catalogo.py`,
+  `tests/js/motorJornada.test.mjs` (13 casos espelhando
+  `tests/test_eventos_secundarios.py`), `tests/js/catalogoMotivos.test.mjs`,
+  `tests/js/sincronizacao.test.mjs`.
+
+### Testes
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest`: 230/230 (era 226).
+- `node --check` em todos os arquivos de `interface_campo/js/`: OK.
+- `node --test tests/js`: 89/89 (era 72).
+
+### Riscos
+- Teste manual em navegador/celular real da nova tela não realizado
+  (mesma limitação de sempre).
+- Migração da coluna `tipo_evento_secundario` e reseed do catálogo em
+  produção (Render) ainda não executados — ação manual pendente.
+- Associação de OS a EE17/EE23 (decisões já tomadas no ADR-0023) continua
+  não desenhada/construída — próximo incremento.

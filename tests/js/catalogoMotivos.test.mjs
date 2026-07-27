@@ -7,7 +7,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { obterMotivosPausa, _limparCacheParaTeste } from "../../interface_campo/js/catalogoMotivos.js";
+import {
+  obterMotivosPausa,
+  obterEventosSecundarios,
+  _limparCacheParaTeste,
+} from "../../interface_campo/js/catalogoMotivos.js";
 
 test.beforeEach(() => {
   _limparCacheParaTeste();
@@ -95,4 +99,69 @@ test("envia o token no header X-Sync-Token", async () => {
   await obterMotivosPausa({ configurada: true, fetchImpl: fetchOk, token: "token-de-teste" });
 
   assert.equal(cabecalhoRecebido, "token-de-teste");
+});
+
+// ----------------------------------------------------------------------
+// obterEventosSecundarios (incremento de Evento Secundario na interface
+// de campo) - mesmo cache/fallback de obterMotivosPausa, so muda o filtro.
+// ----------------------------------------------------------------------
+test("obterEventosSecundarios sem configuracao usa a lista minima embutida", async () => {
+  const eventos = await obterEventosSecundarios({ configurada: false });
+
+  assert.ok(eventos.length > 0);
+  assert.ok(eventos.every((e) => e.tipo_registro === "evento_secundario" && e.ativo));
+  assert.ok(eventos.every((e) => e.tipo_evento_secundario));
+  assert.ok(eventos.some((e) => e.codigo === "EE12" && e.tipo_evento_secundario === "DESLOCAMENTO"));
+  assert.ok(eventos.some((e) => e.codigo === "EE01" && e.tipo_evento_secundario === "APOIO"));
+});
+
+test("obterEventosSecundarios filtra so evento_secundario+ativo do backend", async () => {
+  const catalogoDoBackend = [
+    { codigo: "EE02", descricao: "Refeição", tipo_registro: "pausa", ativo: true },
+    {
+      codigo: "EE12",
+      descricao: "Deslocamento rodoviário",
+      tipo_registro: "evento_secundario",
+      ativo: true,
+      tipo_evento_secundario: "DESLOCAMENTO",
+    },
+    {
+      codigo: "EE03",
+      descricao: "Aguardando CCO",
+      tipo_registro: "evento_secundario",
+      ativo: false,
+      tipo_evento_secundario: "ESPERA",
+    },
+  ];
+  const fetchOk = async () => ({ ok: true, json: async () => catalogoDoBackend });
+
+  const eventos = await obterEventosSecundarios({ configurada: true, fetchImpl: fetchOk });
+
+  assert.equal(eventos.length, 1);
+  assert.equal(eventos[0].codigo, "EE12");
+  assert.equal(eventos[0].tipo_evento_secundario, "DESLOCAMENTO");
+});
+
+test("obterMotivosPausa e obterEventosSecundarios compartilham o mesmo cache do backend", async () => {
+  const catalogoDoBackend = [
+    { codigo: "EE02", descricao: "Refeição", tipo_registro: "pausa", ativo: true },
+    {
+      codigo: "EE12",
+      descricao: "Deslocamento rodoviário",
+      tipo_registro: "evento_secundario",
+      ativo: true,
+      tipo_evento_secundario: "DESLOCAMENTO",
+    },
+  ];
+  await obterMotivosPausa({
+    configurada: true,
+    fetchImpl: async () => ({ ok: true, json: async () => catalogoDoBackend }),
+  });
+
+  // Sem nova chamada de fetch (configurada: false) - deve ler do mesmo
+  // cache gravado pela chamada acima.
+  const eventos = await obterEventosSecundarios({ configurada: false });
+
+  assert.equal(eventos.length, 1);
+  assert.equal(eventos[0].codigo, "EE12");
 });

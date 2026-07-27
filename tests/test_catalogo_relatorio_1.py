@@ -12,6 +12,7 @@ from workforce_core.catalogo import (
     catalogo_relatorio_1_manutencao,
     codigos_relatorio_1_por_tipo_registro,
 )
+from workforce_core.enums import TipoEventoSecundario
 
 
 def test_catalogo_relatorio_1_tem_23_codigos():
@@ -132,3 +133,43 @@ def test_codigos_relatorio_1_por_tipo_registro_cobre_todos_os_23_codigos():
 
 def test_codigos_relatorio_1_por_tipo_registro_desconhecido_retorna_vazio():
     assert codigos_relatorio_1_por_tipo_registro("tipo_que_nao_existe") == []
+
+
+def test_catalogo_relatorio_1_tipo_evento_secundario_mapeado():
+    # Mapeamento codigo -> TipoEventoSecundario (ADR-0014 secao 2, exceto
+    # EE01 que foi classificado como APOIO por decisao do responsavel pelo
+    # produto em 2026-07-28 - ver incremento de Evento Secundario na
+    # interface de campo).
+    catalogo = catalogo_relatorio_1_manutencao()
+    esperado = {
+        "EE01": TipoEventoSecundario.APOIO,
+        "EE03": TipoEventoSecundario.ESPERA,
+        "EE04": TipoEventoSecundario.ESPERA,
+        "EE05": TipoEventoSecundario.ESPERA,
+        "EE06": TipoEventoSecundario.ESPERA,
+        "EE08": TipoEventoSecundario.APOIO,
+        "EE09": TipoEventoSecundario.ESPERA,
+        "EE10": TipoEventoSecundario.ESPERA,
+        "EE12": TipoEventoSecundario.DESLOCAMENTO,
+        "EE13": TipoEventoSecundario.DESLOCAMENTO,
+        "EE14": TipoEventoSecundario.DESLOCAMENTO,
+        "EE15": TipoEventoSecundario.APOIO,
+        "EE16": TipoEventoSecundario.APOIO,
+        "EE18": TipoEventoSecundario.APOIO,
+        "EE19": TipoEventoSecundario.APOIO,
+    }
+    for codigo, tipo in esperado.items():
+        assert catalogo.obter(codigo).tipo_evento_secundario == tipo, codigo
+    # Nenhum codigo evento_secundario deveria ficar sem tipo.
+    codigos_evento_secundario = set(codigos_relatorio_1_por_tipo_registro("evento_secundario"))
+    assert codigos_evento_secundario == set(esperado)
+
+
+def test_catalogo_relatorio_1_tipo_evento_secundario_nulo_fora_de_evento_secundario():
+    # pausa/atividade nunca tem tipo_evento_secundario preenchido.
+    catalogo = catalogo_relatorio_1_manutencao()
+    codigos_nao_evento_secundario = (
+        codigos_relatorio_1_por_tipo_registro("pausa") + codigos_relatorio_1_por_tipo_registro("atividade")
+    )
+    for codigo in codigos_nao_evento_secundario:
+        assert catalogo.obter(codigo).tipo_evento_secundario is None, codigo

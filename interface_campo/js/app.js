@@ -46,6 +46,9 @@ let ultimoStatusSincronizacao = null;
 // primeiro render(). Nunca fica vazio: catalogoMotivos.js sempre devolve
 // pelo menos a lista minima embutida como ultimo recurso offline.
 let motivosPausa = [];
+// Deslocamento/espera/apoio (catalogo dinamico, incremento de Evento
+// Secundario na interface de campo) - mesmo padrao de motivosPausa.
+let eventosSecundarios = [];
 // Catalogo RASF (sintomas/componentes causadores) para o formulario de
 // atendimento de falha - mesmo padrao de motivosPausa (populado em
 // iniciar(), nunca fica vazio).
@@ -67,6 +70,28 @@ function criarSeletorMotivoPausa() {
     select.appendChild(opcao);
   }
   return select;
+}
+
+// Deslocamento/espera/apoio (ADR-0005) - mesmo padrao de
+// criarSeletorMotivoPausa. O tipo (DESLOCAMENTO/ESPERA/APOIO) exigido por
+// motor.iniciarEventoSecundario vem do proprio catalogo
+// (tipo_evento_secundario), buscado por codigo no clique do botao - ver
+// tipoEventoSecundarioParaCodigo abaixo.
+function criarSeletorEventoSecundario() {
+  const select = document.createElement("select");
+  select.id = "eventoSecundario";
+  select.className = "seletor-motivo";
+  for (const evento of eventosSecundarios) {
+    const opcao = document.createElement("option");
+    opcao.value = evento.codigo;
+    opcao.textContent = `${evento.codigo} - ${evento.descricao}`;
+    select.appendChild(opcao);
+  }
+  return select;
+}
+
+function tipoEventoSecundarioParaCodigo(codigo) {
+  return eventosSecundarios.find((evento) => evento.codigo === codigo)?.tipo_evento_secundario;
 }
 
 // Campos do formulario de atendimento de falha (ADR-0021). Cada um
@@ -439,6 +464,13 @@ function renderResumoEmAndamento() {
       `Pausa iniciada as ${formatoHora(pausa.inicio)} (motivo: ${pausa.motivo}, decorrido: ${decorridoPausa})`
     );
   }
+  const eventoSecundario = motor._eventoSecundarioAtivo;
+  if (eventoSecundario) {
+    const decorridoEvento = calculo.formatarDuracao(agora.getTime() - eventoSecundario.inicio.getTime());
+    partes.push(
+      `Evento iniciado as ${formatoHora(eventoSecundario.inicio)} (motivo: ${eventoSecundario.motivo}, decorrido: ${decorridoEvento})`
+    );
+  }
   const paragrafo = document.createElement("p");
   paragrafo.className = "em-andamento";
   paragrafo.textContent = partes.join(" · ");
@@ -521,6 +553,7 @@ function render() {
   // ABERTA
   const pausa = motor._pausaAtiva;
   const atividade = motor._atividadeAtiva;
+  const eventoSecundario = motor._eventoSecundarioAtivo;
 
   if (pausa) {
     els.status.textContent = "Em pausa.";
@@ -562,6 +595,15 @@ function render() {
         );
       }
     }
+  } else if (eventoSecundario) {
+    els.status.textContent = "Deslocamento/espera/apoio em andamento.";
+    els.botoes.appendChild(
+      botao(
+        "Encerrar evento",
+        () => executar(() => motor.encerrarEventoSecundario(RelogioSimulado.agora())),
+        { destaque: true }
+      )
+    );
   } else {
     els.status.textContent = "Jornada aberta, sem atividade em andamento.";
     els.botoes.appendChild(
@@ -578,6 +620,15 @@ function render() {
       botao("Iniciar atendimento de falha", () => {
         mostrarTransferenciaFalha = false;
         executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
+      })
+    );
+    const seletorEvento = criarSeletorEventoSecundario();
+    els.botoes.appendChild(seletorEvento);
+    els.botoes.appendChild(
+      botao("Iniciar deslocamento/espera/apoio", () => {
+        const codigo = seletorEvento.value;
+        const tipo = tipoEventoSecundarioParaCodigo(codigo);
+        executar(() => motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, codigo));
       })
     );
     els.botoes.appendChild(
@@ -665,12 +716,14 @@ function configurarSimulador() {
 }
 
 async function iniciar() {
-  const [abertas, motivos, rasf] = await Promise.all([
+  const [abertas, motivos, eventos, rasf] = await Promise.all([
     listarJornadasAbertas(),
     CatalogoMotivos.obterMotivosPausa(),
+    CatalogoMotivos.obterEventosSecundarios(),
     CatalogoRasf.obterCatalogoRasf(),
   ]);
   motivosPausa = motivos;
+  eventosSecundarios = eventos;
   catalogoRasf = rasf;
   if (abertas.length > 1) {
     // Nunca deveria acontecer (regra de ouro: uma jornada aberta por vez).

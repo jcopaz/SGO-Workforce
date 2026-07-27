@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 
+from .enums import TipoEventoSecundario
+
 
 class Categoria(str, Enum):
     """Categorias iniciais de evento, conforme docs/07_MOTOR_EVENTOS_E_HH.md,
@@ -99,6 +101,12 @@ class EntradaCatalogo:
     # evento original" (docs/17_SEGURANCA_GOVERNANCA.md), aplicado a
     # motivos de catalogo.
     ativo: bool = True
+    # So preenchido quando tipo_registro == "evento_secundario" - diz qual
+    # dos 3 tipos genericos do motor (ADR-0005) este codigo EE aciona,
+    # para a interface de campo montar o seletor sem precisar de um
+    # segundo mapeamento manual (ver ADR-0014 secao 2 e a decisao de
+    # produto que classificou EE01 como APOIO).
+    tipo_evento_secundario: Optional[TipoEventoSecundario] = None
 
 
 class CatalogoMotivos:
@@ -229,30 +237,38 @@ def catalogo_padrao() -> CatalogoMotivos:
 # liberado pela renumeracao e o novo EE23 e uma entrada real,
 # "Manutencao Programada Nao Concluida" - contraparte de EE17 quando a
 # manutencao nao termina no turno do colaborador.
+#
+# Sexto elemento da tupla (tipo_evento_secundario): so preenchido para os
+# codigos "evento_secundario", mapeando cada um para um dos 3 tipos
+# genericos do motor (ADR-0005). Mapeamento vem do ADR-0014 secao 2, exceto
+# EE01 "Preparacao para jornada" - o unico codigo que o ADR-0014 catalogou
+# como evento_secundario sem atribuir um tipo; classificado como APOIO por
+# decisao do responsavel pelo produto em 2026-07-28 (conversa registrada
+# no incremento de Evento Secundario na interface de campo).
 _RELATORIO_1_ENTRADAS = [
-    ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL),
-    ("EE03", "Aguardando CCO", Categoria.AGUARDANDO_CCO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE04", "Falta de ferramenta ou material", Categoria.AGUARDANDO_MATERIAL, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE05", "Trem parado na frente de serviço", Categoria.TREM_PARADO_FRENTE_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE06", "Restrição de infraestrutura", Categoria.RESTRICAO_INFRAESTRUTURA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa", ClassificacaoHH.IMPRODUTIVA),
-    ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA),
-    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
-    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
-    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario", ClassificacaoHH.PRODUTIVA),
-    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.PRODUTIVA),
-    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
-    ("EE17", "Manutenção Programada", Categoria.ATIVIDADE_PLANEJADA, "atividade", ClassificacaoHH.PRODUTIVA),
-    ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
-    ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
-    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA),
-    ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA),
-    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA),
-    ("EE23", "Manutenção Programada Não Concluída", Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA, "atividade", ClassificacaoHH.PRODUTIVA),
+    ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL, None),
+    ("EE03", "Aguardando CCO", Categoria.AGUARDANDO_CCO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
+    ("EE04", "Falta de ferramenta ou material", Categoria.AGUARDANDO_MATERIAL, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
+    ("EE05", "Trem parado na frente de serviço", Categoria.TREM_PARADO_FRENTE_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
+    ("EE06", "Restrição de infraestrutura", Categoria.RESTRICAO_INFRAESTRUTURA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
+    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa", ClassificacaoHH.IMPRODUTIVA, None),
+    ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
+    ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
+    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA, None),
+    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.DESLOCAMENTO),
+    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.DESLOCAMENTO),
+    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.DESLOCAMENTO),
+    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE17", "Manutenção Programada", Categoria.ATIVIDADE_PLANEJADA, "atividade", ClassificacaoHH.PRODUTIVA, None),
+    ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA, None),
+    ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA, None),
+    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA, None),
+    ("EE23", "Manutenção Programada Não Concluída", Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA, "atividade", ClassificacaoHH.PRODUTIVA, None),
 ]
 
 
@@ -297,7 +313,7 @@ def catalogo_relatorio_1_manutencao() -> CatalogoMotivos:
     na interface de campo.
     """
     catalogo = CatalogoMotivos()
-    for codigo, descricao, categoria, tipo_registro, classificacao_hh in _RELATORIO_1_ENTRADAS:
+    for codigo, descricao, categoria, tipo_registro, classificacao_hh, tipo_evento_secundario in _RELATORIO_1_ENTRADAS:
         catalogo.registrar(
             EntradaCatalogo(
                 codigo=codigo,
@@ -305,6 +321,7 @@ def catalogo_relatorio_1_manutencao() -> CatalogoMotivos:
                 categoria=categoria,
                 classificacao_hh=classificacao_hh,
                 tipo_registro=tipo_registro,
+                tipo_evento_secundario=tipo_evento_secundario,
             )
         )
     return catalogo
@@ -318,6 +335,6 @@ def codigos_relatorio_1_por_tipo_registro(tipo_registro: str) -> List[str]:
     """
     return [
         codigo
-        for codigo, _descricao, _categoria, tipo, _classificacao_hh in _RELATORIO_1_ENTRADAS
+        for codigo, _descricao, _categoria, tipo, _classificacao_hh, _tipo_evento_secundario in _RELATORIO_1_ENTRADAS
         if tipo == tipo_registro
     ]

@@ -249,11 +249,15 @@ def entrada_catalogo_para_dict(entrada: EntradaCatalogo) -> Dict[str, Any]:
         "classificacao_hh": entrada.classificacao_hh.value,
         "tipo_registro": entrada.tipo_registro,
         "ativo": entrada.ativo,
+        "tipo_evento_secundario": (
+            entrada.tipo_evento_secundario.value if entrada.tipo_evento_secundario is not None else None
+        ),
     }
 
 
 def entrada_catalogo_de_dict(dados: Dict[str, Any]) -> EntradaCatalogo:
     categoria_bruta = dados.get("categoria")
+    tipo_evento_secundario_bruto = dados.get("tipo_evento_secundario")
     return EntradaCatalogo(
         codigo=dados["codigo"],
         descricao=dados["descricao"],
@@ -263,4 +267,7 @@ def entrada_catalogo_de_dict(dados: Dict[str, Any]) -> EntradaCatalogo:
         ),
         tipo_registro=dados.get("tipo_registro", "pausa"),
         ativo=dados.get("ativo", True),
+        tipo_evento_secundario=(
+            TipoEventoSecundario(tipo_evento_secundario_bruto) if tipo_evento_secundario_bruto else None
+        ),
     )

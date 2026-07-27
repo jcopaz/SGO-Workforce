@@ -19,3 +19,18 @@ export const EstadoPausa = Object.freeze({
   ATIVA: "ATIVA",
   ENCERRADA: "ENCERRADA",
 });
+
+// Incremento de Evento Secundario na interface de campo - espelha
+// src/workforce_core/enums.py (ADR-0005), que ja existia so no lado
+// Python.
+export const EstadoEventoSecundario = Object.freeze({
+  CRIADA: "CRIADA",
+  ATIVA: "ATIVA",
+  ENCERRADA: "ENCERRADA",
+});
+
+export const TipoEventoSecundario = Object.freeze({
+  DESLOCAMENTO: "DESLOCAMENTO",
+  ESPERA: "ESPERA",
+  APOIO: "APOIO",
+});

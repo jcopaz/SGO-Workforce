@@ -52,10 +52,22 @@ function atividadeParaPayload(atividade) {
   };
 }
 
-// Converte a jornada do formato do motor JS (camelCase, sem eventos
-// secundarios) para o mesmo contrato que
-// workforce_storage.serializacao.jornada_para_dict produz no lado Python -
-// e o formato que workforce_api (POST /jornadas) espera receber.
+// Mesmo contrato de workforce_storage.serializacao.evento_secundario_para_dict.
+function eventoSecundarioParaPayload(evento) {
+  return {
+    id: evento.id,
+    tipo: evento.tipo,
+    motivo: evento.motivo,
+    inicio: evento.inicio ? evento.inicio.toISOString() : null,
+    fim: evento.fim ? evento.fim.toISOString() : null,
+    estado: evento.estado,
+  };
+}
+
+// Converte a jornada do formato do motor JS (camelCase) para o mesmo
+// contrato que workforce_storage.serializacao.jornada_para_dict produz no
+// lado Python - e o formato que workforce_api (POST /jornadas) espera
+// receber.
 export function paraPayloadSincronizacao(jornada) {
   return {
     formato_versao: 4,
@@ -65,9 +77,7 @@ export function paraPayloadSincronizacao(jornada) {
     fim: jornada.fim ? jornada.fim.toISOString() : null,
     estado: jornada.estado,
     atividades: jornada.atividades.map(atividadeParaPayload),
-    // O motor JS ainda nao tem deslocamento/espera/apoio (Incremento 5 so
-    // existe no lado Python, ADR-0004) - sempre vazio.
-    eventos_secundarios: [],
+    eventos_secundarios: jornada.eventosSecundarios.map(eventoSecundarioParaPayload),
   };
 }
 

@@ -23,3 +23,10 @@ export class TimestampInvalidoError extends ErroDominio {}
 export class EstadoInconsistenteError extends ErroDominio {}
 export class AtendimentoFalhaNaoAtivoError extends ErroDominio {}
 export class AtendimentoFalhaCamposObrigatoriosError extends ErroDominio {}
+export class EventoSecundarioJaAtivoError extends ErroDominio {}
+export class EventoSecundarioNaoAtivoError extends ErroDominio {}
+export class EventoSecundarioTipoObrigatorioError extends ErroDominio {}
+export class EventoSecundarioMotivoObrigatorioError extends ErroDominio {}
+export class EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError extends ErroDominio {}
+export class AtividadeExigeNenhumEventoSecundarioAtivoError extends ErroDominio {}
+export class JornadaComEventoSecundarioAbertoError extends ErroDominio {}
