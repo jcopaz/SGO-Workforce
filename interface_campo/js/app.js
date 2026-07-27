@@ -15,6 +15,7 @@ import { carregarJornada, listarJornadasAbertas, salvarJornada } from "./armazen
 import * as RelogioSimulado from "./relogioSimulado.js";
 import * as Sincronizacao from "./sincronizacao.js";
 import * as CatalogoMotivos from "./catalogoMotivos.js";
+import * as CatalogoRasf from "./catalogoRasf.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
@@ -42,6 +43,10 @@ let ultimoStatusSincronizacao = null;
 // primeiro render(). Nunca fica vazio: catalogoMotivos.js sempre devolve
 // pelo menos a lista minima embutida como ultimo recurso offline.
 let motivosPausa = [];
+// Catalogo RASF (sintomas/componentes causadores) para o formulario de
+// atendimento de falha - mesmo padrao de motivosPausa (populado em
+// iniciar(), nunca fica vazio).
+let catalogoRasf = { sintomas: [], componentes_causadores: [] };
 
 function criarSeletorMotivoPausa() {
   const select = document.createElement("select");
@@ -54,6 +59,103 @@ function criarSeletorMotivoPausa() {
     select.appendChild(opcao);
   }
   return select;
+}
+
+// Campos do formulario de atendimento de falha (ADR-0021). Cada um
+// inicializa com o valor ja persistido (dados_falha.<campo>) para um
+// re-render nao perder o que ja foi salvo, e so grava (executar ->
+// registrarDadosFalha) quando o campo perde o foco/muda - nunca a cada
+// tecla, para nao disparar um render completo a cada digito.
+function criarCampoTexto(rotulo, valorAtual, aoSalvar) {
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = rotulo;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = valorAtual || "";
+  input.addEventListener("blur", () => aoSalvar(input.value.trim()));
+  label.append(span, input);
+  return label;
+}
+
+function criarCampoTextarea(rotulo, valorAtual, aoSalvar) {
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = rotulo;
+  const textarea = document.createElement("textarea");
+  textarea.rows = 3;
+  textarea.value = valorAtual || "";
+  textarea.addEventListener("blur", () => aoSalvar(textarea.value.trim()));
+  label.append(span, textarea);
+  return label;
+}
+
+function criarCampoSelecao(rotulo, opcoes, valorAtual, aoSalvar) {
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = rotulo;
+  const select = document.createElement("select");
+  select.className = "seletor-motivo";
+  const opcaoVazia = document.createElement("option");
+  opcaoVazia.value = "";
+  opcaoVazia.textContent = "Selecione...";
+  select.appendChild(opcaoVazia);
+  for (const valor of opcoes) {
+    const opcao = document.createElement("option");
+    opcao.value = valor;
+    opcao.textContent = valor;
+    select.appendChild(opcao);
+  }
+  select.value = valorAtual || "";
+  select.addEventListener("change", () => aoSalvar(select.value));
+  label.append(span, select);
+  return label;
+}
+
+// Formulario completo, anexado a els.botoes quando ha um atendimento de
+// falha em andamento (atividade.dadosFalha existe). O aviso persistente
+// fica visivel enquanto essa tela estiver aberta - nao e um toast que
+// some sozinho.
+function renderFormularioAtendimentoFalha(atividade) {
+  const dados = atividade.dadosFalha;
+
+  const aviso = document.createElement("p");
+  aviso.className = "aviso-piloto";
+  aviso.textContent =
+    "Atendimento de falha em andamento: a atividade só pode ser encerrada depois de preencher nota, ativo, sintoma, objeto e observações/causa.";
+  els.botoes.appendChild(aviso);
+
+  els.botoes.appendChild(
+    criarCampoTexto("Número da nota de atendimento", dados.nota, (valor) =>
+      executar(() => motor.registrarDadosFalha({ nota: valor }))
+    )
+  );
+  els.botoes.appendChild(
+    criarCampoTexto("Identificação do ativo", dados.ativo, (valor) =>
+      executar(() => motor.registrarDadosFalha({ ativo: valor }))
+    )
+  );
+  els.botoes.appendChild(
+    criarCampoSelecao("Sintoma", catalogoRasf.sintomas, dados.sintoma, (valor) =>
+      executar(() => motor.registrarDadosFalha({ sintoma: valor }))
+    )
+  );
+  els.botoes.appendChild(
+    criarCampoSelecao(
+      "Objeto (componente causador)",
+      catalogoRasf.componentes_causadores,
+      dados.objeto,
+      (valor) => executar(() => motor.registrarDadosFalha({ objeto: valor }))
+    )
+  );
+  els.botoes.appendChild(
+    criarCampoTextarea("Observações/Causa", dados.observacao, (valor) =>
+      executar(() => motor.registrarDadosFalha({ observacao: valor }))
+    )
+  );
 }
 
 function botao(texto, aoClicar, { destaque = false } = {}) {
@@ -255,7 +357,12 @@ function render() {
       })
     );
   } else if (atividade) {
-    els.status.textContent = "Atividade em andamento.";
+    if (atividade.dadosFalha) {
+      els.status.textContent = "Atendimento de falha em andamento.";
+      renderFormularioAtendimentoFalha(atividade);
+    } else {
+      els.status.textContent = "Atividade em andamento.";
+    }
     const seletorMotivo = criarSeletorMotivoPausa();
     els.botoes.appendChild(seletorMotivo);
     els.botoes.appendChild(
@@ -264,9 +371,11 @@ function render() {
       )
     );
     els.botoes.appendChild(
-      botao("Encerrar atividade", () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())), {
-        destaque: true,
-      })
+      botao(
+        atividade.dadosFalha ? "Concluir atendimento" : "Encerrar atividade",
+        () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())),
+        { destaque: true }
+      )
     );
   } else {
     els.status.textContent = "Jornada aberta, sem atividade em andamento.";
@@ -274,6 +383,11 @@ function render() {
       botao("Iniciar atividade", () => executar(() => motor.iniciarAtividade(RelogioSimulado.agora())), {
         destaque: true,
       })
+    );
+    els.botoes.appendChild(
+      botao("Iniciar atendimento de falha", () =>
+        executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()))
+      )
     );
     els.botoes.appendChild(
       botao("Encerrar jornada", () => executar(() => motor.encerrarJornada(RelogioSimulado.agora())))
@@ -360,11 +474,13 @@ function configurarSimulador() {
 }
 
 async function iniciar() {
-  const [abertas, motivos] = await Promise.all([
+  const [abertas, motivos, rasf] = await Promise.all([
     listarJornadasAbertas(),
     CatalogoMotivos.obterMotivosPausa(),
+    CatalogoRasf.obterCatalogoRasf(),
   ]);
   motivosPausa = motivos;
+  catalogoRasf = rasf;
   if (abertas.length > 1) {
     // Nunca deveria acontecer (regra de ouro: uma jornada aberta por vez).
     // Se acontecer, e sinal de dado corrompido/adulterado - nao decide

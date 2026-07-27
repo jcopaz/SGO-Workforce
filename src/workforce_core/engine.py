@@ -47,11 +47,11 @@ from .exceptions import (
     TimestampInvalidoError,
 )
 
-_CAMPOS_OBRIGATORIOS_FALHA = ("nota", "ativo", "sintoma", "causa", "acao", "observacao")
+CAMPOS_OBRIGATORIOS_FALHA = ("nota", "ativo", "sintoma", "objeto", "observacao")
 
 
 def _validar_dados_falha_completos(dados: DadosFalha) -> None:
-    faltantes = [campo for campo in _CAMPOS_OBRIGATORIOS_FALHA if not getattr(dados, campo)]
+    faltantes = [campo for campo in CAMPOS_OBRIGATORIOS_FALHA if not getattr(dados, campo)]
     if faltantes:
         raise AtendimentoFalhaCamposObrigatoriosError(
             "Atendimento de falha nao pode ser encerrado sem: " + ", ".join(faltantes) + "."
@@ -241,8 +241,8 @@ class MotorJornada:
         Reaproveita integralmente as regras de Atividade (jornada aberta,
         atividade principal unica, mutuamente exclusiva com evento
         secundario) - o unico acrescimo e que encerrar_atividade passa a
-        exigir nota, ativo, sintoma, causa, acao e observacao antes de
-        aceitar o encerramento (docs/27 secao 3.5).
+        exigir nota, ativo, sintoma, objeto e observacao antes de aceitar
+        o encerramento (docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md).
         """
         atividade = self.iniciar_atividade(quando)
         atividade.dados_falha = DadosFalha()
@@ -254,6 +254,7 @@ class MotorJornada:
         nota: str | None = None,
         ativo: str | None = None,
         sintoma: str | None = None,
+        objeto: str | None = None,
         causa: str | None = None,
         acao: str | None = None,
         observacao: str | None = None,
@@ -261,9 +262,10 @@ class MotorJornada:
         """Atualiza parcialmente os dados do atendimento de falha em andamento.
 
         Cada campo so e sobrescrito se for informado (nao-None), permitindo
-        preencher nota/ativo/sintoma no inicio e causa/acao/observacao mais
-        perto do encerramento, conforme o fluxo de
-        docs/09_ATENDIMENTO_FALHAS_RASF.md.
+        preencher nota/ativo/sintoma/objeto no inicio e observacao mais
+        perto do encerramento. `causa`/`acao` continuam aceitos por
+        compatibilidade (nao usados pelo formulario atual da interface de
+        campo, ver ADR-0021).
         """
         self._garantir_jornada_aberta()
         if self._atividade_ativa is None or self._atividade_ativa.dados_falha is None:
@@ -277,6 +279,8 @@ class MotorJornada:
             dados.ativo = ativo
         if sintoma is not None:
             dados.sintoma = sintoma
+        if objeto is not None:
+            dados.objeto = objeto
         if causa is not None:
             dados.causa = causa
         if acao is not None:

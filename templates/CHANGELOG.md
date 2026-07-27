@@ -32,6 +32,12 @@
   botões em gradiente, cards de KPI, logo (`painel/estilo.py`,
   `painel/assets/logo_mrs.png`). Ver
   `docs/47_ADR_0020_REORGANIZACAO_PAINEL_E_IDENTIDADE_VISUAL.md`.
+- Atendimento de falha na interface de campo: botão "Iniciar atendimento
+  de falha", formulário (nota, ativo, sintoma, objeto, observações/causa)
+  com aviso persistente e travamento do encerramento até tudo preenchido.
+  Novo endpoint `GET /catalogo-rasf` (sintomas e componentes causadores
+  reais do RASF) e `interface_campo/js/catalogoRasf.js` (cache offline).
+  Ver `docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md`.
 ### Alterado
 - Painel reorganizado com `st.navigation`/`st.Page` em 3 seções: "Análise
   de Dados" (dashboard, Mapa Operacional, Capacidade PCM), "Dados"
@@ -43,16 +49,23 @@
   passou a mostrar o tempo decorrido de jornada/atividade/pausa; toda
   transição agora também dispara sincronização best-effort com o backend.
 - `interface_campo/service-worker.js`: `CACHE_VERSAO` incrementada de `v4`
-  para `v8` ao longo destas sessões (novos arquivos `relogioSimulado.js`,
-  `configSincronizacao.js`, `sincronizacao.js` e `catalogoMotivos.js` no
-  app shell).
+  para `v9` ao longo destas sessões (novos arquivos `relogioSimulado.js`,
+  `configSincronizacao.js`, `sincronizacao.js`, `catalogoMotivos.js` e
+  `catalogoRasf.js` no app shell).
+- **Campos obrigatórios do atendimento de falha revistos** (decisão do
+  responsável pelo produto, ADR-0021): `causa`/`ação` deixam de ser
+  exigidos separadamente (unificados em "observações/causa"); `objeto`
+  (componente causador) passa a ser exigido. `workforce_core.engine.CAMPOS_OBRIGATORIOS_FALHA`
+  agora é pública (era `_CAMPOS_OBRIGATORIOS_FALHA`) e reaproveitada por
+  `workforce_export/csv_exportacao.py`, que tinha uma cópia duplicada e
+  desatualizada dessa mesma regra.
 - `requirements.txt`: adiciona `requests` (cliente HTTP do painel).
 - `docs/23_DECISOES_PENDENTES.md`: item 10 (hospedagem/autenticação do
   piloto) marcado como resolvido no escopo do piloto.
 - `painel/dados.py::montar_resumo` usa `catalogo_completo()` por padrão
   (antes usava `catalogo_padrao()`, só motivos de teste).
 - Data/hora em `dd/mm/aaaa hh:mm:ss` no painel (`formatar_data_hora`,
-  usada em `painel/app.py` e `painel/pages/1_Mapa_Operacional.py`) e na
+  usada em `painel/app.py` e `painel/telas/mapa_operacional.py`) e na
   interface de campo (`interface_campo/js/app.js::formatoHora`) - mesmo
   padrão nos dois lados. Exportações CSV/XLSX continuam em ISO 8601
   (decisão consciente, ver ADR-0018).
@@ -105,7 +118,12 @@
   upsert idempotente, inativos omitidos, payload malformado).
 - `tests/js/catalogoMotivos.test.mjs` (6 casos): fallback mínimo, cache
   offline, erro HTTP, token no header.
-- `node --test tests/js`: 36/36 testes. `pytest`: 197/197 testes.
+- `tests/js/motorJornada.test.mjs`: 9 novos casos de atendimento de falha
+  espelhando `tests/test_atendimento_falha.py`.
+- `tests/js/catalogoRasf.test.mjs` (novo, 5 casos): mesmo padrão de
+  `catalogoMotivos.test.mjs`.
+- `tests/test_workforce_api.py`: 2 novos casos de `/catalogo-rasf`.
+- `node --test tests/js`: 49/49 testes. `pytest`: 200/200 testes.
 ### Riscos
 - Simulador de tempo é ferramenta de teste: precisa ser removido/bloqueado
   antes de qualquer piloto real com colaboradores (ver ADR-0016).
@@ -132,7 +150,12 @@
   não foram vistas num navegador real - só validado que o processo
   Streamlit sobe sem erro fatal (`/_stcore/health`). Conferência visual
   manual pendente. Ver ADR-0020.
-- Hierarquia organizacional (coordenação/gerência/gerência geral) e o
-  restante do roteiro de Atendimento de Falha (formulário completo, GPS,
-  foto, transferência entre colaboradores) ainda não foram construídos -
-  próximos incrementos.
+- Hierarquia organizacional (coordenação/gerência/gerência geral) ainda
+  não foi construída - próximo incremento.
+- Atendimento de falha na interface de campo não foi testado num
+  navegador real (fluxo completo: selecionar, ver o aviso, preencher,
+  tentar concluir incompleto, preencher tudo e concluir). Ver ADR-0021.
+- GPS no preenchimento, upload de foto (Supabase) e transferência de
+  atendimento entre colaboradores ("Falha não Concluída") ainda não
+  foram construídos - próximos incrementos (D2/D3/D4 do roteiro
+  combinado com o responsável pelo produto).

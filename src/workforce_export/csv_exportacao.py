@@ -31,6 +31,7 @@ from workforce_core.calculo import (
     tempo_classificado_jornada,
     tempo_nao_classificado,
 )
+from workforce_core.engine import CAMPOS_OBRIGATORIOS_FALHA
 from workforce_core.entities import Jornada, PulsoGps
 
 from .metadados import MetadadosExportacao
@@ -66,6 +67,7 @@ CAMPOS_FALHAS = [
     "nota",
     "ativo",
     "sintoma",
+    "objeto",
     "causa",
     "acao",
     "observacao",
@@ -171,9 +173,6 @@ def linhas_eventos(jornadas: List[Jornada]) -> List[Dict[str, Any]]:
     return linhas
 
 
-_CAMPOS_OBRIGATORIOS_FALHA = ("nota", "ativo", "sintoma", "causa", "acao", "observacao")
-
-
 def linhas_falhas(jornadas: List[Jornada]) -> List[Dict[str, Any]]:
     linhas = []
     for jornada in jornadas:
@@ -181,7 +180,11 @@ def linhas_falhas(jornadas: List[Jornada]) -> List[Dict[str, Any]]:
             dados = atividade.dados_falha
             if dados is None:
                 continue
-            completo = all(getattr(dados, campo) for campo in _CAMPOS_OBRIGATORIOS_FALHA)
+            # Mesma regra de completude do motor (workforce_core.engine),
+            # reaproveitada em vez de duplicada - um incremento anterior
+            # duplicou essa tupla aqui e ela ficou desatualizada quando a
+            # regra mudou no ADR-0021.
+            completo = all(getattr(dados, campo) for campo in CAMPOS_OBRIGATORIOS_FALHA)
             linhas.append(
                 {
                     "jornada_id": str(jornada.id),
@@ -191,6 +194,7 @@ def linhas_falhas(jornadas: List[Jornada]) -> List[Dict[str, Any]]:
                     "nota": dados.nota or "",
                     "ativo": dados.ativo or "",
                     "sintoma": dados.sintoma or "",
+                    "objeto": dados.objeto or "",
                     "causa": dados.causa or "",
                     "acao": dados.acao or "",
                     "observacao": dados.observacao or "",

@@ -59,7 +59,7 @@ def test_atendimento_falha_pode_referenciar_os_opcionalmente():
     motor.iniciar_jornada(_dt(8, 0))
     motor.iniciar_atendimento_falha(_dt(8, 10))
     motor.registrar_dados_falha(
-        nota="1", ativo="A", sintoma="S", causa="C", acao="Ac", observacao="Obs"
+        nota="1", ativo="A", sintoma="S", objeto="O", observacao="Obs"
     )
     atividade = motor.jornada.atividades[0]
     atividade.dados_falha.os_referencia = ReferenciaOS(numero="999", ciclo_ou_plano="2026-C3")

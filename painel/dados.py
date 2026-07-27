@@ -153,8 +153,7 @@ def gerar_jornadas_exemplo(diretorio: Union[str, Path], quantidade: int = 3) -> 
                 nota="EXEMPLO-1",
                 ativo="ATIVO-EXEMPLO",
                 sintoma="Sintoma de exemplo",
-                causa="Causa de exemplo",
-                acao="Acao de exemplo",
+                objeto="Componente de exemplo",
                 observacao="Dado gerado para demonstracao do painel.",
             )
             motor.encerrar_atividade(inicio + timedelta(hours=3, minutes=45))

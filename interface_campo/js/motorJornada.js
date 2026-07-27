@@ -8,12 +8,25 @@
 
 import { EstadoAtividade, EstadoJornada, EstadoPausa } from "./enums.js";
 import * as Erros from "./erros.js";
-import { novaAtividade, novaJornada, novaPausa } from "./entidades.js";
+import { novaAtividade, novaJornada, novaPausa, novoDadosFalha } from "./entidades.js";
 
 function validarOrdem(inicio, fim, rotulo) {
   if (fim.getTime() < inicio.getTime()) {
     throw new Erros.TimestampInvalidoError(
       `O timestamp de fim da ${rotulo} nao pode ser anterior ao inicio.`
+    );
+  }
+}
+
+// Mesma lista de src/workforce_core/engine.py::CAMPOS_OBRIGATORIOS_FALHA
+// (revista no ADR-0021) - nota/ativo/sintoma/objeto/observacao.
+const CAMPOS_OBRIGATORIOS_FALHA = ["nota", "ativo", "sintoma", "objeto", "observacao"];
+
+function validarDadosFalhaCompletos(dados) {
+  const faltantes = CAMPOS_OBRIGATORIOS_FALHA.filter((campo) => !dados[campo]);
+  if (faltantes.length > 0) {
+    throw new Erros.AtendimentoFalhaCamposObrigatoriosError(
+      "Atendimento de falha nao pode ser encerrado sem: " + faltantes.join(", ") + "."
     );
   }
 }
@@ -143,10 +156,39 @@ export class MotorJornada {
     }
     const atividade = this._atividadeAtiva;
     validarOrdem(atividade.inicio, quando, "atividade");
+    if (atividade.dadosFalha) {
+      validarDadosFalhaCompletos(atividade.dadosFalha);
+    }
     atividade.fim = quando;
     atividade.estado = EstadoAtividade.ENCERRADA;
     this._atividadeAtiva = null;
     return atividade;
+  }
+
+  // Atendimento de falha (ADR-0021, espelhando
+  // src/workforce_core/engine.py::iniciar_atendimento_falha).
+  iniciarAtendimentoFalha(quando) {
+    const atividade = this.iniciarAtividade(quando);
+    atividade.dadosFalha = novoDadosFalha();
+    return atividade;
+  }
+
+  // Atualizacao parcial - so sobrescreve o que for explicitamente
+  // informado (mesmo padrao de registrar_dados_falha no Python).
+  registrarDadosFalha({ nota, ativo, sintoma, objeto, observacao } = {}) {
+    this._garantirJornadaAberta();
+    if (!this._atividadeAtiva || !this._atividadeAtiva.dadosFalha) {
+      throw new Erros.AtendimentoFalhaNaoAtivoError(
+        "Nao ha atendimento de falha ativo para registrar dados."
+      );
+    }
+    const dados = this._atividadeAtiva.dadosFalha;
+    if (nota !== undefined) dados.nota = nota;
+    if (ativo !== undefined) dados.ativo = ativo;
+    if (sintoma !== undefined) dados.sintoma = sintoma;
+    if (objeto !== undefined) dados.objeto = objeto;
+    if (observacao !== undefined) dados.observacao = observacao;
+    return dados;
   }
 
   iniciarPausa(quando, motivo) {

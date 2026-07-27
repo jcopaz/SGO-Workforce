@@ -45,7 +45,7 @@ def _jornada_completa(matricula="12345"):
     motor.encerrar_atividade(_dt(11, 30))
     motor.iniciar_atendimento_falha(_dt(11, 30))
     motor.registrar_dados_falha(
-        nota="1", ativo="ATIVO-X", sintoma="S", causa="C", acao="Ac", observacao="Obs"
+        nota="1", ativo="ATIVO-X", sintoma="S", objeto="O", observacao="Obs"
     )
     motor.encerrar_atividade(_dt(12, 0))
     motor.encerrar_jornada(_dt(12, 0))

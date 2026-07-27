@@ -33,3 +33,17 @@ O arquivo analisado possui 3.986 registros e 77 colunas, com 53 sintomas distint
 
 ## Estratégia de catálogo
 Preservar código e descrição originais, normalizar acentuação e espaços, manter status ativo/inativo e autoria da alteração. Valores novos entram como pendentes de governança, não diretamente no catálogo oficial.
+
+## Atualização (2026-07-27) — implementação na interface de campo (ADR-0021)
+
+A pedido do responsável pelo produto, os campos mínimos obrigatórios
+implementados na interface de campo passaram a ser: **nota, ativo,
+sintoma, objeto (componente causador) e observações/causa** — `causa` e
+`ação` (listados acima como campos separados) foram unificados num único
+campo livre "Observações/Causa" nesta implementação; `objeto` é novo,
+mapeado ao catálogo de "componente causador" já citado em "Campos
+recomendados". Sintoma e objeto usam o catálogo real do RASF
+(`catalogos/sintomas.csv`, `catalogos/componentes_causadores.csv`),
+servido pelo backend em `GET /catalogo-rasf`. Detalhes completos, o que
+ficou fora de escopo (GPS, foto, transferência entre colaboradores) e a
+justificativa da unificação em `docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md`.

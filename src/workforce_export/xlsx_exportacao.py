@@ -145,6 +145,7 @@ def _aba_falhas(wb: Workbook, jornadas: List[Jornada]) -> None:
         "nota",
         "ativo",
         "sintoma",
+        "objeto",
         "causa",
         "acao",
         "observacao",
@@ -173,7 +174,7 @@ _DICIONARIO_DADOS = [
     ("Jornadas", "estado", "NAO_INICIADA, ABERTA ou ENCERRADA."),
     ("Jornadas", "*_segundos", "Duracoes em segundos, para uso tecnico/recalculo."),
     ("Pausas", "motivo", "Codigo de motivo (ex.: PAUSA_TESTE) - catalogo oficial ainda pendente (ADR-0005)."),
-    ("Falhas", "completo", "True se nota/ativo/sintoma/causa/acao/observacao estao todos preenchidos (docs/27 secao 3.5)."),
+    ("Falhas", "completo", "True se nota/ativo/sintoma/objeto/observacao estao todos preenchidos (docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md)."),
     ("Qualidade", "Taxa de GPS valido", "Proporcao de pulsos OK entre os avaliados (workforce_core.consolidacao.taxa_qualidade_pulsos)."),
 ]
 

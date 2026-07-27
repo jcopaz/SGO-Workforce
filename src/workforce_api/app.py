@@ -23,11 +23,13 @@ docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md):
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from workforce_storage.catalogo_rasf import apenas_ativos, carregar_catalogos_rasf
 from workforce_storage.exceptions import ArquivoCorrompidoError
 from workforce_storage.serializacao import (
     entrada_catalogo_de_dict,
@@ -164,3 +166,33 @@ def upsert_catalogo(
         raise HTTPException(status_code=400, detail=f"Motivo malformado: {exc}") from exc
     repositorio.salvar(entrada)
     return {"status": "salvo", "codigo": entrada.codigo}
+
+
+# Diretorio catalogos/ na raiz do repositorio (levado junto no deploy do
+# Render, igual ao resto do codigo) - sintomas e componentes causadores do
+# RASF, ver docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md. Sem tabela no
+# Postgres: esses catalogos ainda nao tem fluxo de edicao/governanca
+# definido (ao contrario do catalogo de motivos, ADR-0019), entao nao faz
+# sentido administra-los pelo painel ainda - so servir o que ja existe.
+_DIRETORIO_CATALOGOS_RASF = Path(__file__).resolve().parent.parent.parent / "catalogos"
+_catalogo_rasf_cache: Optional[Dict[str, List[str]]] = None
+
+
+def obter_catalogo_rasf() -> Dict[str, List[str]]:
+    """Le catalogos/sintomas.csv e catalogos/componentes_causadores.csv
+    uma unica vez por processo (os arquivos so mudam com um novo deploy)."""
+    global _catalogo_rasf_cache
+    if _catalogo_rasf_cache is None:
+        catalogos = carregar_catalogos_rasf(_DIRETORIO_CATALOGOS_RASF)
+        _catalogo_rasf_cache = {
+            "sintomas": sorted(item.valor for item in apenas_ativos(catalogos.get("sintomas", []))),
+            "componentes_causadores": sorted(
+                item.valor for item in apenas_ativos(catalogos.get("componentes_causadores", []))
+            ),
+        }
+    return _catalogo_rasf_cache
+
+
+@app.get("/catalogo-rasf", dependencies=[Depends(exigir_token)])
+def listar_catalogo_rasf() -> Dict[str, List[str]]:
+    return obter_catalogo_rasf()

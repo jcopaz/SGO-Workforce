@@ -96,6 +96,7 @@ def dados_falha_para_dict(dados: Optional[DadosFalha]) -> Optional[Dict[str, Any
         "nota": dados.nota,
         "ativo": dados.ativo,
         "sintoma": dados.sintoma,
+        "objeto": dados.objeto,
         "causa": dados.causa,
         "acao": dados.acao,
         "observacao": dados.observacao,
@@ -110,6 +111,7 @@ def dados_falha_de_dict(dados: Optional[Dict[str, Any]]) -> Optional[DadosFalha]
         nota=dados.get("nota"),
         ativo=dados.get("ativo"),
         sintoma=dados.get("sintoma"),
+        objeto=dados.get("objeto"),  # ausente em registros anteriores ao ADR-0021
         causa=dados.get("causa"),
         acao=dados.get("acao"),
         observacao=dados.get("observacao"),

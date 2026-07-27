@@ -21,3 +21,5 @@ export class PausaMotivoObrigatorioError extends ErroDominio {}
 export class PausaForaDoIntervaloError extends ErroDominio {}
 export class TimestampInvalidoError extends ErroDominio {}
 export class EstadoInconsistenteError extends ErroDominio {}
+export class AtendimentoFalhaNaoAtivoError extends ErroDominio {}
+export class AtendimentoFalhaCamposObrigatoriosError extends ErroDominio {}

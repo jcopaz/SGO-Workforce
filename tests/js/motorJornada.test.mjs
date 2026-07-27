@@ -241,3 +241,110 @@ test("recuperacao de estado: MotorJornada.aPartirDe reconstroi ativos corretamen
   const atividade = recuperado.jornada.atividades[0];
   assert.equal(calculo.duracaoPausasAtividade(atividade), 20 * 60000);
 });
+
+// ----------------------------------------------------------------------
+// Atendimento de falha (ADR-0021, espelha tests/test_atendimento_falha.py)
+// ----------------------------------------------------------------------
+function motorComAtendimentoAtivo() {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtendimentoFalha(dt(8, 10));
+  return motor;
+}
+
+test("atendimento de falha completo encerra normalmente", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.registrarDadosFalha({
+    nota: "12345",
+    ativo: "AT-001",
+    sintoma: "33 - CIRCUITO DE VIA COM OCUP. INDEVIDA",
+    objeto: "FUSÍVEL",
+    observacao: "Testado apos a troca, normalizado.",
+  });
+
+  const atividade = motor.encerrarAtividade(dt(9, 0));
+  motor.encerrarJornada(dt(9, 0));
+
+  assert.equal(atividade.estado, "ENCERRADA");
+  assert.equal(atividade.dadosFalha.nota, "12345");
+  assert.equal(atividade.dadosFalha.objeto, "FUSÍVEL");
+});
+
+test("bloqueia encerramento de atendimento de falha sem nenhum campo", () => {
+  const motor = motorComAtendimentoAtivo();
+  assert.throws(() => motor.encerrarAtividade(dt(9, 0)), (erro) => {
+    assert.ok(erro instanceof Erros.AtendimentoFalhaCamposObrigatoriosError);
+    for (const campo of ["nota", "ativo", "sintoma", "objeto", "observacao"]) {
+      assert.ok(erro.message.includes(campo), `mensagem deveria citar ${campo}`);
+    }
+    return true;
+  });
+});
+
+test("bloqueia encerramento de atendimento de falha com campos parciais", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.registrarDadosFalha({ nota: "12345", ativo: "AT-001", sintoma: "Falha X" });
+
+  assert.throws(() => motor.encerrarAtividade(dt(9, 0)), (erro) => {
+    assert.ok(erro.message.includes("objeto"));
+    assert.ok(erro.message.includes("observacao"));
+    assert.ok(!erro.message.includes("nota"));
+    return true;
+  });
+});
+
+test("registro progressivo de campos do atendimento de falha", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.registrarDadosFalha({ nota: "1", ativo: "A", sintoma: "S", objeto: "O" });
+  motor.registrarDadosFalha({ observacao: "Obs" });
+
+  const dados = motor.jornada.atividades[0].dadosFalha;
+  assert.deepEqual(
+    [dados.nota, dados.ativo, dados.sintoma, dados.objeto, dados.observacao],
+    ["1", "A", "S", "O", "Obs"]
+  );
+
+  // Um segundo registro so sobrescreve o que for explicitamente informado.
+  motor.registrarDadosFalha({ nota: "1-revisado" });
+  assert.equal(motor.jornada.atividades[0].dadosFalha.ativo, "A");
+  assert.equal(motor.jornada.atividades[0].dadosFalha.nota, "1-revisado");
+});
+
+test("registrarDadosFalha sem atendimento ativo lanca erro dedicado", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.registrarDadosFalha({ nota: "1" }),
+    Erros.AtendimentoFalhaNaoAtivoError
+  );
+});
+
+test("registrarDadosFalha em atividade comum nao e permitido", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10)); // atividade comum, sem dadosFalha
+  assert.throws(
+    () => motor.registrarDadosFalha({ nota: "1" }),
+    Erros.AtendimentoFalhaNaoAtivoError
+  );
+});
+
+test("atividade comum encerra sem exigir campos de atendimento de falha", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const atividade = motor.encerrarAtividade(dt(9, 0));
+  assert.equal(atividade.dadosFalha, undefined);
+});
+
+test("atendimento de falha pode ter pausa normalmente", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.iniciarPausa(dt(8, 30), "PAUSA_TESTE");
+  motor.finalizarPausa(dt(8, 40));
+  motor.registrarDadosFalha({ nota: "1", ativo: "A", sintoma: "S", objeto: "O", observacao: "Obs" });
+
+  const atividade = motor.encerrarAtividade(dt(9, 0));
+
+  assert.equal(calculo.duracaoPausasAtividade(atividade), 10 * 60000);
+  assert.equal(calculo.duracaoAtividadeLiquida(atividade), 40 * 60000);
+});

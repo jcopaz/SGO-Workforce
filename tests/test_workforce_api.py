@@ -207,3 +207,29 @@ def test_post_catalogo_malformado_e_400(cliente_catalogo):
         headers={"X-Sync-Token": TOKEN_TESTE},
     )
     assert resposta.status_code == 400
+
+
+# ----------------------------------------------------------------------
+# /catalogo-rasf (sintomas e componentes causadores - docs/48_ADR_0021)
+# ----------------------------------------------------------------------
+@pytest.fixture
+def cliente_rasf(monkeypatch):
+    monkeypatch.setenv("SYNC_TOKEN", TOKEN_TESTE)
+    return TestClient(app)
+
+
+def test_get_catalogo_rasf_sem_token_e_401(cliente_rasf):
+    resposta = cliente_rasf.get("/catalogo-rasf")
+    assert resposta.status_code == 401
+
+
+def test_get_catalogo_rasf_retorna_sintomas_e_componentes_reais(cliente_rasf):
+    resposta = cliente_rasf.get("/catalogo-rasf", headers={"X-Sync-Token": TOKEN_TESTE})
+    assert resposta.status_code == 200
+    dados = resposta.json()
+
+    assert "sintomas" in dados
+    assert "componentes_causadores" in dados
+    assert len(dados["sintomas"]) == 53
+    assert len(dados["componentes_causadores"]) == 148
+    assert "FUSÍVEL" in dados["componentes_causadores"]

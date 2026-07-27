@@ -35,6 +35,21 @@ export function novaAtividade({ inicio = null } = {}) {
   };
 }
 
+// Campos revistos no ADR-0021 a pedido do responsavel pelo produto:
+// nota/ativo/sintoma/objeto/observacao (objeto = componente causador do
+// RASF). causa/acao existem no lado Python por compatibilidade mas nao
+// aparecem no formulario da interface de campo - por isso nao tem
+// equivalente aqui.
+export function novoDadosFalha() {
+  return {
+    nota: null,
+    ativo: null,
+    sintoma: null,
+    objeto: null,
+    observacao: null,
+  };
+}
+
 export function novaJornada({ colaboradorMatricula }) {
   return {
     id: gerarId(),

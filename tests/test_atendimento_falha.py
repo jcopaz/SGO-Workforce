@@ -1,8 +1,11 @@
 """Testes do Incremento 6: atendimento de falha.
 
-Cobre a regra inegociavel de docs/27_ALINHAMENTO_OFICIAL_SGO_WORKFORCE_v1_2.md
-secao 3.5: um atendimento de falha nao pode ser encerrado sem nota, ativo,
-sintoma, causa, acao, observacao tecnica e horario final.
+Regra atual (revista no ADR-0021 a pedido do responsavel pelo produto,
+2026-07-27): um atendimento de falha nao pode ser encerrado sem nota,
+ativo, sintoma, objeto (componente causador) e observacao ("Observacoes/
+Causa" na interface de campo) e horario final. `causa`/`acao` (regra
+original de docs/27 secao 3.5) continuam aceitos por
+compatibilidade com registros antigos, mas nao sao mais exigidos.
 """
 
 from datetime import datetime, timedelta
@@ -33,8 +36,7 @@ def test_atendimento_falha_completo_encerra_normalmente():
         nota="12345",
         ativo="AT-001",
         sintoma="33 - CIRCUITO DE VIA COM OCUP. INDEVIDA",
-        causa="Falha de contato",
-        acao="Substituicao de rele",
+        objeto="FUSÍVEL",
         observacao="Testado apos a troca, normalizado.",
     )
     atividade = motor.encerrar_atividade(_dt(9, 0))
@@ -42,6 +44,7 @@ def test_atendimento_falha_completo_encerra_normalmente():
 
     assert atividade.estado.value == "ENCERRADA"
     assert atividade.dados_falha.nota == "12345"
+    assert atividade.dados_falha.objeto == "FUSÍVEL"
     assert calculo.duracao_atividade_bruta(atividade) == timedelta(minutes=50)
 
 
@@ -49,31 +52,43 @@ def test_bloqueia_encerramento_sem_nenhum_campo():
     motor = _motor_com_atendimento_ativo()
     with pytest.raises(AtendimentoFalhaCamposObrigatoriosError) as excinfo:
         motor.encerrar_atividade(_dt(9, 0))
-    for campo in ("nota", "ativo", "sintoma", "causa", "acao", "observacao"):
+    for campo in ("nota", "ativo", "sintoma", "objeto", "observacao"):
         assert campo in str(excinfo.value)
 
 
 def test_bloqueia_encerramento_com_campos_parciais():
     motor = _motor_com_atendimento_ativo()
     motor.registrar_dados_falha(nota="12345", ativo="AT-001", sintoma="Falha X")
-    # causa, acao e observacao ainda faltam.
+    # objeto e observacao ainda faltam.
     with pytest.raises(AtendimentoFalhaCamposObrigatoriosError) as excinfo:
         motor.encerrar_atividade(_dt(9, 0))
     mensagem = str(excinfo.value)
-    assert "causa" in mensagem
-    assert "acao" in mensagem
+    assert "objeto" in mensagem
     assert "observacao" in mensagem
     assert "nota" not in mensagem
 
 
+def test_causa_e_acao_sao_opcionais_apos_adr_0021():
+    # causa/acao continuam existindo no dataclass (compatibilidade), mas
+    # nao bloqueiam mais o encerramento - so nota/ativo/sintoma/objeto/
+    # observacao sao exigidos.
+    motor = _motor_com_atendimento_ativo()
+    motor.registrar_dados_falha(
+        nota="12345", ativo="AT-001", sintoma="Falha X", objeto="Componente Y", observacao="Obs"
+    )
+    atividade = motor.encerrar_atividade(_dt(9, 0))
+    assert atividade.dados_falha.causa is None
+    assert atividade.dados_falha.acao is None
+
+
 def test_registro_progressivo_de_campos():
     motor = _motor_com_atendimento_ativo()
-    motor.registrar_dados_falha(nota="1", ativo="A", sintoma="S")
-    motor.registrar_dados_falha(causa="C", acao="Ac", observacao="Obs")
+    motor.registrar_dados_falha(nota="1", ativo="A", sintoma="S", objeto="O")
+    motor.registrar_dados_falha(observacao="Obs")
 
     dados = motor.jornada.atividades[0].dados_falha
-    assert (dados.nota, dados.ativo, dados.sintoma) == ("1", "A", "S")
-    assert (dados.causa, dados.acao, dados.observacao) == ("C", "Ac", "Obs")
+    assert (dados.nota, dados.ativo, dados.sintoma, dados.objeto) == ("1", "A", "S", "O")
+    assert dados.observacao == "Obs"
 
     # Nao deve fazer nada com um segundo registro passando None, so
     # sobrescrever o que for explicitamente informado.
@@ -110,7 +125,7 @@ def test_atendimento_falha_pode_ter_pausa_normalmente():
     motor.iniciar_pausa(_dt(8, 30), "PAUSA_TESTE")
     motor.finalizar_pausa(_dt(8, 40))
     motor.registrar_dados_falha(
-        nota="1", ativo="A", sintoma="S", causa="C", acao="Ac", observacao="Obs"
+        nota="1", ativo="A", sintoma="S", objeto="O", observacao="Obs"
     )
     atividade = motor.encerrar_atividade(_dt(9, 0))
 
