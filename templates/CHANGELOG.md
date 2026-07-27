@@ -26,9 +26,18 @@
   (`src/workforce_api/repositorio_catalogo_postgres.py`, com seed
   automático dos 23 códigos reais), consumido pela interface de campo
   (`interface_campo/js/catalogoMotivos.js`, com cache offline e fallback
-  mínimo) e administrado em `painel/pages/4_Catalogo.py`. Ver
+  mínimo) e administrado em `painel/telas/configuracoes_catalogo.py`. Ver
   `docs/46_ADR_0019_CATALOGO_DINAMICO.md`.
+- Identidade visual do painel copiada do SGO (Gestão_OS): sidebar escura,
+  botões em gradiente, cards de KPI, logo (`painel/estilo.py`,
+  `painel/assets/logo_mrs.png`). Ver
+  `docs/47_ADR_0020_REORGANIZACAO_PAINEL_E_IDENTIDADE_VISUAL.md`.
 ### Alterado
+- Painel reorganizado com `st.navigation`/`st.Page` em 3 seções: "Análise
+  de Dados" (dashboard, Mapa Operacional, Capacidade PCM), "Dados"
+  (Exportações), "Configurações" (Catálogo de motivos).
+  `painel/pages/` renomeado para `painel/telas/`; `painel/app.py` virou
+  um launcher fino. Ver ADR-0020.
 - `interface_campo/js/app.js`: as 7 transições do motor de dominio agora usam
   `RelogioSimulado.agora()` em vez de `new Date()`; o resumo em andamento
   passou a mostrar o tempo decorrido de jornada/atividade/pausa; toda
@@ -119,3 +128,11 @@
 - Catálogo dinâmico (`motivos_catalogo`) não foi testado contra Postgres
   real neste ambiente (mesma limitação já registrada para `jornadas` no
   ADR-0017) - só validado com repositório falso em memória. Ver ADR-0019.
+- Identidade visual e navegação do painel (`st.navigation`, CSS do SGO)
+  não foram vistas num navegador real - só validado que o processo
+  Streamlit sobe sem erro fatal (`/_stcore/health`). Conferência visual
+  manual pendente. Ver ADR-0020.
+- Hierarquia organizacional (coordenação/gerência/gerência geral) e o
+  restante do roteiro de Atendimento de Falha (formulário completo, GPS,
+  foto, transferência entre colaboradores) ainda não foram construídos -
+  próximos incrementos.

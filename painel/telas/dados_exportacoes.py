@@ -28,8 +28,6 @@ from workforce_export import (
 from workforce_export.csv_exportacao import linhas_eventos, linhas_falhas, linhas_gps, linhas_jornadas
 from workforce_export.xlsx_exportacao import exportar_xlsx
 
-st.set_page_config(page_title="SGO Workforce | Exportacoes (piloto)", layout="wide")
-
 st.warning(
     "Piloto tecnico. Layout oficial de colunas, dados pessoais permitidos, "
     "auditoria e perfis autorizados ainda sao decisoes pendentes "

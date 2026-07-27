@@ -27,8 +27,6 @@ from workforce_core.pcm import (
     simular_cenario_relatorio_1_manutencao,
 )
 
-st.set_page_config(page_title="SGO Workforce | Capacidade PCM (piloto)", layout="wide")
-
 st.warning(
     "Piloto tecnico. Os buckets de perda e o mapeamento categoria -> bucket "
     "abaixo vem da planilha real de PCM da MRS Logistica (ver "

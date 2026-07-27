@@ -22,8 +22,6 @@ from streamlit_folium import st_folium
 from dados import carregar_jornadas, carregar_pulsos, formatar_data_hora, gerar_pulsos_exemplo
 from mapa import construir_mapa
 
-st.set_page_config(page_title="SGO Workforce | Mapa (piloto)", layout="wide")
-
 st.warning(
     "Piloto tecnico. Filtros de coordenacao, equipe, patio, sintoma e "
     "impacto ainda nao existem porque esses conceitos ainda nao foram "

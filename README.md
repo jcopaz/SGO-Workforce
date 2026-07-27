@@ -182,7 +182,8 @@ Testes: `tests/test_painel.py` (roda com `python -m pytest`).
 
 ## Incremento 10 — Mapa operacional (Folium)
 
-Segunda página do painel (`painel/pages/1_Mapa_Operacional.py`): pulsos
+Página "Análise de Dados > Mapa Operacional" do painel
+(`painel/telas/mapa_operacional.py`): pulsos
 brutos coloridos por qualidade, trajetória simplificada e clusters de
 permanência (sempre rotulados como inferência, nunca prova). Lógica pura
 em `workforce_core/geo.py`, sem nenhum limiar padrão embutido. Decisões,
@@ -196,8 +197,8 @@ Testes: `tests/test_geo.py`, `tests/test_mapa.py`.
 `src/workforce_export/`: CSV (jornadas/eventos/falhas/gps + metadados),
 XLSX (8 abas, totais idênticos ao painel via `workforce_core.consolidacao`)
 e GeoJSON (pontos/trajetórias, matrícula do colaborador omitida por
-padrão). Terceira página do painel:
-`painel/pages/2_Exportacoes.py`. Decisões e o que fica fora de escopo em
+padrão). Página "Dados > Exportações" do painel:
+`painel/telas/dados_exportacoes.py`. Decisões e o que fica fora de escopo em
 `docs/38_ADR_0011_EXPORTACOES_CSV_XLSX_GEOJSON.md`.
 
 Testes: `tests/test_exportacoes.py`.
@@ -207,8 +208,8 @@ Testes: `tests/test_exportacoes.py`.
 `workforce_core/pcm.py`: fórmula de capacidade bruta/efetiva de
 `docs/15_CAPACIDADE_PCM.md` (todos os termos como parâmetros explícitos,
 piso zero), buckets citados do doc, e `simular_cenario` que sempre
-devolve as premissas usadas. Quarta página do painel:
-`painel/pages/3_Capacidade_PCM.py`, com mapeamento categoria→bucket
+devolve as premissas usadas. Página "Análise de Dados > Capacidade PCM"
+do painel: `painel/telas/capacidade_pcm.py`, com mapeamento categoria→bucket
 rotulado como exemplo não oficial. Decisões em
 `docs/39_ADR_0012_CAPACIDADE_PCM.md` — o incremento com mais pendências
 de negócio até agora (fonte de escala, ausências, buckets oficiais).
@@ -241,9 +242,20 @@ instruções de deploy (Render) em
 
 O mesmo backend também expõe `GET`/`POST /catalogo` (catálogo dinâmico de
 motivos de pausa, com seed automático dos 23 códigos reais do Relatório
-1) — administrado em `painel/pages/4_Catalogo.py` e consumido pela
+1) — administrado na página "Configurações > Catálogo de motivos"
+(`painel/telas/configuracoes_catalogo.py`) e consumido pela
 interface de campo com cache offline. Ver
 `docs/46_ADR_0019_CATALOGO_DINAMICO.md`.
+
+## Organização do painel e identidade visual
+
+`painel/app.py` é um launcher (`st.navigation`/`st.Page`) com 3 seções:
+**Análise de Dados** (dashboard, Mapa Operacional, Capacidade PCM),
+**Dados** (Exportações) e **Configurações** (Catálogo de motivos). Cada
+tela vive em `painel/telas/`. Identidade visual (`painel/estilo.py`,
+`painel/assets/logo_mrs.png`) copiada do SGO (Gestão_OS) a pedido do
+responsável pelo produto, para facilitar integração futura. Ver
+`docs/47_ADR_0020_REORGANIZACAO_PAINEL_E_IDENTIDADE_VISUAL.md`.
 
 ### Como rodar o backend localmente
 

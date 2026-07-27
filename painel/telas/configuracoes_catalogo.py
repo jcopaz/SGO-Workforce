@@ -31,8 +31,6 @@ def _obter_secret_seguro(chave: str, default: str = "") -> str:
         return default
 
 
-st.set_page_config(page_title="SGO Workforce | Catálogo (piloto)", layout="wide")
-
 st.warning(
     "Piloto técnico. Editar um motivo aqui muda a classificação de "
     "jornadas já registradas que usam esse código - não há versionamento "
