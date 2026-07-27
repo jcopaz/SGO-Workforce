@@ -16,6 +16,9 @@ import * as RelogioSimulado from "./relogioSimulado.js";
 import * as Sincronizacao from "./sincronizacao.js";
 import * as CatalogoMotivos from "./catalogoMotivos.js";
 import * as CatalogoRasf from "./catalogoRasf.js";
+import * as Geolocalizacao from "./geolocalizacao.js";
+import * as FotoFalha from "./fotoFalha.js";
+import * as ContinuacoesFalha from "./continuacoesFalha.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
@@ -47,6 +50,11 @@ let motivosPausa = [];
 // atendimento de falha - mesmo padrao de motivosPausa (populado em
 // iniciar(), nunca fica vazio).
 let catalogoRasf = { sintomas: [], componentes_causadores: [] };
+// Controla a exibicao do formulario inline de transferencia ("Falha nao
+// Concluida", D4) - resetado sempre que uma nova atividade comeca (ver
+// os botoes "Iniciar atividade"/"Iniciar atendimento de falha"/"Iniciar
+// nova jornada" abaixo), para nunca vazar entre atendimentos diferentes.
+let mostrarTransferenciaFalha = false;
 
 function criarSeletorMotivoPausa() {
   const select = document.createElement("select");
@@ -156,6 +164,156 @@ function renderFormularioAtendimentoFalha(atividade) {
       executar(() => motor.registrarDadosFalha({ observacao: valor }))
     )
   );
+
+  els.botoes.appendChild(criarBlocoLocalizacao(dados));
+  els.botoes.appendChild(criarBlocoFoto(dados));
+}
+
+// GPS best-effort (D2): nunca bloqueia nada, so registra se a captura der
+// certo. Acao explicita do colaborador (botao), nao automatica - assim o
+// prompt de permissao do navegador so aparece quando ele sabe por que.
+function textoStatusLocalizacao(dados) {
+  if (dados.gpsLatitude == null || dados.gpsLongitude == null) {
+    return "Localização não capturada (opcional).";
+  }
+  const precisao =
+    dados.gpsPrecisaoMetros != null ? ` (±${Math.round(dados.gpsPrecisaoMetros)}m)` : "";
+  return `Localização capturada às ${formatoHora(dados.gpsCapturadoEm)}${precisao}.`;
+}
+
+function criarBlocoLocalizacao(dados) {
+  const bloco = document.createElement("div");
+  bloco.className = "bloco-localizacao";
+
+  const status = document.createElement("p");
+  status.className = "status-localizacao";
+  status.textContent = textoStatusLocalizacao(dados);
+  bloco.appendChild(status);
+
+  bloco.appendChild(
+    botao("Capturar localização", async () => {
+      limparMensagem();
+      const posicao = await Geolocalizacao.capturarPosicaoAtual();
+      if (!posicao) {
+        mostrarAviso(
+          "Não foi possível capturar a localização agora (sinal fraco ou permissão negada) - isso não impede concluir o atendimento."
+        );
+        return;
+      }
+      await executar(() =>
+        motor.registrarDadosFalha({
+          gpsLatitude: posicao.latitude,
+          gpsLongitude: posicao.longitude,
+          gpsPrecisaoMetros: posicao.precisaoMetros,
+          gpsCapturadoEm: posicao.capturadoEm,
+        })
+      );
+      mostrarAviso(`Localização capturada às ${formatoHora(posicao.capturadoEm)}.`);
+    })
+  );
+
+  return bloco;
+}
+
+// Foto best-effort (D3): nunca bloqueia nada, so registra fotoCaminho se
+// o envio ao backend (que repassa ao Supabase Storage) der certo.
+function textoStatusFoto(dados) {
+  return dados.fotoCaminho ? "Foto enviada." : "Nenhuma foto enviada (opcional).";
+}
+
+function criarBlocoFoto(dados) {
+  const bloco = document.createElement("div");
+  bloco.className = "bloco-foto";
+
+  const status = document.createElement("p");
+  status.className = "status-foto";
+  status.textContent = textoStatusFoto(dados);
+  bloco.appendChild(status);
+
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = "Foto do atendimento";
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.capture = "environment";
+  input.addEventListener("change", async () => {
+    const arquivo = input.files[0];
+    if (!arquivo) return;
+    limparMensagem();
+    mostrarAviso("Enviando foto...");
+    const resultado = await FotoFalha.enviarFoto(arquivo);
+    if (!resultado.ok) {
+      mostrarAviso(`${resultado.mensagem} Isso não impede concluir o atendimento.`);
+      return;
+    }
+    await executar(() => motor.registrarDadosFalha({ fotoCaminho: resultado.caminho }));
+    mostrarAviso("Foto enviada.");
+  });
+  label.append(span, input);
+  bloco.appendChild(label);
+
+  return bloco;
+}
+
+// Formulario inline de transferencia ("Falha nao Concluida", D4): pede a
+// matricula de destino sem usar prompt() do navegador (mesmo padrao dos
+// outros campos da tela). Confirmar encerra a atividade localmente
+// (transferirAtendimentoFalha, nunca exige campos completos) e so depois
+// avisa o backend, best-effort - a transferencia local nunca depende de
+// rede.
+function criarFormularioTransferenciaFalha(atividade) {
+  const bloco = document.createElement("div");
+  bloco.className = "bloco-transferencia-falha";
+
+  const aviso = document.createElement("p");
+  aviso.className = "aviso-piloto";
+  aviso.textContent =
+    "Informe a matrícula de quem vai continuar este atendimento. Os dados já preenchidos serão levados para ela.";
+  bloco.appendChild(aviso);
+
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = "Matrícula de destino";
+  const input = document.createElement("input");
+  input.type = "text";
+  label.append(span, input);
+  bloco.appendChild(label);
+
+  bloco.appendChild(
+    botao(
+      "Confirmar transferência",
+      async () => {
+        const matriculaDestino = input.value.trim();
+        if (!matriculaDestino) {
+          mostrarAviso("Informe a matrícula de destino antes de confirmar.");
+          return;
+        }
+        const dadosFalhaAtual = atividade.dadosFalha;
+        mostrarTransferenciaFalha = false;
+        await executar(() => motor.transferirAtendimentoFalha(RelogioSimulado.agora()));
+        const resultado = await ContinuacoesFalha.criarContinuacao(dadosFalhaAtual, matriculaDestino);
+        if (resultado.ok) {
+          mostrarAviso(`Atendimento transferido para a matrícula ${matriculaDestino}.`);
+        } else {
+          mostrarAviso(
+            `Atendimento encerrado aqui, mas ${resultado.mensagem.toLowerCase()} Avise ${matriculaDestino} manualmente.`
+          );
+        }
+      },
+      { destaque: true }
+    )
+  );
+  bloco.appendChild(
+    botao("Cancelar", () => {
+      mostrarTransferenciaFalha = false;
+      render();
+    })
+  );
+
+  return bloco;
 }
 
 function botao(texto, aoClicar, { destaque = false } = {}) {
@@ -315,9 +473,23 @@ function render() {
     els.botoes.appendChild(
       botao(
         "Iniciar jornada",
-        () => {
+        async () => {
           if (!prepararMotorComMatricula()) return;
-          executar(() => motor.iniciarJornada(RelogioSimulado.agora()));
+          const matricula = motor.jornada.colaboradorMatricula;
+          const pendente = await ContinuacoesFalha.buscarPendente(matricula);
+          if (pendente) {
+            await executar(() => {
+              motor.iniciarJornada(RelogioSimulado.agora());
+              motor.iniciarAtendimentoFalha(RelogioSimulado.agora());
+              motor.registrarDadosFalha(pendente.dados);
+            });
+            mostrarAviso(
+              "Havia um atendimento de falha em aberto para você - retomado automaticamente com os dados já preenchidos."
+            );
+            ContinuacoesFalha.marcarConsumida(pendente.id);
+          } else {
+            executar(() => motor.iniciarJornada(RelogioSimulado.agora()));
+          }
         },
         { destaque: true }
       )
@@ -336,6 +508,7 @@ function render() {
         "Iniciar nova jornada",
         () => {
           motor = null;
+          mostrarTransferenciaFalha = false;
           limparMensagem();
           render();
         },
@@ -377,17 +550,35 @@ function render() {
         { destaque: true }
       )
     );
+    if (atividade.dadosFalha) {
+      if (mostrarTransferenciaFalha) {
+        els.botoes.appendChild(criarFormularioTransferenciaFalha(atividade));
+      } else {
+        els.botoes.appendChild(
+          botao("Falha não concluída", () => {
+            mostrarTransferenciaFalha = true;
+            render();
+          })
+        );
+      }
+    }
   } else {
     els.status.textContent = "Jornada aberta, sem atividade em andamento.";
     els.botoes.appendChild(
-      botao("Iniciar atividade", () => executar(() => motor.iniciarAtividade(RelogioSimulado.agora())), {
-        destaque: true,
-      })
+      botao(
+        "Iniciar atividade",
+        () => {
+          mostrarTransferenciaFalha = false;
+          executar(() => motor.iniciarAtividade(RelogioSimulado.agora()));
+        },
+        { destaque: true }
+      )
     );
     els.botoes.appendChild(
-      botao("Iniciar atendimento de falha", () =>
-        executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()))
-      )
+      botao("Iniciar atendimento de falha", () => {
+        mostrarTransferenciaFalha = false;
+        executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
+      })
     );
     els.botoes.appendChild(
       botao("Encerrar jornada", () => executar(() => motor.encerrarJornada(RelogioSimulado.agora())))

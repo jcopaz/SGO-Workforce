@@ -59,6 +59,13 @@ class DadosFalha:
     nunca um numero de OS solto - porque "a OS nao podera ser associada
     somente pelo numero, porque o SAP podera reutilizar o numero em
     ciclos diferentes" (docs/27 secao 10.3).
+
+    `gps_*` e `foto_caminho` (D2/D3 do roteiro combinado apos o ADR-0021)
+    sao best-effort e nunca obrigatorios para encerrar o atendimento -
+    decisao explicita do responsavel pelo produto, coerente com a regra
+    de ouro 7/8 do CLAUDE.md (falha de GPS nunca trava evento
+    operacional). `foto_caminho` guarda a referencia permanente do objeto
+    no Supabase Storage (nao uma URL assinada, que expira).
     """
 
     nota: Optional[str] = None
@@ -69,6 +76,11 @@ class DadosFalha:
     acao: Optional[str] = None
     observacao: Optional[str] = None
     os_referencia: Optional[ReferenciaOS] = None
+    gps_latitude: Optional[float] = None
+    gps_longitude: Optional[float] = None
+    gps_precisao_metros: Optional[float] = None
+    gps_capturado_em: Optional[datetime] = None
+    foto_caminho: Optional[str] = None
 
 
 @dataclass

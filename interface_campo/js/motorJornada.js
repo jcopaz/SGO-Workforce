@@ -175,7 +175,20 @@ export class MotorJornada {
 
   // Atualizacao parcial - so sobrescreve o que for explicitamente
   // informado (mesmo padrao de registrar_dados_falha no Python).
-  registrarDadosFalha({ nota, ativo, sintoma, objeto, observacao } = {}) {
+  // gpsLatitude/gpsLongitude/gpsPrecisaoMetros/gpsCapturadoEm/fotoCaminho
+  // sao best-effort (D2/D3) - nunca entram em CAMPOS_OBRIGATORIOS_FALHA.
+  registrarDadosFalha({
+    nota,
+    ativo,
+    sintoma,
+    objeto,
+    observacao,
+    gpsLatitude,
+    gpsLongitude,
+    gpsPrecisaoMetros,
+    gpsCapturadoEm,
+    fotoCaminho,
+  } = {}) {
     this._garantirJornadaAberta();
     if (!this._atividadeAtiva || !this._atividadeAtiva.dadosFalha) {
       throw new Erros.AtendimentoFalhaNaoAtivoError(
@@ -188,7 +201,36 @@ export class MotorJornada {
     if (sintoma !== undefined) dados.sintoma = sintoma;
     if (objeto !== undefined) dados.objeto = objeto;
     if (observacao !== undefined) dados.observacao = observacao;
+    if (gpsLatitude !== undefined) dados.gpsLatitude = gpsLatitude;
+    if (gpsLongitude !== undefined) dados.gpsLongitude = gpsLongitude;
+    if (gpsPrecisaoMetros !== undefined) dados.gpsPrecisaoMetros = gpsPrecisaoMetros;
+    if (gpsCapturadoEm !== undefined) dados.gpsCapturadoEm = gpsCapturadoEm;
+    if (fotoCaminho !== undefined) dados.fotoCaminho = fotoCaminho;
     return dados;
+  }
+
+  // Transferencia de atendimento de falha ("Falha nao Concluida", D4) -
+  // espelha src/workforce_core/engine.py::transferir_atendimento_falha.
+  // Pula validarDadosFalhaCompletos de proposito: e o unico jeito de uma
+  // atividade com dadosFalha terminar ENCERRADA incompleta.
+  transferirAtendimentoFalha(quando) {
+    this._garantirJornadaAberta();
+    if (this._pausaAtiva) {
+      throw new Erros.AtividadeEncerramentoComPausaAbertaError(
+        "Nao e permitido encerrar a atividade com pausa aberta."
+      );
+    }
+    if (!this._atividadeAtiva || !this._atividadeAtiva.dadosFalha) {
+      throw new Erros.AtendimentoFalhaNaoAtivoError(
+        "Nao ha atendimento de falha ativo para transferir."
+      );
+    }
+    const atividade = this._atividadeAtiva;
+    validarOrdem(atividade.inicio, quando, "atividade");
+    atividade.fim = quando;
+    atividade.estado = EstadoAtividade.ENCERRADA;
+    this._atividadeAtiva = null;
+    return atividade;
   }
 
   iniciarPausa(quando, motivo) {

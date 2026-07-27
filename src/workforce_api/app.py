@@ -25,8 +25,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from workforce_storage.catalogo_rasf import apenas_ativos, carregar_catalogos_rasf
@@ -38,7 +39,9 @@ from workforce_storage.serializacao import (
     jornada_para_dict,
 )
 
+from . import supabase_storage
 from .repositorio_catalogo_postgres import RepositorioCatalogoPostgres
+from .repositorio_continuacoes_postgres import RepositorioContinuacoesFalhaPostgres
 from .repositorio_postgres import RepositorioJornadaPostgres
 
 app = FastAPI(title="SGO Workforce - API de sincronizacao (piloto)")
@@ -95,6 +98,23 @@ def obter_repositorio_catalogo() -> RepositorioCatalogoPostgres:
             )
         _repositorio_catalogo_cache = RepositorioCatalogoPostgres(dsn)
     return _repositorio_catalogo_cache
+
+
+_repositorio_continuacoes_cache: RepositorioContinuacoesFalhaPostgres | None = None
+
+
+def obter_repositorio_continuacoes() -> RepositorioContinuacoesFalhaPostgres:
+    """Mesmo padrao de obter_repositorio()/obter_repositorio_catalogo()."""
+    global _repositorio_continuacoes_cache
+    if _repositorio_continuacoes_cache is None:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise HTTPException(
+                status_code=503,
+                detail="Backend sem DATABASE_URL configurada - nao pode persistir.",
+            )
+        _repositorio_continuacoes_cache = RepositorioContinuacoesFalhaPostgres(dsn)
+    return _repositorio_continuacoes_cache
 
 
 def exigir_token(x_sync_token: str = Header(default="")) -> None:
@@ -196,3 +216,79 @@ def obter_catalogo_rasf() -> Dict[str, List[str]]:
 @app.get("/catalogo-rasf", dependencies=[Depends(exigir_token)])
 def listar_catalogo_rasf() -> Dict[str, List[str]]:
     return obter_catalogo_rasf()
+
+
+# ----------------------------------------------------------------------
+# Fotos do atendimento de falha (D3 - Supabase Storage, ver
+# docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md).
+# A service_role key do Supabase fica so aqui (variavel de ambiente do
+# backend) - a interface de campo nunca a recebe, so fala com estes dois
+# endpoints usando o mesmo token de sincronizacao dos demais.
+# ----------------------------------------------------------------------
+@app.post("/fotos", dependencies=[Depends(exigir_token)])
+async def enviar_foto(arquivo: UploadFile = File(...)) -> Dict[str, str]:
+    conteudo = await arquivo.read()
+    try:
+        caminho = supabase_storage.enviar_foto(
+            conteudo,
+            arquivo.filename or "foto.jpg",
+            arquivo.content_type or "application/octet-stream",
+        )
+    except supabase_storage.SupabaseStorageNaoConfiguradoError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except supabase_storage.SupabaseStorageErro as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"caminho": caminho}
+
+
+@app.get("/fotos/url", dependencies=[Depends(exigir_token)])
+def obter_url_foto(caminho: str) -> Dict[str, str]:
+    try:
+        url = supabase_storage.gerar_url_assinada(caminho)
+    except supabase_storage.SupabaseStorageNaoConfiguradoError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except supabase_storage.SupabaseStorageErro as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"url": url}
+
+
+# ----------------------------------------------------------------------
+# Continuacoes de atendimento de falha (D4 - "Falha nao Concluida",
+# transferencia entre colaboradores, ver docs/49_ADR_0022).
+# ----------------------------------------------------------------------
+@app.post("/continuacoes-falha", dependencies=[Depends(exigir_token)])
+def criar_continuacao_falha(
+    dados: Dict[str, Any],
+    repositorio: RepositorioContinuacoesFalhaPostgres = Depends(obter_repositorio_continuacoes),
+) -> Dict[str, str]:
+    matricula_destino = dados.get("matricula_destino")
+    dados_falha = dados.get("dados")
+    if not matricula_destino or not isinstance(dados_falha, dict):
+        raise HTTPException(
+            status_code=400, detail="matricula_destino e dados sao obrigatorios."
+        )
+    continuacao_id = repositorio.criar(matricula_destino, dados_falha)
+    return {"status": "criado", "id": str(continuacao_id)}
+
+
+@app.get("/continuacoes-falha", dependencies=[Depends(exigir_token)])
+def listar_continuacoes_falha(
+    matricula: str,
+    repositorio: RepositorioContinuacoesFalhaPostgres = Depends(obter_repositorio_continuacoes),
+) -> List[Dict[str, Any]]:
+    """So devolve continuacoes pendentes (nao consumidas) para a matricula
+    informada - a interface de campo chama isto ao iniciar uma jornada."""
+    return repositorio.listar_pendentes(matricula)
+
+
+@app.post("/continuacoes-falha/{continuacao_id}/consumir", dependencies=[Depends(exigir_token)])
+def consumir_continuacao_falha(
+    continuacao_id: str,
+    repositorio: RepositorioContinuacoesFalhaPostgres = Depends(obter_repositorio_continuacoes),
+) -> Dict[str, str]:
+    try:
+        id_uuid = UUID(continuacao_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="id invalido.") from exc
+    repositorio.marcar_consumida(id_uuid)
+    return {"status": "consumida"}

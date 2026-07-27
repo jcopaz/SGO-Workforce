@@ -51,6 +51,39 @@ test("paraPayloadSincronizacao converte campos para o contrato do backend", () =
   assert.equal(pausa.fim, dt(10, 20).toISOString());
 });
 
+test("paraPayloadSincronizacao envia dados_falha de verdade quando ha atendimento de falha", () => {
+  // Bug encontrado durante D2/D3: atividadeParaPayload sempre mandava
+  // dados_falha: null, mesmo apos o motor JS ganhar atendimento de falha
+  // no ADR-0021 - nenhum atendimento registrado no app de campo chegava
+  // ao painel. Corrigido junto com GPS/foto (D2/D3).
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtendimentoFalha(dt(8, 10));
+  motor.registrarDadosFalha({
+    nota: "1",
+    ativo: "A",
+    sintoma: "S",
+    objeto: "O",
+    observacao: "Obs",
+    gpsLatitude: -22.9,
+    gpsLongitude: -43.2,
+    gpsPrecisaoMetros: 15.5,
+    gpsCapturadoEm: dt(8, 15),
+    fotoCaminho: "atendimentos/foo.jpg",
+  });
+  motor.encerrarAtividade(dt(9, 0));
+  motor.encerrarJornada(dt(9, 0));
+
+  const payload = paraPayloadSincronizacao(motor.jornada);
+  const dadosFalha = payload.atividades[0].dados_falha;
+
+  assert.equal(dadosFalha.nota, "1");
+  assert.equal(dadosFalha.objeto, "O");
+  assert.equal(dadosFalha.gps_latitude, -22.9);
+  assert.equal(dadosFalha.gps_capturado_em, dt(8, 15).toISOString());
+  assert.equal(dadosFalha.foto_caminho, "atendimentos/foo.jpg");
+});
+
 test("paraPayloadSincronizacao trata jornada em andamento (fim nulo)", () => {
   const motor = new MotorJornada({ colaboradorMatricula: "99999" });
   motor.iniciarJornada(dt(8, 0));

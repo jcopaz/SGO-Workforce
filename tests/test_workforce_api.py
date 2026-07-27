@@ -17,7 +17,14 @@ from workforce_core.catalogo import Categoria, ClassificacaoHH, EntradaCatalogo
 from workforce_core.engine import MotorJornada
 from workforce_storage.repositorio_jornada import RepositorioJornadaArquivo
 
-from workforce_api.app import app, exigir_token, obter_repositorio, obter_repositorio_catalogo
+from workforce_api import supabase_storage as _supabase_storage_modulo
+from workforce_api.app import (
+    app,
+    exigir_token,
+    obter_repositorio,
+    obter_repositorio_catalogo,
+    obter_repositorio_continuacoes,
+)
 
 TOKEN_TESTE = "token-de-teste-nao-usar-em-producao"
 
@@ -233,3 +240,193 @@ def test_get_catalogo_rasf_retorna_sintomas_e_componentes_reais(cliente_rasf):
     assert len(dados["sintomas"]) == 53
     assert len(dados["componentes_causadores"]) == 148
     assert "FUSÍVEL" in dados["componentes_causadores"]
+
+
+# ----------------------------------------------------------------------
+# /fotos e /fotos/url (upload para Supabase Storage - D3, ver
+# docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md)
+# ----------------------------------------------------------------------
+@pytest.fixture
+def cliente_fotos(monkeypatch):
+    monkeypatch.setenv("SYNC_TOKEN", TOKEN_TESTE)
+    return TestClient(app)
+
+
+def test_post_fotos_sem_token_e_401(cliente_fotos):
+    resposta = cliente_fotos.post(
+        "/fotos", files={"arquivo": ("foto.jpg", b"conteudo", "image/jpeg")}
+    )
+    assert resposta.status_code == 401
+
+
+def test_post_fotos_sucesso_devolve_caminho(cliente_fotos, monkeypatch):
+    monkeypatch.setattr(_supabase_storage_modulo, "enviar_foto", lambda *a, **k: "abc-foto.jpg")
+    resposta = cliente_fotos.post(
+        "/fotos",
+        files={"arquivo": ("foto.jpg", b"conteudo", "image/jpeg")},
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json() == {"caminho": "abc-foto.jpg"}
+
+
+def test_post_fotos_sem_supabase_configurado_e_503(cliente_fotos, monkeypatch):
+    def levanta(*_args, **_kwargs):
+        raise _supabase_storage_modulo.SupabaseStorageNaoConfiguradoError("sem config")
+
+    monkeypatch.setattr(_supabase_storage_modulo, "enviar_foto", levanta)
+    resposta = cliente_fotos.post(
+        "/fotos",
+        files={"arquivo": ("foto.jpg", b"conteudo", "image/jpeg")},
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 503
+
+
+def test_post_fotos_erro_supabase_e_502(cliente_fotos, monkeypatch):
+    def levanta(*_args, **_kwargs):
+        raise _supabase_storage_modulo.SupabaseStorageErro("recusado")
+
+    monkeypatch.setattr(_supabase_storage_modulo, "enviar_foto", levanta)
+    resposta = cliente_fotos.post(
+        "/fotos",
+        files={"arquivo": ("foto.jpg", b"conteudo", "image/jpeg")},
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 502
+
+
+def test_get_fotos_url_sem_token_e_401(cliente_fotos):
+    resposta = cliente_fotos.get("/fotos/url", params={"caminho": "abc-foto.jpg"})
+    assert resposta.status_code == 401
+
+
+def test_get_fotos_url_sucesso(cliente_fotos, monkeypatch):
+    monkeypatch.setattr(
+        _supabase_storage_modulo, "gerar_url_assinada", lambda *a, **k: "https://exemplo/url-assinada"
+    )
+    resposta = cliente_fotos.get(
+        "/fotos/url",
+        params={"caminho": "abc-foto.jpg"},
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json() == {"url": "https://exemplo/url-assinada"}
+
+
+# ----------------------------------------------------------------------
+# /continuacoes-falha (transferencia entre colaboradores - D4, ver
+# docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md)
+# ----------------------------------------------------------------------
+class _RepositorioContinuacoesFalso:
+    """Repositorio em memoria, mesmo espirito de _RepositorioCatalogoFalso -
+    permite testar os endpoints /continuacoes-falha sem Postgres real."""
+
+    def __init__(self):
+        self._registros: dict[str, dict] = {}
+
+    def criar(self, matricula_destino, dados):
+        from uuid import uuid4
+
+        continuacao_id = uuid4()
+        self._registros[str(continuacao_id)] = {
+            "matricula_destino": matricula_destino,
+            "dados": dados,
+            "consumida": False,
+        }
+        return continuacao_id
+
+    def listar_pendentes(self, matricula_destino):
+        return [
+            {"id": id_, "dados": registro["dados"]}
+            for id_, registro in self._registros.items()
+            if registro["matricula_destino"] == matricula_destino and not registro["consumida"]
+        ]
+
+    def marcar_consumida(self, continuacao_id):
+        registro = self._registros.get(str(continuacao_id))
+        if registro:
+            registro["consumida"] = True
+
+
+@pytest.fixture
+def cliente_continuacoes(monkeypatch):
+    monkeypatch.setenv("SYNC_TOKEN", TOKEN_TESTE)
+    repositorio = _RepositorioContinuacoesFalso()
+    app.dependency_overrides[obter_repositorio_continuacoes] = lambda: repositorio
+    try:
+        yield TestClient(app), repositorio
+    finally:
+        app.dependency_overrides.pop(obter_repositorio_continuacoes, None)
+
+
+def test_post_continuacoes_falha_sem_token_e_401(cliente_continuacoes):
+    cliente, _repositorio = cliente_continuacoes
+    resposta = cliente.post(
+        "/continuacoes-falha",
+        json={"matricula_destino": "99999", "dados": {"nota": "1"}},
+    )
+    assert resposta.status_code == 401
+
+
+def test_post_continuacoes_falha_cria_e_aparece_no_get(cliente_continuacoes):
+    cliente, _repositorio = cliente_continuacoes
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    dados = {"matricula_destino": "99999", "dados": {"nota": "1", "ativo": "A"}}
+
+    resposta_post = cliente.post("/continuacoes-falha", json=dados, headers=headers)
+    assert resposta_post.status_code == 200
+
+    resposta_get = cliente.get(
+        "/continuacoes-falha", params={"matricula": "99999"}, headers=headers
+    )
+    assert resposta_get.status_code == 200
+    pendentes = resposta_get.json()
+    assert len(pendentes) == 1
+    assert pendentes[0]["dados"]["nota"] == "1"
+
+
+def test_get_continuacoes_falha_filtra_por_matricula(cliente_continuacoes):
+    cliente, _repositorio = cliente_continuacoes
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    cliente.post(
+        "/continuacoes-falha",
+        json={"matricula_destino": "11111", "dados": {"nota": "1"}},
+        headers=headers,
+    )
+
+    resposta_get = cliente.get(
+        "/continuacoes-falha", params={"matricula": "99999"}, headers=headers
+    )
+    assert resposta_get.json() == []
+
+
+def test_post_continuacao_falha_consumir_remove_da_listagem(cliente_continuacoes):
+    cliente, _repositorio = cliente_continuacoes
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    resposta_post = cliente.post(
+        "/continuacoes-falha",
+        json={"matricula_destino": "99999", "dados": {"nota": "1"}},
+        headers=headers,
+    )
+    continuacao_id = resposta_post.json()["id"]
+
+    resposta_consumir = cliente.post(
+        f"/continuacoes-falha/{continuacao_id}/consumir", headers=headers
+    )
+    assert resposta_consumir.status_code == 200
+
+    resposta_get = cliente.get(
+        "/continuacoes-falha", params={"matricula": "99999"}, headers=headers
+    )
+    assert resposta_get.json() == []
+
+
+def test_post_continuacoes_falha_malformado_e_400(cliente_continuacoes):
+    cliente, _repositorio = cliente_continuacoes
+    resposta = cliente.post(
+        "/continuacoes-falha",
+        json={"matricula_destino": "99999"},  # falta "dados"
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 400

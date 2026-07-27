@@ -258,6 +258,11 @@ class MotorJornada:
         causa: str | None = None,
         acao: str | None = None,
         observacao: str | None = None,
+        gps_latitude: float | None = None,
+        gps_longitude: float | None = None,
+        gps_precisao_metros: float | None = None,
+        gps_capturado_em: datetime | None = None,
+        foto_caminho: str | None = None,
     ) -> DadosFalha:
         """Atualiza parcialmente os dados do atendimento de falha em andamento.
 
@@ -265,7 +270,8 @@ class MotorJornada:
         preencher nota/ativo/sintoma/objeto no inicio e observacao mais
         perto do encerramento. `causa`/`acao` continuam aceitos por
         compatibilidade (nao usados pelo formulario atual da interface de
-        campo, ver ADR-0021).
+        campo, ver ADR-0021). `gps_*`/`foto_caminho` sao best-effort - nunca
+        exigidos por `_validar_dados_falha_completos` (ver CAMPOS_OBRIGATORIOS_FALHA).
         """
         self._garantir_jornada_aberta()
         if self._atividade_ativa is None or self._atividade_ativa.dados_falha is None:
@@ -287,7 +293,46 @@ class MotorJornada:
             dados.acao = acao
         if observacao is not None:
             dados.observacao = observacao
+        if gps_latitude is not None:
+            dados.gps_latitude = gps_latitude
+        if gps_longitude is not None:
+            dados.gps_longitude = gps_longitude
+        if gps_precisao_metros is not None:
+            dados.gps_precisao_metros = gps_precisao_metros
+        if gps_capturado_em is not None:
+            dados.gps_capturado_em = gps_capturado_em
+        if foto_caminho is not None:
+            dados.foto_caminho = foto_caminho
         return dados
+
+    def transferir_atendimento_falha(self, quando: datetime) -> Atividade:
+        """Encerra o atendimento de falha ativo sem exigir campos completos
+        - usado quando o colaborador nao consegue concluir no proprio
+        turno e passa o atendimento a outra matricula ("Falha nao
+        Concluida", D4 do roteiro combinado apos o ADR-0021).
+
+        Deliberadamente pula _validar_dados_falha_completos: e o unico
+        jeito de uma atividade com dados_falha terminar ENCERRADA
+        incompleta - isso serve de marca de auditoria (ENCERRADA e
+        incompleta so pode significar "transferida", nunca "concluida").
+        So encerra a atividade, nao a jornada - o colaborador pode ter
+        mais o que fazer no resto do turno.
+        """
+        self._garantir_jornada_aberta()
+        if self._pausa_ativa is not None:
+            raise AtividadeEncerramentoComPausaAbertaError(
+                "Nao e permitido encerrar a atividade com pausa aberta."
+            )
+        if self._atividade_ativa is None or self._atividade_ativa.dados_falha is None:
+            raise AtendimentoFalhaNaoAtivoError(
+                "Nao ha atendimento de falha ativo para transferir."
+            )
+        atividade = self._atividade_ativa
+        self._validar_ordem(atividade.inicio, quando, "atividade")
+        atividade.fim = quando
+        atividade.estado = EstadoAtividade.ENCERRADA
+        self._atividade_ativa = None
+        return atividade
 
     # ------------------------------------------------------------------
     # Pausa

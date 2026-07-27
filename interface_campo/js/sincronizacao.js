@@ -21,6 +21,26 @@ function pausaParaPayload(pausa) {
   };
 }
 
+// Mesmo contrato de workforce_storage.serializacao.dados_falha_para_dict -
+// campos ausentes aqui (causa/acao/os_referencia) nao existem no
+// formulario da interface de campo (ADR-0021) e ficam None do lado Python
+// via dados_falha_de_dict (usa .get()).
+function dadosFalhaParaPayload(dados) {
+  if (!dados) return null;
+  return {
+    nota: dados.nota,
+    ativo: dados.ativo,
+    sintoma: dados.sintoma,
+    objeto: dados.objeto,
+    observacao: dados.observacao,
+    gps_latitude: dados.gpsLatitude,
+    gps_longitude: dados.gpsLongitude,
+    gps_precisao_metros: dados.gpsPrecisaoMetros,
+    gps_capturado_em: dados.gpsCapturadoEm ? dados.gpsCapturadoEm.toISOString() : null,
+    foto_caminho: dados.fotoCaminho,
+  };
+}
+
 function atividadeParaPayload(atividade) {
   return {
     id: atividade.id,
@@ -28,10 +48,7 @@ function atividadeParaPayload(atividade) {
     fim: atividade.fim ? atividade.fim.toISOString() : null,
     estado: atividade.estado,
     pausas: atividade.pausas.map(pausaParaPayload),
-    // O motor JS ainda nao tem atendimento de falha (Incremento 6 so
-    // existe no lado Python, ADR-0004) - sempre null, refletindo
-    // fielmente o que a interface de campo sabe registrar hoje.
-    dados_falha: null,
+    dados_falha: dadosFalhaParaPayload(atividade.dadosFalha),
   };
 }
 

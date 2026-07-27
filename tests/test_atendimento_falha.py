@@ -120,6 +120,86 @@ def test_atividade_comum_encerra_sem_exigir_campos_de_falha():
     assert atividade.dados_falha is None
 
 
+def test_gps_e_foto_sao_opcionais_e_nunca_bloqueiam_encerramento():
+    # D2/D3 (best-effort, decisao do responsavel do produto): mesmo sem
+    # nenhum dado de GPS/foto, o atendimento encerra normalmente desde
+    # que os campos obrigatorios (nota/ativo/sintoma/objeto/observacao)
+    # estejam preenchidos.
+    motor = _motor_com_atendimento_ativo()
+    motor.registrar_dados_falha(
+        nota="1", ativo="A", sintoma="S", objeto="O", observacao="Obs"
+    )
+    atividade = motor.encerrar_atividade(_dt(9, 0))
+    assert atividade.dados_falha.gps_latitude is None
+    assert atividade.dados_falha.foto_caminho is None
+
+
+def test_registrar_gps_e_foto_no_atendimento_de_falha():
+    motor = _motor_com_atendimento_ativo()
+    capturado_em = _dt(8, 15)
+    motor.registrar_dados_falha(
+        nota="1",
+        ativo="A",
+        sintoma="S",
+        objeto="O",
+        observacao="Obs",
+        gps_latitude=-22.9,
+        gps_longitude=-43.2,
+        gps_precisao_metros=15.5,
+        gps_capturado_em=capturado_em,
+        foto_caminho="atendimentos/foo.jpg",
+    )
+    atividade = motor.encerrar_atividade(_dt(9, 0))
+
+    dados = atividade.dados_falha
+    assert dados.gps_latitude == -22.9
+    assert dados.gps_longitude == -43.2
+    assert dados.gps_precisao_metros == 15.5
+    assert dados.gps_capturado_em == capturado_em
+    assert dados.foto_caminho == "atendimentos/foo.jpg"
+
+
+def test_transferir_atendimento_falha_encerra_atividade_incompleta():
+    # D4 ("Falha nao Concluida"): o unico caso em que uma atividade com
+    # dados_falha pode terminar ENCERRADA sem os campos obrigatorios.
+    motor = _motor_com_atendimento_ativo()
+    motor.registrar_dados_falha(nota="1", ativo="A")  # so parcial
+
+    atividade = motor.transferir_atendimento_falha(_dt(8, 30))
+
+    assert atividade.estado.value == "ENCERRADA"
+    assert atividade.fim == _dt(8, 30)
+    assert atividade.dados_falha.nota == "1"
+    assert atividade.dados_falha.objeto is None
+    # A jornada continua aberta - quem transfere pode ter mais o que
+    # fazer no resto do turno.
+    assert motor.jornada.estado.value == "ABERTA"
+
+
+def test_transferir_atendimento_falha_sem_atendimento_ativo():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    with pytest.raises(AtendimentoFalhaNaoAtivoError):
+        motor.transferir_atendimento_falha(_dt(8, 30))
+
+
+def test_transferir_atendimento_falha_em_atividade_comum_nao_e_permitido():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atividade(_dt(8, 10))  # atividade comum, sem dados_falha
+    with pytest.raises(AtendimentoFalhaNaoAtivoError):
+        motor.transferir_atendimento_falha(_dt(8, 30))
+
+
+def test_transferir_atendimento_falha_bloqueia_com_pausa_aberta():
+    from workforce_core.exceptions import AtividadeEncerramentoComPausaAbertaError
+
+    motor = _motor_com_atendimento_ativo()
+    motor.iniciar_pausa(_dt(8, 20), "PAUSA_TESTE")
+    with pytest.raises(AtividadeEncerramentoComPausaAbertaError):
+        motor.transferir_atendimento_falha(_dt(8, 30))
+
+
 def test_atendimento_falha_pode_ter_pausa_normalmente():
     motor = _motor_com_atendimento_ativo()
     motor.iniciar_pausa(_dt(8, 30), "PAUSA_TESTE")

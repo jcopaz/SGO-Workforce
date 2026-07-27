@@ -39,7 +39,8 @@ export function novaAtividade({ inicio = null } = {}) {
 // nota/ativo/sintoma/objeto/observacao (objeto = componente causador do
 // RASF). causa/acao existem no lado Python por compatibilidade mas nao
 // aparecem no formulario da interface de campo - por isso nao tem
-// equivalente aqui.
+// equivalente aqui. gps_*/fotoCaminho sao best-effort (D2/D3, nunca
+// exigidos para concluir o atendimento - ver motorJornada.js).
 export function novoDadosFalha() {
   return {
     nota: null,
@@ -47,6 +48,11 @@ export function novoDadosFalha() {
     sintoma: null,
     objeto: null,
     observacao: null,
+    gpsLatitude: null,
+    gpsLongitude: null,
+    gpsPrecisaoMetros: null,
+    gpsCapturadoEm: null,
+    fotoCaminho: null,
   };
 }
 

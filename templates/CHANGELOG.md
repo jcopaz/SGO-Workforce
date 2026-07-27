@@ -38,6 +38,26 @@
   Novo endpoint `GET /catalogo-rasf` (sintomas e componentes causadores
   reais do RASF) e `interface_campo/js/catalogoRasf.js` (cache offline).
   Ver `docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md`.
+- GPS, foto e transferência entre colaboradores no atendimento de falha
+  (D2/D3/D4, decisão confirmada: best-effort, nunca bloqueiam "Concluir
+  atendimento"):
+  - GPS: `DadosFalha.gps_latitude/gps_longitude/gps_precisao_metros/gps_capturado_em`,
+    botão "Capturar localização" (`interface_campo/js/geolocalizacao.js`,
+    novo) - ação explícita do colaborador, nunca automática.
+  - Foto: `DadosFalha.foto_caminho`, upload para Supabase Storage
+    (`src/workforce_api/supabase_storage.py`, novo) via `POST /fotos` e
+    `GET /fotos/url` (URL assinada sob demanda) -
+    `interface_campo/js/fotoFalha.js` (novo). `service_role` key do
+    Supabase só existe no backend (Render), nunca na interface de campo.
+  - Transferência ("Falha não Concluída"): `MotorJornada.transferir_atendimento_falha`
+    (Python e `motorJornada.js`) encerra a atividade sem exigir campos
+    completos; tabela `continuacoes_falha` e
+    `src/workforce_api/repositorio_continuacoes_postgres.py` (novo);
+    endpoints `POST/GET /continuacoes-falha` e
+    `POST /continuacoes-falha/{id}/consumir`;
+    `interface_campo/js/continuacoesFalha.js` (novo) e botão "Falha não
+    concluída" + retomada automática ao iniciar jornada com pendência.
+  Ver `docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md`.
 ### Alterado
 - Painel reorganizado com `st.navigation`/`st.Page` em 3 seções: "Análise
   de Dados" (dashboard, Mapa Operacional, Capacidade PCM), "Dados"
@@ -98,6 +118,14 @@
   continuava servindo a versão antiga (placeholder) em cache - exatamente
   a armadilha já registrada no ADR-0004. `CACHE_VERSAO` incrementada de
   `v6` para `v7`.
+- **Nenhum atendimento de falha registrado na interface de campo jamais
+  chegava ao backend/painel**: `sincronizacao.js::atividadeParaPayload`
+  sempre mandava `dados_falha: null`, com um comentário desatualizado
+  ("o motor JS ainda não tem atendimento de falha") que nunca foi
+  corrigido quando o ADR-0021 implementou atendimento de falha no motor
+  JS. Corrigido com `dadosFalhaParaPayload`, encontrado e resolvido junto
+  com o D2/D3 (ADR-0022) - não havia dado histórico a recuperar, só o
+  registro local no dispositivo de quem preencheu.
 ### Testes
 - `tests/js/relogioSimulado.test.mjs` (7 casos): avançar, definir data exata,
   voltar ao tempo real e formatação do deslocamento exibido.
@@ -123,7 +151,22 @@
 - `tests/js/catalogoRasf.test.mjs` (novo, 5 casos): mesmo padrão de
   `catalogoMotivos.test.mjs`.
 - `tests/test_workforce_api.py`: 2 novos casos de `/catalogo-rasf`.
-- `node --test tests/js`: 49/49 testes. `pytest`: 200/200 testes.
+- `tests/test_atendimento_falha.py`: casos novos de GPS/foto opcionais e
+  de `transferir_atendimento_falha` (completo, sem atendimento ativo, em
+  atividade comum, bloqueado com pausa aberta).
+- `tests/test_integracao_sgo.py`: round-trip de serialização de
+  `DadosFalha` com e sem GPS/foto.
+- `tests/test_supabase_storage.py` (novo, 7 casos): upload e URL
+  assinada - sucesso, erro HTTP, sem configuração, bucket customizado.
+- `tests/test_workforce_api.py`: casos novos de `/fotos`, `/fotos/url` e
+  `/continuacoes-falha`.
+- `tests/js/motorJornada.test.mjs`: casos novos de GPS/foto e
+  `transferirAtendimentoFalha`, espelhando `test_atendimento_falha.py`.
+- `tests/js/geolocalizacao.test.mjs`, `tests/js/fotoFalha.test.mjs`,
+  `tests/js/continuacoesFalha.test.mjs` (novos, 3+5+8 casos).
+- `tests/js/sincronizacao.test.mjs`: caso novo comprovando a correção do
+  bug de `dados_falha` nunca sincronizado.
+- `node --test tests/js`: 72/72 testes. `pytest`: 226/226 testes.
 ### Riscos
 - Simulador de tempo é ferramenta de teste: precisa ser removido/bloqueado
   antes de qualquer piloto real com colaboradores (ver ADR-0016).
@@ -152,10 +195,20 @@
   manual pendente. Ver ADR-0020.
 - Hierarquia organizacional (coordenação/gerência/gerência geral) ainda
   não foi construída - próximo incremento.
-- Atendimento de falha na interface de campo não foi testado num
-  navegador real (fluxo completo: selecionar, ver o aviso, preencher,
-  tentar concluir incompleto, preencher tudo e concluir). Ver ADR-0021.
-- GPS no preenchimento, upload de foto (Supabase) e transferência de
-  atendimento entre colaboradores ("Falha não Concluída") ainda não
-  foram construídos - próximos incrementos (D2/D3/D4 do roteiro
-  combinado com o responsável pelo produto).
+- Atendimento de falha na interface de campo (incluindo GPS, foto e
+  transferência - D1 a D4) não foi testado num navegador real (fluxo
+  completo: selecionar, ver o aviso, preencher, capturar localização,
+  enviar foto, transferir para outra matrícula, tentar concluir
+  incompleto, preencher tudo e concluir). Ver ADR-0021 e ADR-0022.
+- Conexão real com o Supabase Storage e com a tabela `continuacoes_falha`
+  em Postgres não foi validada neste ambiente (sem acesso de rede de
+  saída) - só testada com fakes/monkeypatch. Ver ADR-0022.
+- Variáveis de ambiente do Supabase (`SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`) ainda não foram
+  configuradas no Render - upload de foto vai falhar (503) até isso ser
+  feito. A Project URL usada nos testes/documentação
+  (`https://ivmmzefzdswmyiwaxzzg.supabase.co`) foi deduzida do JWT
+  fornecido e precisa ser confirmada contra Settings → API antes do
+  deploy.
+- Exibição da foto do atendimento (via `GET /fotos/url`) ainda não existe
+  em nenhuma tela do painel - só o endpoint foi construído.

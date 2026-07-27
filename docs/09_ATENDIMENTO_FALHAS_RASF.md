@@ -47,3 +47,16 @@ recomendados". Sintoma e objeto usam o catálogo real do RASF
 servido pelo backend em `GET /catalogo-rasf`. Detalhes completos, o que
 ficou fora de escopo (GPS, foto, transferência entre colaboradores) e a
 justificativa da unificação em `docs/48_ADR_0021_ATENDIMENTO_DE_FALHA_CAMPO.md`.
+
+## Atualização (2026-07-27) — GPS, foto e transferência entre colaboradores (ADR-0022)
+
+Os três pedaços deixados fora do ADR-0021 foram entregues: **GPS**
+(captura opcional via botão "Capturar localização", nunca bloqueia o
+encerramento), **foto** (upload para Supabase Storage via `POST /fotos`,
+caminho permanente gravado em `DadosFalha.foto_caminho`) e
+**transferência entre colaboradores** ("Falha não Concluída" — encerra a
+atividade mesmo incompleta e leva nota/ativo/sintoma/objeto/observação
+para a próxima matrícula via `continuacoes_falha`). GPS e foto são
+best-effort por decisão explícita do responsável pelo produto — nunca
+impedem concluir o atendimento. Detalhes completos em
+`docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md`.

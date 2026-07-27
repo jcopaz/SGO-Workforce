@@ -5,7 +5,7 @@
 // nenhuma chamada de rede (nao ha API real ainda - ver
 // docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
 
-const CACHE_VERSAO = "sgo-workforce-shell-v9";
+const CACHE_VERSAO = "sgo-workforce-shell-v10";
 const ARQUIVOS_APP_SHELL = [
   "./",
   "./index.html",
@@ -23,6 +23,9 @@ const ARQUIVOS_APP_SHELL = [
   "./js/sincronizacao.js",
   "./js/catalogoMotivos.js",
   "./js/catalogoRasf.js",
+  "./js/geolocalizacao.js",
+  "./js/fotoFalha.js",
+  "./js/continuacoesFalha.js",
   "./icons/icone.svg",
 ];
 

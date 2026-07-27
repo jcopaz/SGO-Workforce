@@ -101,6 +101,11 @@ def dados_falha_para_dict(dados: Optional[DadosFalha]) -> Optional[Dict[str, Any
         "acao": dados.acao,
         "observacao": dados.observacao,
         "os_referencia": referencia_os_para_dict(dados.os_referencia),
+        "gps_latitude": dados.gps_latitude,
+        "gps_longitude": dados.gps_longitude,
+        "gps_precisao_metros": dados.gps_precisao_metros,
+        "gps_capturado_em": _dt_para_str(dados.gps_capturado_em),
+        "foto_caminho": dados.foto_caminho,
     }
 
 
@@ -116,6 +121,12 @@ def dados_falha_de_dict(dados: Optional[Dict[str, Any]]) -> Optional[DadosFalha]
         acao=dados.get("acao"),
         observacao=dados.get("observacao"),
         os_referencia=referencia_os_de_dict(dados.get("os_referencia")),
+        # ausentes em registros anteriores a D2/D3 (GPS/foto).
+        gps_latitude=dados.get("gps_latitude"),
+        gps_longitude=dados.get("gps_longitude"),
+        gps_precisao_metros=dados.get("gps_precisao_metros"),
+        gps_capturado_em=_str_para_dt(dados.get("gps_capturado_em")),
+        foto_caminho=dados.get("foto_caminho"),
     )
 
 

@@ -89,6 +89,37 @@ def test_round_trip_serializacao_com_os_referencia():
     assert recarregado.os_referencia == ReferenciaOS(numero="42", ciclo_ou_plano="2026-C1")
 
 
+def test_round_trip_serializacao_com_gps_e_foto():
+    dados = DadosFalha(
+        nota="1",
+        ativo="A",
+        sintoma="S",
+        objeto="O",
+        observacao="Obs",
+        gps_latitude=-22.9,
+        gps_longitude=-43.2,
+        gps_precisao_metros=15.5,
+        gps_capturado_em=_dt(8, 15),
+        foto_caminho="atendimentos/foo.jpg",
+    )
+
+    recarregado = dados_falha_de_dict(dados_falha_para_dict(dados))
+
+    assert recarregado.gps_latitude == -22.9
+    assert recarregado.gps_longitude == -43.2
+    assert recarregado.gps_precisao_metros == 15.5
+    assert recarregado.gps_capturado_em == _dt(8, 15)
+    assert recarregado.foto_caminho == "atendimentos/foo.jpg"
+
+
+def test_round_trip_serializacao_sem_gps_ou_foto_e_retrocompativel():
+    # Simula um registro anterior ao D2/D3 (sem essas chaves).
+    dados_antigo = {"nota": "1", "ativo": "A", "sintoma": "S", "observacao": "Obs"}
+    recarregado = dados_falha_de_dict(dados_antigo)
+    assert recarregado.gps_latitude is None
+    assert recarregado.foto_caminho is None
+
+
 def test_round_trip_serializacao_sem_os_referencia_e_retrocompativel():
     # Simula um arquivo v3 (antes do Incremento 13), sem a chave os_referencia.
     dados_v3 = {

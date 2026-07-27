@@ -337,6 +337,79 @@ test("atividade comum encerra sem exigir campos de atendimento de falha", () => 
   assert.equal(atividade.dadosFalha, undefined);
 });
 
+test("gps e foto sao opcionais e nunca bloqueiam o encerramento (D2/D3)", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.registrarDadosFalha({ nota: "1", ativo: "A", sintoma: "S", objeto: "O", observacao: "Obs" });
+  const atividade = motor.encerrarAtividade(dt(9, 0));
+  assert.equal(atividade.dadosFalha.gpsLatitude, null);
+  assert.equal(atividade.dadosFalha.fotoCaminho, null);
+});
+
+test("registra gps e foto no atendimento de falha", () => {
+  const motor = motorComAtendimentoAtivo();
+  const capturadoEm = dt(8, 15);
+  motor.registrarDadosFalha({
+    nota: "1",
+    ativo: "A",
+    sintoma: "S",
+    objeto: "O",
+    observacao: "Obs",
+    gpsLatitude: -22.9,
+    gpsLongitude: -43.2,
+    gpsPrecisaoMetros: 15.5,
+    gpsCapturadoEm: capturadoEm,
+    fotoCaminho: "atendimentos/foo.jpg",
+  });
+  const atividade = motor.encerrarAtividade(dt(9, 0));
+
+  const dados = atividade.dadosFalha;
+  assert.equal(dados.gpsLatitude, -22.9);
+  assert.equal(dados.gpsLongitude, -43.2);
+  assert.equal(dados.gpsPrecisaoMetros, 15.5);
+  assert.equal(dados.gpsCapturadoEm, capturadoEm);
+  assert.equal(dados.fotoCaminho, "atendimentos/foo.jpg");
+});
+
+test("transferirAtendimentoFalha encerra atividade incompleta (D4)", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.registrarDadosFalha({ nota: "1", ativo: "A" }); // so parcial
+
+  const atividade = motor.transferirAtendimentoFalha(dt(8, 30));
+
+  assert.equal(atividade.estado, "ENCERRADA");
+  assert.equal(atividade.dadosFalha.nota, "1");
+  assert.equal(atividade.dadosFalha.objeto, null);
+  assert.equal(motor.jornada.estado, "ABERTA");
+});
+
+test("transferirAtendimentoFalha sem atendimento ativo lanca erro dedicado", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.transferirAtendimentoFalha(dt(8, 30)),
+    Erros.AtendimentoFalhaNaoAtivoError
+  );
+});
+
+test("transferirAtendimentoFalha em atividade comum nao e permitido", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  assert.throws(
+    () => motor.transferirAtendimentoFalha(dt(8, 30)),
+    Erros.AtendimentoFalhaNaoAtivoError
+  );
+});
+
+test("transferirAtendimentoFalha bloqueia com pausa aberta", () => {
+  const motor = motorComAtendimentoAtivo();
+  motor.iniciarPausa(dt(8, 20), "PAUSA_TESTE");
+  assert.throws(
+    () => motor.transferirAtendimentoFalha(dt(8, 30)),
+    Erros.AtividadeEncerramentoComPausaAbertaError
+  );
+});
+
 test("atendimento de falha pode ter pausa normalmente", () => {
   const motor = motorComAtendimentoAtivo();
   motor.iniciarPausa(dt(8, 30), "PAUSA_TESTE");
