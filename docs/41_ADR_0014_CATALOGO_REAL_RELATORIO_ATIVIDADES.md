@@ -131,6 +131,22 @@ mapeamento estrutural (pausa vs. evento secundário vs. atividade) é uma
 interpretação de quem implementou, não confirmada linha a linha com o
 responsável pelo produto — sujeita a correção.
 
+## Atualização (2026-07-27) — reclassificação e renumeração (ADR-0023)
+
+A classificação de HH pendente acima foi resolvida: o responsável pelo
+produto validou `classificacao_hh` código a código. Nesse processo,
+identificou que o antigo `EE18` ("Suporte da manutenção") duplicava o que
+já era `EE22` ("Manutenção não planejada") e pediu a exclusão de um dos
+dois — mantido o que hoje é `EE21` ("Atendimento de Falha", a base de
+toda a funcionalidade construída desde o ADR-0006). Isso deslizou os
+códigos `EE19`-`EE24` uma posição, e um código novo, `EE23` ("Manutenção
+Programada Não Concluída"), passou a existir. `EE17` e `EE22` (agora
+`EE21`) também tiveram a descrição atualizada para o texto atual do
+formulário. A tabela completa e atualizada está em
+`docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md` — a numeração
+citada no restante deste documento (contexto histórico de 2026-07-23)
+não reflete mais os códigos atuais de `EE18` em diante.
+
 ## Data e responsáveis
 
 - Data de registro: 2026-07-23.

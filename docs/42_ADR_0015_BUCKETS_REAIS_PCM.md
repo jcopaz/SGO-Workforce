@@ -166,6 +166,21 @@ de um período real específico, não uma meta ou classificação validada
 para uso contínuo — o mapeamento estrutural (qual categoria cai em qual
 bucket) é a parte reaproveitada aqui, não os números do exemplo.
 
+## Atualização (2026-07-27) — renumeração de códigos (ADR-0023)
+
+`EE22` ("Manutenção não planejada") citado neste documento passou a se
+chamar `EE21` ("Atendimento de Falha") após a reclassificação/exclusão de
+duplicidade do ADR-0023. Um código novo, `EE23` ("Manutenção Programada
+Não Concluída"), também ficou fora de qualquer bucket de perda pelo mesmo
+motivo de `EE17`/`EE21` (sem checagem de OS válida ainda). O mapeamento
+por `Categoria` (não por string de código) em
+`mapeamento_categoria_bucket_relatorio_1_manutencao()` não precisou
+mudar de estrutura — só a documentação dos números de código.
+Além disso, o próprio escopo do módulo de Capacidade PCM deixou de ser
+prioridade nesta fase (o PCM não vai usar esta aplicação por enquanto,
+decisão do responsável pelo produto) — o código permanece, mas evoluções
+futuras devem checar `docs/23_DECISOES_PENDENTES.md`, item 5.
+
 ## Data e responsáveis
 
 - Data de registro: 2026-07-23.

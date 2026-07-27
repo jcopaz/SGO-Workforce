@@ -117,17 +117,21 @@ def mapeamento_categoria_bucket_relatorio_1_manutencao() -> Dict[Categoria, Buck
     produto em 2026-07-23. Ver docs/42_ADR_0015_BUCKETS_REAIS_PCM.md para
     a tabela original e a justificativa completa.
 
-    `Categoria.ATIVIDADE_PLANEJADA` (EE17, manutencao em equipamentos) e
-    `Categoria.ATENDIMENTO_FALHA` (EE22, manutencao nao planejada)
-    deliberadamente NAO aparecem aqui: na planilha real, essas horas so
-    contam como perda ("produtiva nao rentavel") quando NAO estao
-    vinculadas a uma OS planejada valida - uma distincao que o sistema
-    ainda nao verifica automaticamente (nao ha checagem de "OS valida/
-    planejada" hoje, so o campo opcional `DadosFalha.os_referencia` do
-    Incremento 13). Ate essa checagem existir, esses dois codigos ficam
-    fora de qualquer bucket de perda por padrao aqui - tratados como
-    capacidade efetiva/rentavel, o mesmo valor (0,00%) que a planilha real
-    mostrava para eles no bucket "nao rentavel" no exemplo fornecido.
+    `Categoria.ATIVIDADE_PLANEJADA` (EE17, manutencao programada),
+    `Categoria.ATENDIMENTO_FALHA` (EE21, atendimento de falha) e
+    `Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA` (EE23, manutencao
+    programada nao concluida, ver ADR-0023) deliberadamente NAO aparecem
+    aqui: na planilha real, essas horas so contam como perda ("produtiva
+    nao rentavel") quando NAO estao vinculadas a uma OS planejada valida -
+    uma distincao que o sistema ainda nao verifica automaticamente (nao ha
+    checagem de "OS valida/planejada" hoje, so o campo opcional
+    `DadosFalha.os_referencia` do Incremento 13). Ate essa checagem
+    existir, esses tres codigos ficam fora de qualquer bucket de perda por
+    padrao aqui - tratados como capacidade efetiva/rentavel, o mesmo valor
+    (0,00%) que a planilha real mostrava para eles no bucket "nao
+    rentavel" no exemplo fornecido. (Numeracao de codigos atualizada pelo
+    ADR-0023 em 2026-07-27 - o antigo EE22 "manutencao nao planejada"
+    virou EE21 "Atendimento de Falha".)
 
     `FERIAS` e `MOTIVOS_LEGAIS` (bucket HORAS_AUSENTES na planilha real)
     tambem nao aparecem: nao correspondem a nenhum codigo do Relatorio 1,

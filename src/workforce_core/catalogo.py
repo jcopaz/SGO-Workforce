@@ -1,11 +1,14 @@
 """Infraestrutura de catalogo do Incremento 5.
 
 O catalogo oficial de motivos, e a classificacao de cada um como produtivo,
-improdutivo ou nao computavel, sao decisoes de negocio explicitamente
+improdutivo ou nao computavel, eram decisoes de negocio explicitamente
 pendentes (docs/27_ALINHAMENTO_OFICIAL_SGO_WORKFORCE_v1_2.md, secao 6 itens
-6-9, e secao 15.3 "Antes do Incremento 5"). Este modulo fornece apenas a
-estrutura tecnica para representar essas decisoes quando forem tomadas -
-nao inventa nenhum valor de classificacao definitivo.
+6-9, e secao 15.3 "Antes do Incremento 5"). Este modulo fornece a estrutura
+tecnica para representar essas decisoes - nenhum valor foi inventado pelo
+agente; `catalogo_padrao()` (motivos de teste) continua NAO_DEFINIDO, e
+`catalogo_relatorio_1_manutencao()` (codigos reais) teve sua classificacao
+validada codigo a codigo pelo responsavel pelo produto em 2026-07-27 (ver
+docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md).
 
 O vocabulario de Categoria vem de docs/07_MOTOR_EVENTOS_E_HH.md ("Categorias
 iniciais"), que ja fazia parte da leitura obrigatoria do projeto - nao e uma
@@ -58,6 +61,11 @@ class Categoria(str, Enum):
     CARREGAR_VEICULO = "CARREGAR_VEICULO"
     DESCARREGAR_VEICULO = "DESCARREGAR_VEICULO"
     SMS = "SMS"
+
+    # Contraparte de ATIVIDADE_PLANEJADA quando a manutencao programada nao
+    # e concluida no turno (EE23, decisao de negocio de 2026-07-27 - ver
+    # docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md).
+    ATIVIDADE_PLANEJADA_NAO_CONCLUIDA = "ATIVIDADE_PLANEJADA_NAO_CONCLUIDA"
 
 
 class ClassificacaoHH(str, Enum):
@@ -198,42 +206,53 @@ def catalogo_padrao() -> CatalogoMotivos:
     return catalogo
 
 
-# Codigo EE -> (descricao exata do formulario, categoria, tipo de registro).
-# "tipo_registro" indica como o codigo se encaixa no motor de dominio hoje:
+# Codigo EE -> (descricao exata do formulario, categoria, tipo de registro,
+# classificacao_hh). "tipo_registro" indica como o codigo se encaixa no
+# motor de dominio hoje:
 # - "atividade": e a propria Atividade (nao e um motivo de pausa/evento);
 # - "pausa": motivo de Pausa (interrompe uma Atividade em andamento);
 # - "evento_secundario": motivo de Deslocamento/Espera/Apoio (vinculado
 #   diretamente a Jornada, mutuamente exclusivo com a Atividade principal).
 # Ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md para a
-# justificativa codigo a codigo.
+# justificativa codigo a codigo original e
+# docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md para a
+# reclassificacao produtiva/improdutiva e a renumeracao de 2026-07-27
+# (responsavel pelo produto validou codigo a codigo).
+#
+# Renumeracao de 2026-07-27: o antigo EE18 "Suporte da manutencao" foi
+# excluido do catalogo por ser duplicado do que hoje e EE21 "Atendimento
+# de Falha" - os codigos EE19-EE24 da versao anterior deslizaram uma
+# posicao (antigo EE19 -> novo EE18, ..., antigo EE24 -> novo EE23). O
+# antigo EE24 "Horas nao apontadas" (tempo nao classificado, calculado
+# automaticamente a partir das lacunas entre eventos - nunca uma entrada
+# de catalogo) nao existe mais como conceito reservado: o numero EE24 foi
+# liberado pela renumeracao e o novo EE23 e uma entrada real,
+# "Manutencao Programada Nao Concluida" - contraparte de EE17 quando a
+# manutencao nao termina no turno do colaborador.
 _RELATORIO_1_ENTRADAS = [
-    ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario"),
-    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa"),
-    ("EE03", "Aguardando CCO", Categoria.AGUARDANDO_CCO, "evento_secundario"),
-    ("EE04", "Falta de ferramenta ou material", Categoria.AGUARDANDO_MATERIAL, "evento_secundario"),
-    ("EE05", "Trem parado na frente de serviço", Categoria.TREM_PARADO_FRENTE_SERVICO, "evento_secundario"),
-    ("EE06", "Restrição de infraestrutura", Categoria.RESTRICAO_INFRAESTRUTURA, "evento_secundario"),
-    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa"),
-    ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario"),
-    ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario"),
-    ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario"),
-    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa"),
-    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario"),
-    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario"),
-    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario"),
-    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario"),
-    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario"),
-    ("EE17", "Manutenção em equipamentos", Categoria.ATIVIDADE_PLANEJADA, "atividade"),
-    ("EE18", "Suporte da manutenção", Categoria.APOIO_OPERACIONAL, "evento_secundario"),
-    ("EE19", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario"),
-    ("EE20", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario"),
-    ("EE21", "SMS", Categoria.SMS, "pausa"),
-    ("EE22", "Manutenção não planejada", Categoria.ATENDIMENTO_FALHA, "atividade"),
-    ("EE23", "Treinamento", Categoria.TREINAMENTO, "pausa"),
-    # EE24 "Horas nao apontadas" nao vira entrada de catalogo: e o proprio
-    # conceito de "tempo nao classificado" ja calculado automaticamente a
-    # partir das lacunas entre eventos (workforce_core.calculo), nao um
-    # motivo que alguem escolhe ao iniciar um evento. Ver ADR-0014.
+    ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL),
+    ("EE03", "Aguardando CCO", Categoria.AGUARDANDO_CCO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE04", "Falta de ferramenta ou material", Categoria.AGUARDANDO_MATERIAL, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE05", "Trem parado na frente de serviço", Categoria.TREM_PARADO_FRENTE_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE06", "Restrição de infraestrutura", Categoria.RESTRICAO_INFRAESTRUTURA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa", ClassificacaoHH.IMPRODUTIVA),
+    ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA),
+    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
+    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
+    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario", ClassificacaoHH.PRODUTIVA),
+    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.PRODUTIVA),
+    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.IMPRODUTIVA),
+    ("EE17", "Manutenção Programada", Categoria.ATIVIDADE_PLANEJADA, "atividade", ClassificacaoHH.PRODUTIVA),
+    ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
+    ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA),
+    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA),
+    ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA),
+    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA),
+    ("EE23", "Manutenção Programada Não Concluída", Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA, "atividade", ClassificacaoHH.PRODUTIVA),
 ]
 
 
@@ -267,25 +286,24 @@ def catalogo_relatorio_1_manutencao() -> CatalogoMotivos:
     esta mais em uso e nao foi incorporado aqui).
 
     Diferente de catalogo_padrao(), estas entradas nao sao um exemplo de
-    teste - sao os codigos e descricoes reais do formulario em papel. Ainda
-    assim, `classificacao_hh` permanece NAO_DEFINIDO para todas: o codigo
-    existir no formulario nao implica uma classificacao
-    produtiva/improdutiva/nao computavel validada - essa continua sendo
-    uma decisao de negocio separada e pendente (docs/27 secao 6, itens 6-9).
+    teste - sao os codigos e descricoes reais do formulario em papel.
+    `classificacao_hh` foi validada codigo a codigo pelo responsavel pelo
+    produto em 2026-07-27 (docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md)
+    - antes disso permanecia NAO_DEFINIDO para todas.
 
     Ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md para a
-    justificativa completa, incluindo por que EE24 nao aparece aqui e por
-    que os codigos "evento_secundario" ainda nao tem tela propria na
-    interface de campo.
+    justificativa original codigo a codigo e ADR-0023 para a renumeracao/
+    reclassificacao. Codigos "evento_secundario" ainda nao tem tela propria
+    na interface de campo.
     """
     catalogo = CatalogoMotivos()
-    for codigo, descricao, categoria, tipo_registro in _RELATORIO_1_ENTRADAS:
+    for codigo, descricao, categoria, tipo_registro, classificacao_hh in _RELATORIO_1_ENTRADAS:
         catalogo.registrar(
             EntradaCatalogo(
                 codigo=codigo,
                 descricao=descricao,
                 categoria=categoria,
-                classificacao_hh=ClassificacaoHH.NAO_DEFINIDO,
+                classificacao_hh=classificacao_hh,
                 tipo_registro=tipo_registro,
             )
         )
@@ -300,6 +318,6 @@ def codigos_relatorio_1_por_tipo_registro(tipo_registro: str) -> List[str]:
     """
     return [
         codigo
-        for codigo, _descricao, _categoria, tipo in _RELATORIO_1_ENTRADAS
+        for codigo, _descricao, _categoria, tipo, _classificacao_hh in _RELATORIO_1_ENTRADAS
         if tipo == tipo_registro
     ]

@@ -78,11 +78,12 @@ with col3:
 
 st.subheader("2. Mapeamento categoria -> bucket (planilha real MRS, ADR-0015)")
 st.caption(
-    "Manutencao em equipamentos (EE17) e Manutencao nao planejada (EE22) "
-    "nao aparecem aqui: na planilha real, so contam como perda quando NAO "
-    "vinculadas a uma OS planejada valida - o sistema ainda nao verifica "
-    "isso automaticamente, entao ficam fora de qualquer bucket de perda "
-    "por padrao (tratadas como capacidade efetiva)."
+    "Manutencao Programada (EE17), Atendimento de Falha (EE21) e "
+    "Manutencao Programada Nao Concluida (EE23) nao aparecem aqui: na "
+    "planilha real, so contam como perda quando NAO vinculadas a uma OS "
+    "planejada valida - o sistema ainda nao verifica isso automaticamente, "
+    "entao ficam fora de qualquer bucket de perda por padrao (tratadas "
+    "como capacidade efetiva). Ver ADR-0023 para a renumeracao de codigos."
 )
 mapeamento = mapeamento_categoria_bucket_relatorio_1_manutencao()
 st.dataframe(

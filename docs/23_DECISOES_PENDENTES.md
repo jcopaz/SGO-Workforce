@@ -1,19 +1,46 @@
 # Decisões pendentes
 
 1. Intervalo padrão dos pulsos GPS e impacto em bateria.
-2. Política legal/corporativa de captura e retenção.
-3. Catálogo oficial de pausas e cômputo de cada item.
+2. ~~Política legal/corporativa de captura e retenção.~~ Resolvido em
+   2026-07-27: os aparelhos são da empresa, e a MRS já rastreia o veículo
+   hoje e já captava a localização do colaborador no sistema anterior —
+   a LGPD já está coberta pela política corporativa existente,
+   equivalente ao que o Workforce faz. Não bloqueia nenhum incremento.
+3. ~~Catálogo oficial de pausas e cômputo de cada item.~~ Resolvido em
+   2026-07-27: os 23 códigos do Relatório 1 tiveram `classificacao_hh`
+   validada código a código pelo responsável pelo produto (também
+   excluído um código duplicado — antigo EE18 — e criado um novo, EE23,
+   "Manutenção Programada Não Concluída"). Ver
+   `docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md`.
 4. Regra de pausa: evento filho ou suspensão/fechamento.
-5. Escalas e fonte de capacidade bruta.
+5. ~~Escalas e fonte de capacidade bruta.~~ Escopo redefinido em
+   2026-07-27: PCM não vai usar esta aplicação por enquanto — a proposta
+   de valor do Workforce nesta fase é mostrar a capacidade líquida
+   produtiva de HH com o mapeamento das atividades por colaborador, não
+   alimentar o processo de PCM diretamente. Capacidade PCM (Incremento 12,
+   ADR-0012/ADR-0015) continua existindo no código, mas não é mais
+   prioridade de evolução; como entregar essa informação ao PCM fica para
+   decidir depois.
 6. Associação de múltiplas OS no mesmo evento.
-7. Obrigatoriedade de GPS para iniciar/encerrar.
-8. Evidência fotográfica em falhas.
+7. ~~Obrigatoriedade de GPS para iniciar/encerrar.~~ Resolvido em
+   2026-07-27 para o atendimento de falha: best-effort, nunca bloqueia
+   ("Concluir atendimento" exige só nota/ativo/sintoma/objeto/observação).
+   Ver `docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md`. Não
+   cobre pulsos periódicos de jornada (item 1) nem obrigatoriedade fora do
+   atendimento de falha.
+8. ~~Evidência fotográfica em falhas.~~ Resolvido em 2026-07-27: upload
+   opcional (best-effort) para Supabase Storage, mesmo ADR-0022. Exibição
+   da foto no painel ainda não existe (só o endpoint).
 9. Nível de detalhe do mapa por perfil.
 10. ~~Hospedagem e autenticação do piloto.~~ Resolvido no escopo do piloto
     em 2026-07-26: backend FastAPI no Render + Postgres hospedado + token
     fixo (`SYNC_TOKEN`). Não é o desenho de autenticação final de
     produção — ver `docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md`.
-11. Critérios de catálogo novo e aprovação.
+11. ~~Critérios de catálogo novo e aprovação.~~ Resolvido em 2026-07-27:
+    nenhuma política formal por enquanto — o catálogo dinâmico
+    (ADR-0019) fica limitado à tela de administração já existente
+    (`painel/telas/configuracoes_catalogo.py`), sem workflow de
+    aprovação. Revisar se a escala de uso aumentar.
 12. Forma de importação periódica do RASF.
 13. Login/autenticação de usuário (painel e interface de campo). Avaliado
     em 2026-07-27 (reaproveitar a base de usuários do SGO exigiria

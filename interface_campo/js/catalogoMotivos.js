@@ -42,12 +42,14 @@ function gravarCache(lista) {
 // backend nem tem cache de uma consulta anterior (ex.: primeiro uso, ja
 // offline). Sao os mesmos 5 motivos que ja estavam fixos no codigo antes
 // deste incremento - garante que o seletor de pausa nunca fica vazio.
+// Renumerado em 2026-07-27 (ADR-0023): antigo EE21 "SMS" -> EE20 "DDS / APR",
+// antigo EE23 "Treinamento" -> EE22 (mesmo nome).
 const CATALOGO_MINIMO_OFFLINE = [
   { codigo: "EE02", descricao: "Refeição 1 hora", tipo_registro: "pausa", ativo: true },
   { codigo: "EE07", descricao: "Reunião ou ADM", tipo_registro: "pausa", ativo: true },
   { codigo: "EE11", descricao: "Consulta à documentação técnica", tipo_registro: "pausa", ativo: true },
-  { codigo: "EE21", descricao: "SMS", tipo_registro: "pausa", ativo: true },
-  { codigo: "EE23", descricao: "Treinamento", tipo_registro: "pausa", ativo: true },
+  { codigo: "EE20", descricao: "DDS / APR", tipo_registro: "pausa", ativo: true },
+  { codigo: "EE22", descricao: "Treinamento", tipo_registro: "pausa", ativo: true },
 ];
 
 function filtrarMotivosPausa(lista) {

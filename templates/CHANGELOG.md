@@ -58,7 +58,31 @@
     `interface_campo/js/continuacoesFalha.js` (novo) e botão "Falha não
     concluída" + retomada automática ao iniciar jornada com pendência.
   Ver `docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md`.
+- Novo código `EE23` no catálogo do Relatório 1: "Manutenção Programada
+  Não Concluída" (`Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA`,
+  `tipo_registro="atividade"`, `classificacao_hh=PRODUTIVA`) — contraparte
+  de `EE17` quando a manutenção programada não é concluída no turno. Ver
+  `docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md`.
 ### Alterado
+- **Catálogo do Relatório 1 reclassificado e renumerado** (decisão do
+  responsável pelo produto, ADR-0023): todos os 23 códigos ganharam
+  `classificacao_hh` validada (antes 100% `NAO_DEFINIDO`, bloqueando os
+  cards de HH produtivo/improdutivo do dashboard oficial); código antigo
+  `EE18` ("Suporte da manutenção") excluído por duplicar `EE22`
+  ("Manutenção não planejada", agora `EE21`/"Atendimento de Falha") —
+  códigos `EE19` a `EE24` deslizaram uma posição; `EE17` e `EE21`
+  também tiveram a descrição atualizada ("Manutenção Programada" e
+  "Atendimento de Falha"); `EE20` renomeado de "SMS" para "DDS / APR".
+  Atualizados: `catalogo.py`, `pcm.py`, `painel/dados.py`,
+  `painel/telas/capacidade_pcm.py`, `interface_campo/js/catalogoMotivos.js`
+  (fallback offline), `tests/test_catalogo_relatorio_1.py`.
+- Escopo da Capacidade PCM redefinido (decisão do responsável pelo
+  produto): o PCM não vai usar esta aplicação por enquanto — o código do
+  Incremento 12/ADR-0015 continua existindo, mas deixa de ser prioridade
+  de evolução. Ver `docs/23_DECISOES_PENDENTES.md`, item 5.
+- Retenção/LGPD de GPS e governança do catálogo dinâmico marcadas como
+  resolvidas (decisões do responsável pelo produto, sem necessidade de
+  política nova agora) — ver `docs/23_DECISOES_PENDENTES.md`, itens 2 e 11.
 - Painel reorganizado com `st.navigation`/`st.Page` em 3 seções: "Análise
   de Dados" (dashboard, Mapa Operacional, Capacidade PCM), "Dados"
   (Exportações), "Configurações" (Catálogo de motivos).
@@ -167,6 +191,10 @@
 - `tests/js/sincronizacao.test.mjs`: caso novo comprovando a correção do
   bug de `dados_falha` nunca sincronizado.
 - `node --test tests/js`: 72/72 testes. `pytest`: 226/226 testes.
+- `tests/test_catalogo_relatorio_1.py`: reescrito para a numeração e
+  classificação do ADR-0023 (23 códigos, categorias estruturais EE17/
+  EE21/EE23, classificação completa validada). `pytest` completo depois:
+  226/226 (sem regressão).
 ### Riscos
 - Simulador de tempo é ferramenta de teste: precisa ser removido/bloqueado
   antes de qualquer piloto real com colaboradores (ver ADR-0016).
@@ -184,8 +212,16 @@
   responsável pelo produto em 2026-07-27, ver ADR-0018) - painel e
   interface de campo seguem sem login, só com o token de sincronização.
 - Cards de HH produtivo/improdutivo do `docs/12_DASHBOARDS_ECHARTS.md`
-  continuam bloqueados: nenhum motivo do catálogo tem
-  `classificacao_hh` definida ainda (decisão de negócio pendente).
+  não estão mais bloqueados por falta de classificação (`classificacao_hh`
+  validada no ADR-0023) - mas nenhuma tela ainda consome essa informação,
+  a construção do card em si continua pendente.
+- **Catálogo dinâmico em produção pode estar desatualizado após o
+  ADR-0023**: `motivos_catalogo` no Postgres do Render só é semeado na
+  primeira vez que a tabela está vazia - se algo já chamou `GET`/`POST
+  /catalogo` antes desta renumeração, a tabela pode ter a versão antiga
+  dos códigos `EE18` em diante. Ação recomendada: conferir `GET
+  /catalogo` após o próximo deploy e limpar a tabela manualmente se
+  necessário para forçar o reseed.
 - Catálogo dinâmico (`motivos_catalogo`) não foi testado contra Postgres
   real neste ambiente (mesma limitação já registrada para `jornadas` no
   ADR-0017) - só validado com repositório falso em memória. Ver ADR-0019.

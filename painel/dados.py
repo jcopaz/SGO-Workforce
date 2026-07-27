@@ -77,11 +77,12 @@ def carregar_jornadas_via_api(url_base: str, token: str) -> Tuple[List[Jornada],
 
 def montar_resumo(jornadas: List[Jornada], catalogo: CatalogoMotivos | None = None) -> ResumoConsolidado:
     """Usa catalogo_completo() por padrao (motivos de teste + codigos reais
-    EE01-EE23, ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md).
-    Usar so catalogo_padrao() aqui fazia toda pausa registrada de verdade
-    pela interface de campo (codigos EE02/EE07/EE11/EE21/EE23) cair em
-    "sem categoria conhecida", porque esses codigos nao estavam no
-    catalogo de teste.
+    EE01-EE23, ver docs/41_ADR_0014_CATALOGO_REAL_RELATORIO_ATIVIDADES.md e
+    docs/50_ADR_0023_RECLASSIFICACAO_CATALOGO_RELATORIO_1.md para a
+    renumeracao/reclassificacao de 2026-07-27). Usar so catalogo_padrao()
+    aqui fazia toda pausa registrada de verdade pela interface de campo
+    (codigos EE02/EE07/EE11/EE20/EE22) cair em "sem categoria conhecida",
+    porque esses codigos nao estavam no catalogo de teste.
     """
     return resumo_consolidado(jornadas, catalogo or catalogo_completo())
 
