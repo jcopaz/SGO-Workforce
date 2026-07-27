@@ -11,9 +11,18 @@ from .enums import (
     EstadoJornada,
     EstadoPausa,
     QualidadePulso,
+    ResultadoAtividade,
     TipoEventoSecundario,
 )
-from .entities import Atividade, DadosFalha, EventoSecundario, Jornada, Pausa, PulsoGps
+from .entities import (
+    Atividade,
+    DadosFalha,
+    EventoSecundario,
+    Jornada,
+    OrdemServico,
+    Pausa,
+    PulsoGps,
+)
 from .engine import MotorJornada
 from .exceptions import EstadoInconsistenteError
 from .integracao_sgo import (
@@ -43,12 +52,14 @@ __all__ = [
     "EstadoPausa",
     "EstadoEventoSecundario",
     "TipoEventoSecundario",
+    "ResultadoAtividade",
     "QualidadePulso",
     "Jornada",
     "Atividade",
     "Pausa",
     "EventoSecundario",
     "DadosFalha",
+    "OrdemServico",
     "PulsoGps",
     "MotorJornada",
     "ReferenciaOS",

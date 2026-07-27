@@ -116,3 +116,23 @@ class AtendimentoFalhaCamposObrigatoriosError(ErroDominio):
     Regra inegociavel de docs/27_ALINHAMENTO_OFICIAL_SGO_WORKFORCE_v1_2.md,
     secao 3.5.
     """
+
+
+class OrdemServicoNumeroObrigatorioError(ErroDominio):
+    """O numero da OS e obrigatorio para associa-la a uma atividade."""
+
+
+class OrdemServicoExigeAtividadeSemFalhaError(ErroDominio):
+    """OS (ADR-0025) so se aplica a Atividade comum (EE17/EE23) - um
+    atendimento de falha ja tem seu proprio campo de OS
+    (DadosFalha.os_referencia, ainda nao implementado na interface de campo)."""
+
+
+class OrdemServicoNaoEncontradaError(ErroDominio):
+    """Nao existe OS com o id informado na atividade ativa."""
+
+
+class AtividadeNaoConcluidaExigeSemDadosFalhaError(ErroDominio):
+    """encerrar_atividade_nao_concluida (EE23, ADR-0025) so se aplica a
+    Atividade comum - atendimento de falha usa transferir_atendimento_falha
+    para o desfecho equivalente ("Falha nao Concluida", D4)."""

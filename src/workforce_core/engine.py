@@ -14,12 +14,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .entities import Atividade, DadosFalha, EventoSecundario, Jornada, Pausa
+from .entities import Atividade, DadosFalha, EventoSecundario, Jornada, OrdemServico, Pausa
 from .enums import (
     EstadoAtividade,
     EstadoEventoSecundario,
     EstadoJornada,
     EstadoPausa,
+    ResultadoAtividade,
     TipoEventoSecundario,
 )
 from .exceptions import (
@@ -29,6 +30,7 @@ from .exceptions import (
     AtividadeExigeNenhumEventoSecundarioAtivoError,
     AtividadeJaAtivaError,
     AtividadeNaoAtivaError,
+    AtividadeNaoConcluidaExigeSemDadosFalhaError,
     EstadoInconsistenteError,
     EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError,
     EventoSecundarioJaAtivoError,
@@ -40,6 +42,9 @@ from .exceptions import (
     JornadaComPausaAbertaError,
     JornadaJaAbertaError,
     JornadaNaoAbertaError,
+    OrdemServicoExigeAtividadeSemFalhaError,
+    OrdemServicoNaoEncontradaError,
+    OrdemServicoNumeroObrigatorioError,
     PausaExigeAtividadeAtivaError,
     PausaJaAtivaError,
     PausaMotivoObrigatorioError,
@@ -215,7 +220,7 @@ class MotorJornada:
         self._atividade_ativa = atividade
         return atividade
 
-    def encerrar_atividade(self, quando: datetime) -> Atividade:
+    def _finalizar_atividade(self, quando: datetime, resultado: ResultadoAtividade) -> Atividade:
         self._garantir_jornada_aberta()
         if self._pausa_ativa is not None:
             raise AtividadeEncerramentoComPausaAbertaError(
@@ -229,8 +234,54 @@ class MotorJornada:
             _validar_dados_falha_completos(atividade.dados_falha)
         atividade.fim = quando
         atividade.estado = EstadoAtividade.ENCERRADA
+        atividade.resultado = resultado
         self._atividade_ativa = None
         return atividade
+
+    def encerrar_atividade(self, quando: datetime) -> Atividade:
+        return self._finalizar_atividade(quando, ResultadoAtividade.CONCLUIDA)
+
+    def encerrar_atividade_nao_concluida(self, quando: datetime) -> Atividade:
+        """"Atividade nao concluida" (EE23, ADR-0023/0025) - contraparte de
+        encerrar_atividade quando a manutencao programada nao termina no
+        turno. So se aplica a Atividade comum: atendimento de falha usa
+        transferir_atendimento_falha para o desfecho equivalente."""
+        if self._atividade_ativa is not None and self._atividade_ativa.dados_falha is not None:
+            raise AtividadeNaoConcluidaExigeSemDadosFalhaError(
+                "Atendimento de falha usa transferir_atendimento_falha, nao "
+                "encerrar_atividade_nao_concluida."
+            )
+        return self._finalizar_atividade(quando, ResultadoAtividade.NAO_CONCLUIDA)
+
+    # ------------------------------------------------------------------
+    # Ordens de servico associadas a Atividade comum (ADR-0025)
+    # ------------------------------------------------------------------
+    def adicionar_ordem_servico(self, quando: datetime, numero: str) -> OrdemServico:
+        self._garantir_jornada_aberta()
+        if self._atividade_ativa is None:
+            raise AtividadeNaoAtivaError("Nao ha atividade ativa para associar uma OS.")
+        if self._atividade_ativa.dados_falha is not None:
+            raise OrdemServicoExigeAtividadeSemFalhaError(
+                "OS so se associa a atividade comum, nao a atendimento de falha."
+            )
+        if not numero:
+            raise OrdemServicoNumeroObrigatorioError("O numero da OS e obrigatorio.")
+        ordem = OrdemServico(numero=numero, criada_em=quando)
+        self._atividade_ativa.ordens_servico.append(ordem)
+        return ordem
+
+    def excluir_ordem_servico(self, ordem_id) -> OrdemServico:
+        """Exclusao parcial de OS nao concluidas (ADR-0023): soft-delete,
+        nunca remove da lista - reenviar a mesma exclusao e idempotente
+        (excluida=True de novo nao muda nada)."""
+        self._garantir_jornada_aberta()
+        if self._atividade_ativa is None:
+            raise AtividadeNaoAtivaError("Nao ha atividade ativa para excluir uma OS.")
+        for ordem in self._atividade_ativa.ordens_servico:
+            if ordem.id == ordem_id:
+                ordem.excluida = True
+                return ordem
+        raise OrdemServicoNaoEncontradaError(f"Nenhuma OS com id {ordem_id} na atividade ativa.")
 
     # ------------------------------------------------------------------
     # Atendimento de falha (Incremento 6)

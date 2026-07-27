@@ -6,11 +6,18 @@
 // regra de negocio deve ser replicada nos dois lados ate existir uma
 // unica fonte de verdade (ver docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
 
-import { EstadoAtividade, EstadoEventoSecundario, EstadoJornada, EstadoPausa } from "./enums.js";
+import {
+  EstadoAtividade,
+  EstadoEventoSecundario,
+  EstadoJornada,
+  EstadoPausa,
+  ResultadoAtividade,
+} from "./enums.js";
 import * as Erros from "./erros.js";
 import {
   novaAtividade,
   novaJornada,
+  novaOrdemServico,
   novaPausa,
   novoDadosFalha,
   novoEventoSecundario,
@@ -179,7 +186,7 @@ export class MotorJornada {
     return atividade;
   }
 
-  encerrarAtividade(quando) {
+  _finalizarAtividade(quando, resultado) {
     this._garantirJornadaAberta();
     if (this._pausaAtiva) {
       throw new Erros.AtividadeEncerramentoComPausaAbertaError(
@@ -196,8 +203,60 @@ export class MotorJornada {
     }
     atividade.fim = quando;
     atividade.estado = EstadoAtividade.ENCERRADA;
+    atividade.resultado = resultado;
     this._atividadeAtiva = null;
     return atividade;
+  }
+
+  encerrarAtividade(quando) {
+    return this._finalizarAtividade(quando, ResultadoAtividade.CONCLUIDA);
+  }
+
+  // "Atividade nao concluida" (EE23, ADR-0023/0025) - contraparte de
+  // encerrarAtividade quando a manutencao programada nao termina no
+  // turno. So se aplica a Atividade comum: atendimento de falha usa
+  // transferirAtendimentoFalha para o desfecho equivalente.
+  encerrarAtividadeNaoConcluida(quando) {
+    if (this._atividadeAtiva && this._atividadeAtiva.dadosFalha) {
+      throw new Erros.AtividadeNaoConcluidaExigeSemDadosFalhaError(
+        "Atendimento de falha usa transferirAtendimentoFalha, nao encerrarAtividadeNaoConcluida."
+      );
+    }
+    return this._finalizarAtividade(quando, ResultadoAtividade.NAO_CONCLUIDA);
+  }
+
+  // Ordens de servico associadas a Atividade comum (ADR-0025).
+  adicionarOrdemServico(quando, numero) {
+    this._garantirJornadaAberta();
+    if (!this._atividadeAtiva) {
+      throw new Erros.AtividadeNaoAtivaError("Nao ha atividade ativa para associar uma OS.");
+    }
+    if (this._atividadeAtiva.dadosFalha) {
+      throw new Erros.OrdemServicoExigeAtividadeSemFalhaError(
+        "OS so se associa a atividade comum, nao a atendimento de falha."
+      );
+    }
+    if (!numero) {
+      throw new Erros.OrdemServicoNumeroObrigatorioError("O numero da OS e obrigatorio.");
+    }
+    const ordem = novaOrdemServico({ numero, criadaEm: quando });
+    this._atividadeAtiva.ordensServico.push(ordem);
+    return ordem;
+  }
+
+  // Exclusao parcial de OS nao concluidas (ADR-0023): soft-delete, nunca
+  // remove da lista - reenviar a mesma exclusao e idempotente.
+  excluirOrdemServico(ordemId) {
+    this._garantirJornadaAberta();
+    if (!this._atividadeAtiva) {
+      throw new Erros.AtividadeNaoAtivaError("Nao ha atividade ativa para excluir uma OS.");
+    }
+    const ordem = this._atividadeAtiva.ordensServico.find((o) => o.id === ordemId);
+    if (!ordem) {
+      throw new Erros.OrdemServicoNaoEncontradaError(`Nenhuma OS com id ${ordemId} na atividade ativa.`);
+    }
+    ordem.excluida = true;
+    return ordem;
   }
 
   // Atendimento de falha (ADR-0021, espelhando

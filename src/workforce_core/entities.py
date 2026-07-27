@@ -17,6 +17,7 @@ from .enums import (
     EstadoJornada,
     EstadoPausa,
     QualidadePulso,
+    ResultadoAtividade,
     TipoEventoSecundario,
 )
 from .integracao_sgo import ReferenciaOS
@@ -84,6 +85,25 @@ class DadosFalha:
 
 
 @dataclass
+class OrdemServico:
+    """Numero de OS (texto livre) associado a uma Atividade comum
+    (EE17/EE23, ADR-0025) - decisao de negocio: texto livre, nao o
+    `ReferenciaOS` estruturado usado em `DadosFalha.os_referencia`
+    (conceito diferente, nunca implementado na interface de campo).
+
+    `excluida` e soft-delete (nunca remove da lista) - mesmo principio de
+    "correcao nunca apaga o evento original" (docs/17_SEGURANCA_GOVERNANCA.md)
+    ja aplicado a `ativo` no catalogo de motivos. Corresponde a "conclusao
+    parcial de OS (excluir da lista as nao concluidas)" do ADR-0023.
+    """
+
+    numero: str
+    id: UUID = field(default_factory=uuid4)
+    criada_em: Optional[datetime] = None
+    excluida: bool = False
+
+
+@dataclass
 class Atividade:
     id: UUID = field(default_factory=uuid4)
     inicio: Optional[datetime] = None
@@ -91,6 +111,10 @@ class Atividade:
     estado: EstadoAtividade = EstadoAtividade.CRIADA
     pausas: List[Pausa] = field(default_factory=list)
     dados_falha: Optional[DadosFalha] = None
+    ordens_servico: List[OrdemServico] = field(default_factory=list)
+    # None (todas as Atividades encerradas antes do ADR-0025) e tratado
+    # como CONCLUIDA na consolidacao - ver ResultadoAtividade.
+    resultado: Optional[ResultadoAtividade] = None
 
 
 @dataclass

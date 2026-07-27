@@ -34,3 +34,12 @@ export const TipoEventoSecundario = Object.freeze({
   ESPERA: "ESPERA",
   APOIO: "APOIO",
 });
+
+// Resultado do encerramento de uma Atividade comum (EE17/EE23, ADR-0025) -
+// espelha src/workforce_core/enums.py::ResultadoAtividade. null (qualquer
+// Atividade encerrada antes deste incremento) e tratado como CONCLUIDA na
+// consolidacao, nao aqui no motor - o motor so grava o que for explicito.
+export const ResultadoAtividade = Object.freeze({
+  CONCLUIDA: "CONCLUIDA",
+  NAO_CONCLUIDA: "NAO_CONCLUIDA",
+});

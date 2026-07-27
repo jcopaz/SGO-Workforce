@@ -16,6 +16,23 @@ class EstadoAtividade(str, Enum):
     ENCERRADA = "ENCERRADA"
 
 
+class ResultadoAtividade(str, Enum):
+    """Resultado do encerramento de uma Atividade comum (EE17/EE23,
+    ADR-0025). Antes desta decisao, EE17 era so inferido pela ausencia de
+    dados_falha (workforce_core.consolidacao) - este campo torna o
+    resultado explicito para permitir o segundo desfecho (EE23,
+    "Manutencao Programada Nao Concluida", ADR-0023).
+
+    None (o padrao para qualquer Atividade que nunca passou por
+    encerrar_atividade_nao_concluida) e tratado como CONCLUIDA na
+    consolidacao - mesmo comportamento que ja existia antes deste campo
+    existir, preservando jornadas ja sincronizadas.
+    """
+
+    CONCLUIDA = "CONCLUIDA"
+    NAO_CONCLUIDA = "NAO_CONCLUIDA"
+
+
 class EstadoPausa(str, Enum):
     CRIADA = "CRIADA"
     ATIVA = "ATIVA"

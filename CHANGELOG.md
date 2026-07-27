@@ -519,3 +519,41 @@ deste arquivo.
   produção (Render) ainda não executados — ação manual pendente.
 - Associação de OS a EE17/EE23 (decisões já tomadas no ADR-0023) continua
   não desenhada/construída — próximo incremento.
+
+## [2026-07-28] Associação de OS a EE17/EE23 (ADR-0025)
+
+Ver `docs/52_ADR_0025_ORDEM_DE_SERVICO_EE17_EE23.md` para a decisão
+completa.
+
+### Adicionado
+- `OrdemServico` (`src/workforce_core/entities.py`): numero (texto
+  livre), soft-delete (`excluida`, nunca remove da lista — "exclusão
+  parcial de OS não concluídas" do ADR-0023). `Atividade` ganha
+  `ordens_servico` e `resultado` (`ResultadoAtividade.CONCLUIDA`/
+  `NAO_CONCLUIDA`, novo enum).
+- `MotorJornada.adicionar_ordem_servico`/`excluir_ordem_servico`/
+  `encerrar_atividade_nao_concluida` (Python e JS, paridade completa).
+  `consolidacao._categoria_atividade` passa a produzir EE23 quando
+  `resultado == NAO_CONCLUIDA` (antes, EE17 era sempre inferido por
+  omissão).
+- `app.js`: bloco de OS (lista + adicionar + excluir) na tela de
+  atividade comum; dois botões de encerramento ("Concluir atividade" /
+  "Atividade não concluída") no lugar do único anterior. Atendimento de
+  falha não muda.
+- `FORMATO_VERSAO` 4 → 5 (`workforce_storage/serializacao.py`),
+  retrocompatível.
+- `tests/test_ordem_servico.py` (19 casos), extensões em
+  `tests/js/motorJornada.test.mjs` e `tests/js/sincronizacao.test.mjs`.
+
+### Testes
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest`: 249/249 (era 230).
+- `node --check` em todos os arquivos de `interface_campo/js/`: OK.
+- `node --test tests/js`: 102/102 (era 89).
+
+### Riscos
+- Teste manual em navegador/celular real não realizado.
+- Exportações (CSV/XLSX/GeoJSON) ainda não mostram OS — fora de escopo
+  deste incremento, próximo passo natural se for pedido.
+- Nenhuma migração de produção necessária aqui (diferente do ADR-0024):
+  `POST /jornadas` já aceita o payload novo sem mudança de schema.

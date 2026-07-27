@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { MotorJornada } from "../../interface_campo/js/motorJornada.js";
 import * as calculo from "../../interface_campo/js/calculo.js";
 import * as Erros from "../../interface_campo/js/erros.js";
-import { TipoEventoSecundario } from "../../interface_campo/js/enums.js";
+import { ResultadoAtividade, TipoEventoSecundario } from "../../interface_campo/js/enums.js";
 
 function dt(hora, minuto, dia = 1) {
   return new Date(2026, 0, dia, hora, minuto, 0, 0);
@@ -586,5 +586,145 @@ test("estado inconsistente: evento e atividade ativos juntos", () => {
   assert.throws(
     () => MotorJornada.aPartirDe(motor.jornada),
     Erros.EstadoInconsistenteError
+  );
+});
+
+// ----------------------------------------------------------------------
+// Ordem de servico e resultado de encerramento (ADR-0025, espelha
+// tests/test_ordem_servico.py) - portado para JS no incremento de OS em
+// EE17/EE23 na interface de campo.
+// ----------------------------------------------------------------------
+test("adicionarOrdemServico associa a atividade ativa", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+
+  const ordem = motor.adicionarOrdemServico(dt(8, 15), "111");
+
+  assert.equal(ordem.numero, "111");
+  assert.equal(ordem.excluida, false);
+  assert.deepEqual(motor.jornada.atividades[0].ordensServico, [ordem]);
+});
+
+test("adicionar multiplas ordens de servico", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+
+  motor.adicionarOrdemServico(dt(8, 15), "111");
+  motor.adicionarOrdemServico(dt(8, 20), "222");
+
+  const numeros = motor.jornada.atividades[0].ordensServico.map((o) => o.numero);
+  assert.deepEqual(numeros, ["111", "222"]);
+});
+
+test("adicionarOrdemServico numero obrigatorio", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  assert.throws(
+    () => motor.adicionarOrdemServico(dt(8, 15), ""),
+    Erros.OrdemServicoNumeroObrigatorioError
+  );
+});
+
+test("adicionarOrdemServico sem atividade ativa", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.adicionarOrdemServico(dt(8, 15), "111"),
+    Erros.AtividadeNaoAtivaError
+  );
+});
+
+test("adicionarOrdemServico em atendimento de falha nao e permitido", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtendimentoFalha(dt(8, 10));
+  assert.throws(
+    () => motor.adicionarOrdemServico(dt(8, 15), "111"),
+    Erros.OrdemServicoExigeAtividadeSemFalhaError
+  );
+});
+
+test("excluirOrdemServico marca excluida sem remover da lista", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const ordem = motor.adicionarOrdemServico(dt(8, 15), "111");
+
+  motor.excluirOrdemServico(ordem.id);
+
+  const atividade = motor.jornada.atividades[0];
+  assert.equal(atividade.ordensServico.length, 1);
+  assert.equal(atividade.ordensServico[0].excluida, true);
+});
+
+test("excluirOrdemServico e idempotente", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const ordem = motor.adicionarOrdemServico(dt(8, 15), "111");
+
+  motor.excluirOrdemServico(ordem.id);
+  motor.excluirOrdemServico(ordem.id);
+
+  assert.equal(motor.jornada.atividades[0].ordensServico[0].excluida, true);
+});
+
+test("excluirOrdemServico inexistente", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  assert.throws(
+    () => motor.excluirOrdemServico("id-que-nao-existe"),
+    Erros.OrdemServicoNaoEncontradaError
+  );
+});
+
+test("excluirOrdemServico sem atividade ativa", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.excluirOrdemServico("qualquer-id"),
+    Erros.AtividadeNaoAtivaError
+  );
+});
+
+test("encerrarAtividade grava resultado CONCLUIDA", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  motor.adicionarOrdemServico(dt(8, 15), "111");
+
+  const atividade = motor.encerrarAtividade(dt(9, 0));
+
+  assert.equal(atividade.resultado, ResultadoAtividade.CONCLUIDA);
+  assert.equal(atividade.ordensServico[0].numero, "111");
+});
+
+test("encerrarAtividadeNaoConcluida grava resultado e preserva OS excluidas", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const ordem1 = motor.adicionarOrdemServico(dt(8, 15), "111");
+  motor.adicionarOrdemServico(dt(8, 20), "222");
+  motor.excluirOrdemServico(ordem1.id);
+
+  const atividade = motor.encerrarAtividadeNaoConcluida(dt(9, 0));
+
+  assert.equal(atividade.resultado, ResultadoAtividade.NAO_CONCLUIDA);
+  assert.equal(atividade.ordensServico.length, 2);
+  assert.equal(atividade.ordensServico[0].excluida, true);
+  assert.equal(atividade.ordensServico[1].excluida, false);
+});
+
+test("encerrarAtividadeNaoConcluida em atendimento de falha nao e permitido", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtendimentoFalha(dt(8, 10));
+  assert.throws(
+    () => motor.encerrarAtividadeNaoConcluida(dt(9, 0)),
+    Erros.AtividadeNaoConcluidaExigeSemDadosFalhaError
   );
 });

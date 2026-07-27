@@ -21,8 +21,29 @@ from typing import Dict, List, Optional
 
 from . import calculo
 from .catalogo import Categoria, CatalogoMotivos
-from .entities import Jornada, PulsoGps
-from .enums import EstadoJornada, QualidadePulso
+from .entities import Atividade, Jornada, PulsoGps
+from .enums import EstadoJornada, QualidadePulso, ResultadoAtividade
+
+
+def _categoria_atividade(atividade: Atividade) -> Categoria:
+    """Classifica uma Atividade encerrada em ATENDIMENTO_FALHA, ATIVIDADE_PLANEJADA
+    ou ATIVIDADE_PLANEJADA_NAO_CONCLUIDA (EE21/EE17/EE23).
+
+    dados_falha tem precedencia sobre `resultado`: um atendimento de falha
+    so encerra via encerrar_atividade/transferir_atendimento_falha, nunca
+    via encerrar_atividade_nao_concluida (ADR-0025), entao sempre e
+    ATENDIMENTO_FALHA independente do `resultado` gravado.
+
+    `resultado is None` (qualquer Atividade encerrada antes do ADR-0025,
+    quando o campo nao existia) e tratado como CONCLUIDA - mesmo
+    comportamento implicito que ja existia, sem reclassificar dados ja
+    sincronizados.
+    """
+    if atividade.dados_falha is not None:
+        return Categoria.ATENDIMENTO_FALHA
+    if atividade.resultado == ResultadoAtividade.NAO_CONCLUIDA:
+        return Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA
+    return Categoria.ATIVIDADE_PLANEJADA
 
 
 # ----------------------------------------------------------------------
@@ -33,10 +54,10 @@ def resumo_por_categoria(
 ) -> Dict[Optional[Categoria], timedelta]:
     """Agrega a duracao classificada da jornada por Categoria.
 
-    Atividades sao classificadas como ATENDIMENTO_FALHA quando tem
-    dados_falha, ou ATIVIDADE_PLANEJADA quando nao tem (as duas categorias
-    de docs/07_MOTOR_EVENTOS_E_HH.md que correspondem ao conceito de
-    "atividade"). Pausas e eventos secundarios sao classificados pela
+    Atividades sao classificadas por `_categoria_atividade`: ATENDIMENTO_FALHA
+    quando tem dados_falha, ATIVIDADE_PLANEJADA_NAO_CONCLUIDA quando o
+    resultado e NAO_CONCLUIDA (ADR-0025), ou ATIVIDADE_PLANEJADA caso
+    contrario. Pausas e eventos secundarios sao classificados pela
     categoria associada ao seu motivo no catalogo informado; quando o
     motivo nao esta no catalogo ou nao tem categoria definida, a duracao
     entra no bucket `None` ("sem categoria conhecida").
@@ -49,10 +70,7 @@ def resumo_por_categoria(
     for atividade in jornada.atividades:
         if atividade.fim is None:
             continue
-        categoria_atividade = (
-            Categoria.ATENDIMENTO_FALHA if atividade.dados_falha is not None else Categoria.ATIVIDADE_PLANEJADA
-        )
-        _somar(categoria_atividade, calculo.duracao_atividade_liquida(atividade))
+        _somar(_categoria_atividade(atividade), calculo.duracao_atividade_liquida(atividade))
 
         for pausa in atividade.pausas:
             if pausa.fim is None:
@@ -104,16 +122,11 @@ def linhas_eventos_classificadas(
         for atividade in jornada.atividades:
             if atividade.fim is None:
                 continue
-            categoria_atividade = (
-                Categoria.ATENDIMENTO_FALHA
-                if atividade.dados_falha is not None
-                else Categoria.ATIVIDADE_PLANEJADA
-            )
             linhas.append(
                 LinhaEvento(
                     colaborador_matricula=jornada.colaborador_matricula,
                     data=atividade.inicio.date(),
-                    categoria=categoria_atividade,
+                    categoria=_categoria_atividade(atividade),
                     motivo=None,
                     duracao=calculo.duracao_atividade_liquida(atividade),
                     tipo="ATIVIDADE",

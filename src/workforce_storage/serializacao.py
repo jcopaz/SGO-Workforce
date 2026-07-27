@@ -17,6 +17,7 @@ from workforce_core.entities import (
     DadosFalha,
     EventoSecundario,
     Jornada,
+    OrdemServico,
     Pausa,
     PulsoGps,
 )
@@ -26,6 +27,7 @@ from workforce_core.enums import (
     EstadoJornada,
     EstadoPausa,
     QualidadePulso,
+    ResultadoAtividade,
     TipoEventoSecundario,
 )
 from workforce_core.integracao_sgo import ReferenciaOS
@@ -33,10 +35,11 @@ from workforce_core.integracao_sgo import ReferenciaOS
 # v2 adiciona eventos_secundarios (Incremento 5).
 # v3 adiciona dados_falha em Atividade (Incremento 6).
 # v4 adiciona os_referencia em DadosFalha (Incremento 13).
+# v5 adiciona ordens_servico e resultado em Atividade (ADR-0025).
 # Arquivos de versoes anteriores nao tem esses campos - jornada_de_dict e
 # atividade_de_dict tratam isso com .get(..., valor_padrao) por
 # compatibilidade retroativa, sem exigir migracao dos arquivos ja gravados.
-FORMATO_VERSAO = 4
+FORMATO_VERSAO = 5
 
 
 def _dt_para_str(valor: Optional[datetime]) -> Optional[str]:
@@ -130,6 +133,24 @@ def dados_falha_de_dict(dados: Optional[Dict[str, Any]]) -> Optional[DadosFalha]
     )
 
 
+def ordem_servico_para_dict(ordem: OrdemServico) -> Dict[str, Any]:
+    return {
+        "id": str(ordem.id),
+        "numero": ordem.numero,
+        "criada_em": _dt_para_str(ordem.criada_em),
+        "excluida": ordem.excluida,
+    }
+
+
+def ordem_servico_de_dict(dados: Dict[str, Any]) -> OrdemServico:
+    return OrdemServico(
+        id=UUID(dados["id"]),
+        numero=dados["numero"],
+        criada_em=_str_para_dt(dados.get("criada_em")),
+        excluida=dados.get("excluida", False),
+    )
+
+
 def atividade_para_dict(atividade: Atividade) -> Dict[str, Any]:
     return {
         "id": str(atividade.id),
@@ -138,10 +159,13 @@ def atividade_para_dict(atividade: Atividade) -> Dict[str, Any]:
         "estado": atividade.estado.value,
         "pausas": [pausa_para_dict(pausa) for pausa in atividade.pausas],
         "dados_falha": dados_falha_para_dict(atividade.dados_falha),
+        "ordens_servico": [ordem_servico_para_dict(ordem) for ordem in atividade.ordens_servico],
+        "resultado": atividade.resultado.value if atividade.resultado is not None else None,
     }
 
 
 def atividade_de_dict(dados: Dict[str, Any]) -> Atividade:
+    resultado_bruto = dados.get("resultado")
     return Atividade(
         id=UUID(dados["id"]),
         inicio=_str_para_dt(dados["inicio"]),
@@ -149,6 +173,8 @@ def atividade_de_dict(dados: Dict[str, Any]) -> Atividade:
         estado=EstadoAtividade(dados["estado"]),
         pausas=[pausa_de_dict(p) for p in dados["pausas"]],
         dados_falha=dados_falha_de_dict(dados.get("dados_falha")),
+        ordens_servico=[ordem_servico_de_dict(o) for o in dados.get("ordens_servico", [])],
+        resultado=ResultadoAtividade(resultado_bruto) if resultado_bruto else None,
     )
 
 

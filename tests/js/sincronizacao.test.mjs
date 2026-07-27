@@ -104,6 +104,28 @@ test("paraPayloadSincronizacao serializa eventos_secundarios (incremento de Even
   assert.equal(evento.fim, dt(8, 30).toISOString());
 });
 
+test("paraPayloadSincronizacao serializa ordens_servico e resultado (ADR-0025)", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const ordem1 = motor.adicionarOrdemServico(dt(8, 15), "111");
+  motor.adicionarOrdemServico(dt(8, 20), "222");
+  motor.excluirOrdemServico(ordem1.id);
+  motor.encerrarAtividadeNaoConcluida(dt(9, 0));
+  motor.encerrarJornada(dt(9, 0));
+
+  const payload = paraPayloadSincronizacao(motor.jornada);
+  const atividade = payload.atividades[0];
+
+  assert.equal(atividade.resultado, "NAO_CONCLUIDA");
+  assert.equal(atividade.ordens_servico.length, 2);
+  assert.equal(atividade.ordens_servico[0].numero, "111");
+  assert.equal(atividade.ordens_servico[0].excluida, true);
+  assert.equal(atividade.ordens_servico[0].criada_em, dt(8, 15).toISOString());
+  assert.equal(atividade.ordens_servico[1].numero, "222");
+  assert.equal(atividade.ordens_servico[1].excluida, false);
+});
+
 test("paraPayloadSincronizacao trata jornada em andamento (fim nulo)", () => {
   const motor = new MotorJornada({ colaboradorMatricula: "99999" });
   motor.iniciarJornada(dt(8, 0));

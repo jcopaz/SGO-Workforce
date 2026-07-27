@@ -41,6 +41,16 @@ function dadosFalhaParaPayload(dados) {
   };
 }
 
+// Mesmo contrato de workforce_storage.serializacao.ordem_servico_para_dict.
+function ordemServicoParaPayload(ordem) {
+  return {
+    id: ordem.id,
+    numero: ordem.numero,
+    criada_em: ordem.criadaEm ? ordem.criadaEm.toISOString() : null,
+    excluida: ordem.excluida,
+  };
+}
+
 function atividadeParaPayload(atividade) {
   return {
     id: atividade.id,
@@ -49,6 +59,8 @@ function atividadeParaPayload(atividade) {
     estado: atividade.estado,
     pausas: atividade.pausas.map(pausaParaPayload),
     dados_falha: dadosFalhaParaPayload(atividade.dadosFalha),
+    ordens_servico: atividade.ordensServico.map(ordemServicoParaPayload),
+    resultado: atividade.resultado,
   };
 }
 

@@ -341,6 +341,53 @@ function criarFormularioTransferenciaFalha(atividade) {
   return bloco;
 }
 
+// Bloco de OS (ADR-0025) - texto livre, múltiplas OS por atividade,
+// exclusão individual soft-delete (a OS some da lista visível mas nunca é
+// removida do registro, ver motorJornada.js::excluirOrdemServico).
+function criarBlocoOrdensServico(atividade) {
+  const bloco = document.createElement("div");
+  bloco.className = "bloco-ordens-servico";
+
+  const ativas = atividade.ordensServico.filter((ordem) => !ordem.excluida);
+  if (ativas.length > 0) {
+    const lista = document.createElement("ul");
+    lista.className = "lista-ordens-servico";
+    for (const ordem of ativas) {
+      const item = document.createElement("li");
+      const texto = document.createElement("span");
+      texto.textContent = ordem.numero;
+      item.appendChild(texto);
+      item.appendChild(
+        botao("Excluir", () => executar(() => motor.excluirOrdemServico(ordem.id)))
+      );
+      lista.appendChild(item);
+    }
+    bloco.appendChild(lista);
+  }
+
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = "Número da OS";
+  const input = document.createElement("input");
+  input.type = "text";
+  label.append(span, input);
+  bloco.appendChild(label);
+
+  bloco.appendChild(
+    botao("Adicionar OS", () => {
+      const numero = input.value.trim();
+      if (!numero) {
+        mostrarAviso("Informe o número da OS antes de adicionar.");
+        return;
+      }
+      executar(() => motor.adicionarOrdemServico(RelogioSimulado.agora(), numero));
+    })
+  );
+
+  return bloco;
+}
+
 function botao(texto, aoClicar, { destaque = false } = {}) {
   const b = document.createElement("button");
   b.textContent = texto;
@@ -568,6 +615,7 @@ function render() {
       renderFormularioAtendimentoFalha(atividade);
     } else {
       els.status.textContent = "Atividade em andamento.";
+      els.botoes.appendChild(criarBlocoOrdensServico(atividade));
     }
     const seletorMotivo = criarSeletorMotivoPausa();
     els.botoes.appendChild(seletorMotivo);
@@ -576,13 +624,32 @@ function render() {
         executar(() => motor.iniciarPausa(RelogioSimulado.agora(), seletorMotivo.value))
       )
     );
-    els.botoes.appendChild(
-      botao(
-        atividade.dadosFalha ? "Concluir atendimento" : "Encerrar atividade",
-        () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())),
-        { destaque: true }
-      )
-    );
+    if (atividade.dadosFalha) {
+      els.botoes.appendChild(
+        botao(
+          "Concluir atendimento",
+          () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())),
+          { destaque: true }
+        )
+      );
+    } else {
+      // Dois desfechos de encerramento (ADR-0023/0025): "Concluir
+      // atividade" grava EE17 (resultado CONCLUIDA), "Atividade não
+      // concluída" grava EE23 (resultado NAO_CONCLUIDA) - as OS já
+      // adicionadas continuam na lista nos dois casos.
+      els.botoes.appendChild(
+        botao(
+          "Concluir atividade",
+          () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())),
+          { destaque: true }
+        )
+      );
+      els.botoes.appendChild(
+        botao("Atividade não concluída", () =>
+          executar(() => motor.encerrarAtividadeNaoConcluida(RelogioSimulado.agora()))
+        )
+      );
+    }
     if (atividade.dadosFalha) {
       if (mostrarTransferenciaFalha) {
         els.botoes.appendChild(criarFormularioTransferenciaFalha(atividade));

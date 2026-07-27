@@ -32,6 +32,22 @@ export function novaAtividade({ inicio = null } = {}) {
     fim: null,
     estado: "CRIADA",
     pausas: [],
+    ordensServico: [],
+    // null ate a atividade ser encerrada (ADR-0025) - encerrarAtividade
+    // grava CONCLUIDA, encerrarAtividadeNaoConcluida grava NAO_CONCLUIDA.
+    resultado: null,
+  };
+}
+
+// Numero de OS (texto livre) associado a uma Atividade comum (EE17/EE23,
+// ADR-0025). excluida e soft-delete (nunca remove da lista) - "conclusao
+// parcial de OS" do ADR-0023.
+export function novaOrdemServico({ numero, criadaEm = null }) {
+  return {
+    id: gerarId(),
+    numero,
+    criadaEm,
+    excluida: false,
   };
 }
 

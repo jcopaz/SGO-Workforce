@@ -30,3 +30,7 @@ export class EventoSecundarioMotivoObrigatorioError extends ErroDominio {}
 export class EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError extends ErroDominio {}
 export class AtividadeExigeNenhumEventoSecundarioAtivoError extends ErroDominio {}
 export class JornadaComEventoSecundarioAbertoError extends ErroDominio {}
+export class OrdemServicoNumeroObrigatorioError extends ErroDominio {}
+export class OrdemServicoExigeAtividadeSemFalhaError extends ErroDominio {}
+export class OrdemServicoNaoEncontradaError extends ErroDominio {}
+export class AtividadeNaoConcluidaExigeSemDadosFalhaError extends ErroDominio {}
