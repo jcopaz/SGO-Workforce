@@ -109,11 +109,19 @@ class EntradaCatalogo:
     # evento original" (docs/17_SEGURANCA_GOVERNANCA.md), aplicado a
     # motivos de catalogo.
     ativo: bool = True
-    # So preenchido quando tipo_registro == "evento_secundario" - diz qual
-    # dos 3 tipos genericos do motor (ADR-0005) este codigo EE aciona,
-    # para a interface de campo montar o seletor sem precisar de um
-    # segundo mapeamento manual (ver ADR-0014 secao 2 e a decisao de
-    # produto que classificou EE01 como APOIO).
+    # Preenchido para tipo_registro == "evento_secundario" (os 15 codigos
+    # originais do ADR-0014/0024) e, desde o ADR-0030, tambem para os 5
+    # codigos "pausa" que podem ser iniciados soltos, sem atividade ativa
+    # (EE02/EE07/EE11/EE20/EE22) - usando exatamente a mesma mecanica de
+    # EventoSecundario (motor.iniciarEventoSecundario) quando disparados
+    # da tela de topo da interface de campo. tipo_registro continua
+    # "pausa" para esses 5 codigos - a pausa aninhada dentro de uma
+    # atividade em andamento (motor.iniciarPausa) continua funcionando
+    # exatamente como antes, sem nenhuma mudanca. Diz qual dos 3 tipos
+    # genericos do motor (ADR-0005) o codigo aciona quando usado como
+    # evento secundario, para a interface de campo montar o seletor sem
+    # precisar de um segundo mapeamento manual (ver ADR-0014 secao 2 e a
+    # decisao de produto que classificou EE01 como APOIO).
     tipo_evento_secundario: Optional[TipoEventoSecundario] = None
 
 
@@ -246,13 +254,18 @@ def catalogo_padrao() -> CatalogoMotivos:
 # "Manutencao Programada Nao Concluida" - contraparte de EE17 quando a
 # manutencao nao termina no turno do colaborador.
 #
-# Sexto elemento da tupla (tipo_evento_secundario): so preenchido para os
+# Sexto elemento da tupla (tipo_evento_secundario): preenchido para os 15
 # codigos "evento_secundario", mapeando cada um para um dos 3 tipos
 # genericos do motor (ADR-0005). Mapeamento vem do ADR-0014 secao 2, exceto
 # EE01 "Preparacao para jornada" - o unico codigo que o ADR-0014 catalogou
 # como evento_secundario sem atribuir um tipo; classificado como APOIO por
 # decisao do responsavel pelo produto em 2026-07-28 (conversa registrada
-# no incremento de Evento Secundario na interface de campo).
+# no incremento de Evento Secundario na interface de campo). Desde o
+# ADR-0030 (2026-07-31), tambem preenchido (sempre APOIO) para os 5
+# codigos "pausa" que passaram a poder ser iniciados soltos, sem
+# atividade ativa - EE02, EE07, EE11, EE20, EE22. tipo_registro desses 5
+# continua "pausa": a pausa aninhada dentro de uma atividade em andamento
+# nao muda em nada, so ganharam um segundo caminho de uso.
 #
 # Reclassificacao de 2026-07-31 (ADR-0028): EE11-EE16, EE18-EE20 e EE22
 # passam de PRODUTIVA para PRODUTIVA_NAO_RENTAVEL - decisao do responsavel
@@ -271,16 +284,16 @@ def catalogo_padrao() -> CatalogoMotivos:
 # pergunta em aberto em docs/23_DECISOES_PENDENTES.md.
 _RELATORIO_1_ENTRADAS = [
     ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
-    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL, None),
+    ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL, TipoEventoSecundario.APOIO),
     ("EE03", "Aguardando CCO", Categoria.AGUARDANDO_CCO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
     ("EE04", "Falta de ferramenta ou material", Categoria.AGUARDANDO_MATERIAL, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
     ("EE05", "Trem parado na frente de serviço", Categoria.TREM_PARADO_FRENTE_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
     ("EE06", "Restrição de infraestrutura", Categoria.RESTRICAO_INFRAESTRUTURA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
-    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa", ClassificacaoHH.IMPRODUTIVA, None),
+    ("EE07", "Reunião ou ADM", Categoria.REUNIAO, "pausa", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
     ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
     ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
     ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
-    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
+    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.DESLOCAMENTO),
     ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.DESLOCAMENTO),
     ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.DESLOCAMENTO),
@@ -289,9 +302,9 @@ _RELATORIO_1_ENTRADAS = [
     ("EE17", "Manutenção Programada", Categoria.ATIVIDADE_PLANEJADA, "atividade", ClassificacaoHH.PRODUTIVA, None),
     ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
-    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
+    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA, None),
-    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
+    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE23", "Manutenção Programada Não Concluída", Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA, "atividade", ClassificacaoHH.PRODUTIVA, None),
 ]
 

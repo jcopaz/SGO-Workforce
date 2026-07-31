@@ -72,26 +72,75 @@ function criarSeletorMotivoPausa() {
   return select;
 }
 
-// Deslocamento/espera/apoio (ADR-0005) - mesmo padrao de
-// criarSeletorMotivoPausa. O tipo (DESLOCAMENTO/ESPERA/APOIO) exigido por
-// motor.iniciarEventoSecundario vem do proprio catalogo
-// (tipo_evento_secundario), buscado por codigo no clique do botao - ver
-// tipoEventoSecundarioParaCodigo abaixo.
-function criarSeletorEventoSecundario() {
+// Valores sentinela (nunca colidem com um codigo EE real, que e sempre
+// "EE" + 2 digitos) para as duas opcoes especiais da lista unica de
+// acoes abaixo.
+const VALOR_INICIAR_ATIVIDADE = "__ATIVIDADE__";
+const VALOR_ATENDIMENTO_FALHA = "__FALHA__";
+
+// Lista unica de acoes da tela "jornada aberta, sem nada em andamento"
+// (ADR-0030, pedido do responsavel do produto): antes eram 2 botoes
+// separados (Iniciar atividade / Iniciar atendimento de falha) mais um
+// terceiro seletor+botao so para deslocamento/espera/apoio - agora e uma
+// lista so, com um unico botao "Iniciar" embaixo dela (ver render()).
+// Combina motivosPausa (os 5 codigos que ADR-0030 tornou tambem
+// iniciaveis soltos, sem atividade ativa - EE02/EE07/EE11/EE20/EE22) com
+// eventosSecundarios (os 15 codigos de deslocamento/espera/apoio,
+// ADR-0005/0024), ordenados por codigo (mesma ordem do formulario em
+// papel). "Iniciar atividade" e "Atendimento de falha" ficam num grupo
+// separado, sempre no topo, porque abrem um formulario proprio em vez de
+// simplesmente comecar a contar tempo (ver o tratamento do valor
+// sentinela em render()).
+function criarSeletorAcaoPrincipal() {
   const select = document.createElement("select");
-  select.id = "eventoSecundario";
+  select.id = "acaoPrincipal";
   select.className = "seletor-motivo";
-  for (const evento of eventosSecundarios) {
+
+  const grupoPrincipal = document.createElement("optgroup");
+  grupoPrincipal.label = "Ação principal";
+  const opcaoAtividade = document.createElement("option");
+  opcaoAtividade.value = VALOR_INICIAR_ATIVIDADE;
+  opcaoAtividade.textContent = "Iniciar atividade";
+  const opcaoFalha = document.createElement("option");
+  opcaoFalha.value = VALOR_ATENDIMENTO_FALHA;
+  opcaoFalha.textContent = "Atendimento de falha";
+  grupoPrincipal.append(opcaoAtividade, opcaoFalha);
+  select.appendChild(grupoPrincipal);
+
+  const grupoPausaApoio = document.createElement("optgroup");
+  grupoPausaApoio.label = "Pausa, deslocamento e apoio";
+  const opcoesPausaApoio = [...motivosPausa, ...eventosSecundarios].sort((a, b) =>
+    a.codigo.localeCompare(b.codigo)
+  );
+  for (const motivo of opcoesPausaApoio) {
     const opcao = document.createElement("option");
-    opcao.value = evento.codigo;
-    opcao.textContent = `${evento.codigo} - ${evento.descricao}`;
-    select.appendChild(opcao);
+    opcao.value = motivo.codigo;
+    opcao.textContent = `${motivo.codigo} - ${motivo.descricao}`;
+    grupoPausaApoio.appendChild(opcao);
   }
+  select.appendChild(grupoPausaApoio);
+
   return select;
 }
 
+// Busca o tipo em ambas as listas (ADR-0030 fez motivosPausa tambem ter
+// codigos com tipo_evento_secundario - EE02/EE07/EE11/EE20/EE22).
 function tipoEventoSecundarioParaCodigo(codigo) {
-  return eventosSecundarios.find((evento) => evento.codigo === codigo)?.tipo_evento_secundario;
+  const encontrado =
+    eventosSecundarios.find((evento) => evento.codigo === codigo) ??
+    motivosPausa.find((motivo) => motivo.codigo === codigo);
+  return encontrado?.tipo_evento_secundario;
+}
+
+// Descricao legivel de um codigo (para o status "X em andamento." -
+// ADR-0030: como o evento secundario agora tambem cobre pausas avulsas,
+// nao da mais pra usar um texto fixo tipo "Deslocamento/espera/apoio em
+// andamento." para todos os casos).
+function descricaoParaCodigo(codigo) {
+  const encontrado =
+    eventosSecundarios.find((evento) => evento.codigo === codigo) ??
+    motivosPausa.find((motivo) => motivo.codigo === codigo);
+  return encontrado?.descricao;
 }
 
 // Campos do formulario de atendimento de falha (ADR-0021). Cada um
@@ -663,7 +712,8 @@ function render() {
       }
     }
   } else if (eventoSecundario) {
-    els.status.textContent = "Deslocamento/espera/apoio em andamento.";
+    const descricaoEvento = descricaoParaCodigo(eventoSecundario.motivo) ?? "Evento";
+    els.status.textContent = `${descricaoEvento} em andamento.`;
     els.botoes.appendChild(
       botao(
         "Encerrar evento",
@@ -673,30 +723,25 @@ function render() {
     );
   } else {
     els.status.textContent = "Jornada aberta, sem atividade em andamento.";
+    const seletorAcao = criarSeletorAcaoPrincipal();
+    els.botoes.appendChild(seletorAcao);
     els.botoes.appendChild(
       botao(
-        "Iniciar atividade",
+        "Iniciar",
         () => {
+          const valor = seletorAcao.value;
           mostrarTransferenciaFalha = false;
-          executar(() => motor.iniciarAtividade(RelogioSimulado.agora()));
+          if (valor === VALOR_INICIAR_ATIVIDADE) {
+            executar(() => motor.iniciarAtividade(RelogioSimulado.agora()));
+          } else if (valor === VALOR_ATENDIMENTO_FALHA) {
+            executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
+          } else {
+            const tipo = tipoEventoSecundarioParaCodigo(valor);
+            executar(() => motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, valor));
+          }
         },
         { destaque: true }
       )
-    );
-    els.botoes.appendChild(
-      botao("Iniciar atendimento de falha", () => {
-        mostrarTransferenciaFalha = false;
-        executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
-      })
-    );
-    const seletorEvento = criarSeletorEventoSecundario();
-    els.botoes.appendChild(seletorEvento);
-    els.botoes.appendChild(
-      botao("Iniciar deslocamento/espera/apoio", () => {
-        const codigo = seletorEvento.value;
-        const tipo = tipoEventoSecundarioParaCodigo(codigo);
-        executar(() => motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, codigo));
-      })
     );
     els.botoes.appendChild(
       botao("Encerrar jornada", () => executar(() => motor.encerrarJornada(RelogioSimulado.agora())))

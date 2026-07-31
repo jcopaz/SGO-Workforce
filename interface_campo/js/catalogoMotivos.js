@@ -47,19 +47,24 @@ function gravarCache(lista) {
 // antigo EE23 "Treinamento" -> EE22 (mesmo nome).
 // tipo_evento_secundario adicionado no incremento de Evento Secundario na
 // interface de campo (mapeamento do ADR-0014, EE01 classificado como APOIO
-// por decisao do responsavel pelo produto em 2026-07-28).
+// por decisao do responsavel pelo produto em 2026-07-28). Desde o
+// ADR-0030 (2026-07-31), EE02/EE07/EE11/EE20/EE22 tambem tem
+// tipo_evento_secundario (sempre APOIO) - continuam tipo_registro="pausa"
+// (a pausa aninhada dentro de uma atividade em andamento nao muda em
+// nada), mas agora tambem podem ser iniciadas soltas, sem atividade
+// ativa, na lista unica de acoes da tela de topo (app.js).
 const CATALOGO_MINIMO_OFFLINE = [
   { codigo: "EE01", descricao: "Preparação para jornada", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "APOIO" },
-  { codigo: "EE02", descricao: "Refeição 1 hora", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: null },
+  { codigo: "EE02", descricao: "Refeição 1 hora", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: "APOIO" },
   { codigo: "EE03", descricao: "Aguardando CCO", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "ESPERA" },
   { codigo: "EE04", descricao: "Falta de ferramenta ou material", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "ESPERA" },
   { codigo: "EE05", descricao: "Trem parado na frente de serviço", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "ESPERA" },
   { codigo: "EE06", descricao: "Restrição de infraestrutura", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "ESPERA" },
-  { codigo: "EE07", descricao: "Reunião ou ADM", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: null },
+  { codigo: "EE07", descricao: "Reunião ou ADM", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: "APOIO" },
   { codigo: "EE08", descricao: "Serviço interno da coordenação", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "APOIO" },
   { codigo: "EE09", descricao: "Trabalho não distribuído", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "ESPERA" },
   { codigo: "EE10", descricao: "Aguardando sequência de serviço", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "ESPERA" },
-  { codigo: "EE11", descricao: "Consulta à documentação técnica", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: null },
+  { codigo: "EE11", descricao: "Consulta à documentação técnica", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: "APOIO" },
   { codigo: "EE12", descricao: "Deslocamento rodoviário", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "DESLOCAMENTO" },
   { codigo: "EE13", descricao: "Deslocamento ferroviário", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "DESLOCAMENTO" },
   { codigo: "EE14", descricao: "Deslocamento a pé", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "DESLOCAMENTO" },
@@ -67,8 +72,8 @@ const CATALOGO_MINIMO_OFFLINE = [
   { codigo: "EE16", descricao: "Desmontar atividade", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "APOIO" },
   { codigo: "EE18", descricao: "Carregar veículo", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "APOIO" },
   { codigo: "EE19", descricao: "Descarregar veículo", tipo_registro: "evento_secundario", ativo: true, tipo_evento_secundario: "APOIO" },
-  { codigo: "EE20", descricao: "DDS / APR", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: null },
-  { codigo: "EE22", descricao: "Treinamento", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: null },
+  { codigo: "EE20", descricao: "DDS / APR", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: "APOIO" },
+  { codigo: "EE22", descricao: "Treinamento", tipo_registro: "pausa", ativo: true, tipo_evento_secundario: "APOIO" },
 ];
 
 function filtrarPorTipoRegistro(lista, tipoRegistro) {
@@ -91,13 +96,16 @@ function filtrarPorTipoRegistro(lista, tipoRegistro) {
 // tipo que ja veio preenchido, mesmo principio do reparo do backend.
 const TIPO_EVENTO_SECUNDARIO_CONHECIDO = {
   EE01: "APOIO",
+  EE02: "APOIO",
   EE03: "ESPERA",
   EE04: "ESPERA",
   EE05: "ESPERA",
   EE06: "ESPERA",
+  EE07: "APOIO",
   EE08: "APOIO",
   EE09: "ESPERA",
   EE10: "ESPERA",
+  EE11: "APOIO",
   EE12: "DESLOCAMENTO",
   EE13: "DESLOCAMENTO",
   EE14: "DESLOCAMENTO",
@@ -105,6 +113,8 @@ const TIPO_EVENTO_SECUNDARIO_CONHECIDO = {
   EE16: "APOIO",
   EE18: "APOIO",
   EE19: "APOIO",
+  EE20: "APOIO",
+  EE22: "APOIO",
 };
 
 function repararTipoEventoSecundarioAusente(motivo) {
@@ -153,9 +163,13 @@ async function buscarCatalogoCompleto(opcoes) {
   return CATALOGO_MINIMO_OFFLINE;
 }
 
+// Desde o ADR-0030, alguns motivos de pausa (EE02/EE07/EE11/EE20/EE22)
+// tambem podem ser iniciados soltos (mecanica de EventoSecundario) - por
+// isso passam pelo mesmo reparo defensivo de tipo_evento_secundario que
+// obterEventosSecundarios ja aplicava (ver repararTipoEventoSecundarioAusente).
 export async function obterMotivosPausa(opcoes = {}) {
   const lista = await buscarCatalogoCompleto(opcoes);
-  return filtrarPorTipoRegistro(lista, "pausa");
+  return filtrarPorTipoRegistro(lista, "pausa").map(repararTipoEventoSecundarioAusente);
 }
 
 // Deslocamento, espera ou apoio (ADR-0005) - incremento de Evento

@@ -9,6 +9,14 @@
 - Ação principal sempre visível.
 - Fila offline e status de GPS visíveis.
 
+**Implementado no ADR-0030**: a tela "jornada aberta, sem nada em
+andamento" usa uma lista única (não cartões separados) com todas as
+ações - Iniciar atividade, Atendimento de falha, e os 20 códigos de
+pausa/deslocamento/espera/apoio - e um único botão "Iniciar" que vira
+"Encerrar" enquanto algo está em andamento, voltando para a mesma lista
+ao encerrar. "Encerrar jornada" fica fora da lista, como ação terminal
+separada.
+
 ## Encerramento de falha
 Formulário progressivo com nota, ativo, sintoma, causa, ação e observação. Campos catalogados com busca. Bloqueio claro e explicativo quando faltar informação.
 

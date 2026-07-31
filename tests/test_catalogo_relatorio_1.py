@@ -165,11 +165,33 @@ def test_catalogo_relatorio_1_tipo_evento_secundario_mapeado():
     assert codigos_evento_secundario == set(esperado)
 
 
-def test_catalogo_relatorio_1_tipo_evento_secundario_nulo_fora_de_evento_secundario():
-    # pausa/atividade nunca tem tipo_evento_secundario preenchido.
+def test_catalogo_relatorio_1_pausas_avulsas_tem_tipo_evento_secundario_apoio():
+    # ADR-0030: EE02/EE07/EE11/EE20/EE22 continuam tipo_registro="pausa"
+    # (a pausa aninhada dentro de uma atividade em andamento nao muda em
+    # nada), mas agora tambem podem ser iniciados soltos (sem atividade
+    # ativa) usando a mecanica de EventoSecundario - por isso ganham
+    # tipo_evento_secundario=APOIO, ao contrario dos outros 18 codigos de
+    # pausa/atividade que continuam sem tipo.
     catalogo = catalogo_relatorio_1_manutencao()
-    codigos_nao_evento_secundario = (
-        codigos_relatorio_1_por_tipo_registro("pausa") + codigos_relatorio_1_por_tipo_registro("atividade")
-    )
-    for codigo in codigos_nao_evento_secundario:
+    codigos_pausa_avulsa = {"EE02", "EE07", "EE11", "EE20", "EE22"}
+    for codigo in codigos_pausa_avulsa:
+        entrada = catalogo.obter(codigo)
+        assert entrada.tipo_registro == "pausa", codigo
+        assert entrada.tipo_evento_secundario == TipoEventoSecundario.APOIO, codigo
+
+
+def test_catalogo_relatorio_1_tipo_evento_secundario_nulo_fora_de_evento_secundario_e_pausa_avulsa():
+    # Os demais codigos de pausa (sem uso avulso) e todos os de atividade
+    # continuam sem tipo_evento_secundario.
+    catalogo = catalogo_relatorio_1_manutencao()
+    codigos_pausa_avulsa = {"EE02", "EE07", "EE11", "EE20", "EE22"}
+    codigos_sem_tipo = [
+        codigo
+        for codigo in (
+            codigos_relatorio_1_por_tipo_registro("pausa") + codigos_relatorio_1_por_tipo_registro("atividade")
+        )
+        if codigo not in codigos_pausa_avulsa
+    ]
+    assert codigos_sem_tipo  # sanity: ainda sobra pelo menos um codigo nesse grupo
+    for codigo in codigos_sem_tipo:
         assert catalogo.obter(codigo).tipo_evento_secundario is None, codigo

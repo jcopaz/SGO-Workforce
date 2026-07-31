@@ -59,11 +59,23 @@ class _ConexaoFalsa:
         return False
 
 
-def test_mapeamento_reparo_cobre_exatamente_os_15_codigos_evento_secundario():
+def _codigos_com_tipo_evento_secundario_esperados():
+    # 15 codigos "evento_secundario" (ADR-0024) + 5 codigos "pausa" que
+    # ganharam uso avulso no ADR-0030 (EE02/EE07/EE11/EE20/EE22).
+    return set(codigos_relatorio_1_por_tipo_registro("evento_secundario")) | {
+        "EE02",
+        "EE07",
+        "EE11",
+        "EE20",
+        "EE22",
+    }
+
+
+def test_mapeamento_reparo_cobre_os_20_codigos_com_tipo_evento_secundario():
     mapeamento = _mapeamento_reparo_tipo_evento_secundario()
     codigos = {codigo for _tipo, codigo in mapeamento}
-    assert codigos == set(codigos_relatorio_1_por_tipo_registro("evento_secundario"))
-    assert len(mapeamento) == 15
+    assert codigos == _codigos_com_tipo_evento_secundario_esperados()
+    assert len(mapeamento) == 20
 
 
 def test_mapeamento_reparo_inclui_ee01_como_apoio():
@@ -82,11 +94,11 @@ def test_reparar_tipo_evento_secundario_atualiza_so_os_15_codigos_com_guarda_de_
     repositorio._reparar_tipo_evento_secundario()
 
     assert conexao_falsa.commitada
-    assert len(conexao_falsa.executados) == 15
+    assert len(conexao_falsa.executados) == 20
     for sql, params in conexao_falsa.executados:
         assert "SET tipo_evento_secundario" in sql
         assert "WHERE codigo = %s AND tipo_evento_secundario IS NULL" in sql
         assert len(params) == 2  # (tipo, codigo)
 
     codigos_atualizados = {params[1] for _sql, params in conexao_falsa.executados}
-    assert codigos_atualizados == set(codigos_relatorio_1_por_tipo_registro("evento_secundario"))
+    assert codigos_atualizados == _codigos_com_tipo_evento_secundario_esperados()

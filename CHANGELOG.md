@@ -1,5 +1,46 @@
 # Changelog
 
+## [2026-07-31] Lista única de ações na interface de campo (ADR-0030)
+
+Ver `docs/57_ADR_0030_LISTA_UNICA_DE_ACOES.md` para a decisão completa.
+Fluxo pedido explicitamente pelo responsável do produto, com confirmação
+direta sobre um ponto que mudava regra de negócio (ver abaixo).
+
+### Adicionado
+- `src/workforce_core/catalogo.py`: `EE02`, `EE07`, `EE11`, `EE20`, `EE22`
+  (Refeição, Reunião/ADM, Consulta à documentação técnica, DDS/APR,
+  Treinamento) ganham `tipo_evento_secundario = APOIO`, mantendo
+  `tipo_registro = "pausa"` - agora podem ser iniciados soltos (sem
+  atividade ativa, mecânica de `EventoSecundario`) **e** continuam
+  funcionando como pausa aninhada dentro de uma atividade em andamento,
+  sem nenhuma mudança nesse segundo caminho. Confirmado explicitamente
+  pelo responsável do produto (o exemplo original usava "DDS/APR" logo
+  após "Iniciar Jornada", o que exigia essa mudança).
+- `interface_campo/js/app.js`: `criarSeletorAcaoPrincipal` substitui a
+  tela de topo (antes: 2 botões + 1 seletor separado) por uma lista
+  única com "Iniciar atividade"/"Atendimento de falha" + os 20 códigos
+  de pausa/deslocamento/espera/apoio, e um botão "Iniciar" único que vira
+  "Encerrar" enquanto algo está em andamento, voltando pra mesma lista ao
+  encerrar. "Encerrar jornada" continua separado, fora da lista.
+- `interface_campo/js/catalogoMotivos.js`: `obterMotivosPausa` passa a
+  aplicar o mesmo reparo defensivo de `tipo_evento_secundario` que
+  `obterEventosSecundarios` já tinha (ADR-0026), agora cobrindo os 5
+  códigos novos.
+- `docs/11_TELAS_E_UX.md` atualizado.
+- Testes: `tests/test_catalogo_relatorio_1.py`, `tests/test_repositorio_catalogo_postgres.py`
+  (contagem de códigos com tipo 15 → 20), `tests/js/catalogoMotivos.test.mjs`
+  (2 testes novos).
+
+### Testes
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest`: 276/276.
+- `node --check` em todos os arquivos de `interface_campo/js/`: OK.
+- `node --test tests/js/*.test.mjs`: 107/107 (era 105).
+
+### Riscos
+- Teste manual em navegador/celular real não realizado (mesma limitação
+  de sempre).
+
 ## [2026-07-31] Corrige crash ao reabrir jornada antiga (bug real relatado pelo usuário)
 
 ### Corrigido

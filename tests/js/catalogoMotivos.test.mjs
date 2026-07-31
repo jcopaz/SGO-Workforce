@@ -102,6 +102,40 @@ test("envia o token no header X-Sync-Token", async () => {
 });
 
 // ----------------------------------------------------------------------
+// Pausas avulsas (ADR-0030): EE02/EE07/EE11/EE20/EE22 continuam
+// tipo_registro "pausa", mas ganham tipo_evento_secundario (sempre
+// APOIO) para poderem ser iniciadas soltas, sem atividade ativa, na
+// lista unica de acoes da tela de topo (app.js).
+// ----------------------------------------------------------------------
+test("obterMotivosPausa sem configuracao ja traz tipo_evento_secundario nos 5 codigos avulsos", async () => {
+  const motivos = await obterMotivosPausa({ configurada: false });
+
+  const codigosAvulsos = ["EE02", "EE07", "EE11", "EE20", "EE22"];
+  for (const codigo of codigosAvulsos) {
+    const motivo = motivos.find((m) => m.codigo === codigo);
+    assert.ok(motivo, `codigo ${codigo} deveria estar na lista minima embutida`);
+    assert.equal(motivo.tipo_evento_secundario, "APOIO", codigo);
+  }
+});
+
+test("obterMotivosPausa repara tipo_evento_secundario nulo vindo do backend (coluna nao migrada)", async () => {
+  const catalogoDoBackend = [
+    {
+      codigo: "EE20",
+      descricao: "DDS / APR",
+      tipo_registro: "pausa",
+      ativo: true,
+      tipo_evento_secundario: null,
+    },
+  ];
+  const fetchOk = async () => ({ ok: true, json: async () => catalogoDoBackend });
+
+  const motivos = await obterMotivosPausa({ configurada: true, fetchImpl: fetchOk });
+
+  assert.equal(motivos[0].tipo_evento_secundario, "APOIO");
+});
+
+// ----------------------------------------------------------------------
 // obterEventosSecundarios (incremento de Evento Secundario na interface
 // de campo) - mesmo cache/fallback de obterMotivosPausa, so muda o filtro.
 // ----------------------------------------------------------------------
