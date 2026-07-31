@@ -343,92 +343,98 @@ with c6:
         unsafe_allow_html=True,
     )
 
-st.subheader("Indicadores")
-col_gauge, col_performance = st.columns(2)
-with col_gauge:
-    if fracao_utilizacao_hh is None:
-        st.info("Sem HH bruto no período filtrado para calcular Utilização HH.")
-    else:
-        st.caption("Utilização HH (Produtivo rentável / Total)")
-        components.html(
-            renderizar_embutido(grafico_gauge_percentual("Utilização HH", fracao_utilizacao_hh)),
-            height=340,
-            scrolling=False,
+with st.expander("Indicadores", expanded=True):
+    col_gauge, col_performance = st.columns(2)
+    with col_gauge:
+        if fracao_utilizacao_hh is None:
+            st.info("Sem HH bruto no período filtrado para calcular Utilização HH.")
+        else:
+            st.caption("Utilização HH (Produtivo rentável / Total)")
+            components.html(
+                renderizar_embutido(grafico_gauge_percentual("Utilização HH", fracao_utilizacao_hh)),
+                height=340,
+                scrolling=False,
+            )
+    with col_performance:
+        st.info(
+            "Performance (Tempo Planejado / Tempo Real) ainda não aparece aqui: "
+            "o sistema não tem, hoje, nenhuma fonte de tempo planejado por "
+            "atividade/OS (ver docs/23_DECISOES_PENDENTES.md). A fórmula já "
+            "está pronta em `workforce_core.consolidacao.performance` para "
+            "quando essa fonte existir."
         )
-with col_performance:
-    st.info(
-        "Performance (Tempo Planejado / Tempo Real) ainda não aparece aqui: "
-        "o sistema não tem, hoje, nenhuma fonte de tempo planejado por "
-        "atividade/OS (ver docs/23_DECISOES_PENDENTES.md). A fórmula já "
-        "está pronta em `workforce_core.consolidacao.performance` para "
-        "quando essa fonte existir."
+
+with st.expander("Produtividade por colaborador", expanded=True):
+    st.caption(
+        "Utilização HH individual - quem está convertendo mais período de "
+        "trabalho em manutenção rentável (EE17/EE21), no mesmo filtro de "
+        "colaborador/período acima."
     )
-
-st.subheader("Produtividade por colaborador")
-st.caption(
-    "Utilização HH individual - quem está convertendo mais período de "
-    "trabalho em manutenção rentável (EE17/EE21), no mesmo filtro de "
-    "colaborador/período acima."
-)
-utilizacao_por_colaborador = utilizacao_hh_por_colaborador(jornadas_filtradas)
-components.html(
-    renderizar_embutido(grafico_utilizacao_por_colaborador(utilizacao_por_colaborador)),
-    height=500,
-    scrolling=False,
-)
-
-st.subheader("Distribuição de HH por categoria")
-components.html(
-    renderizar_embutido(grafico_hh_por_categoria(por_categoria_filtrado)),
-    height=500,
-    scrolling=False,
-)
-components.html(
-    renderizar_embutido(grafico_distribuicao_pizza(por_categoria_filtrado)),
-    height=520,
-    scrolling=False,
-)
-
-st.subheader("Evolução diária e relação duração x frequência")
-col_evolucao, col_scatter = st.columns(2)
-with col_evolucao:
+    utilizacao_por_colaborador = utilizacao_hh_por_colaborador(jornadas_filtradas)
     components.html(
-        renderizar_embutido(grafico_evolucao_diaria(linhas_filtradas)),
-        height=460,
+        renderizar_embutido(grafico_utilizacao_por_colaborador(utilizacao_por_colaborador)),
+        height=530,
         scrolling=False,
     )
-with col_scatter:
+
+with st.expander("Distribuição de HH por categoria", expanded=True):
+    # Barra em largura cheia (nao em coluna): ate 19 categorias com
+    # rotulo rotacionado precisam de largura de verdade - espremer num
+    # meio de tela reabriria o mesmo risco de rotulo cortado que motivou
+    # o ADR-0032/0033 (grid com containLabel evita o corte, mas nao evita
+    # o rotulo ficar ilegivel de tao comprimido).
+    st.caption("HH por categoria")
+    components.html(
+        renderizar_embutido(grafico_hh_por_categoria(por_categoria_filtrado)),
+        height=560,
+        scrolling=False,
+    )
+    st.caption("Distribuição percentual")
+    components.html(
+        renderizar_embutido(grafico_distribuicao_pizza(por_categoria_filtrado)),
+        height=560,
+        scrolling=False,
+    )
+
+with st.expander("Evolução diária de HH", expanded=True):
+    components.html(
+        renderizar_embutido(grafico_evolucao_diaria(linhas_filtradas)),
+        height=480,
+        scrolling=False,
+    )
+
+with st.expander("Duração média x frequência por motivo", expanded=True):
     dados_motivo = contagem_e_duracao_media_por_motivo(linhas_filtradas)
     if not dados_motivo:
         st.info("Nenhum evento com motivo (pausa/deslocamento/espera/apoio) no filtro atual.")
     else:
         components.html(
             renderizar_embutido(grafico_scatter_duracao_frequencia(dados_motivo)),
-            height=500,
+            height=520,
             scrolling=False,
         )
 
-st.subheader("HH por colaborador (detalhado por categoria)")
-components.html(
-    renderizar_embutido(grafico_hh_por_colaborador(linhas_filtradas)),
-    height=500,
-    scrolling=False,
-)
+with st.expander("HH por colaborador (detalhado por categoria)", expanded=True):
+    components.html(
+        renderizar_embutido(grafico_hh_por_colaborador(linhas_filtradas)),
+        height=560,
+        scrolling=False,
+    )
 
-st.subheader("HH por motivo/justificativa")
-_grafico_motivo, _altura_motivo = grafico_hh_por_motivo(linhas_filtradas)
-components.html(
-    renderizar_embutido(_grafico_motivo),
-    height=_altura_motivo + 30,
-    scrolling=False,
-)
+with st.expander("HH por motivo/justificativa", expanded=True):
+    _grafico_motivo, _altura_motivo = grafico_hh_por_motivo(linhas_filtradas)
+    components.html(
+        renderizar_embutido(_grafico_motivo),
+        height=_altura_motivo + 30,
+        scrolling=False,
+    )
 
-st.subheader("Fluxo de HH: colaborador → categoria")
-components.html(
-    renderizar_embutido(grafico_sankey_colaborador_categoria(linhas_filtradas)),
-    height=540,
-    scrolling=False,
-)
+with st.expander("Fluxo de HH: colaborador → categoria", expanded=True):
+    components.html(
+        renderizar_embutido(grafico_sankey_colaborador_categoria(linhas_filtradas)),
+        height=620,
+        scrolling=False,
+    )
 
 st.subheader("Jornadas carregadas")
 st.dataframe(

@@ -1,12 +1,15 @@
 """Construcao dos graficos ECharts do painel (Incremento 9, expandido no
-ADR-0031 - dashboard completo de produtividade/execucao e detalhamento de
-falhas).
+ADR-0031, ajustado no ADR-0032, reescrito do zero no ADR-0033 - sistema
+de layout unico para todo grafico do painel).
 
 Usa pyecharts (gera a option JSON do Apache ECharts em Python) em vez do
 pacote streamlit-echarts original do Requirements.txt, que esta
 incompativel com a versao do Streamlit disponivel neste ambiente - troca
 documentada em docs/36_ADR_0009_DASHBOARD_ECHARTS_PYECHARTS.md, a decisao
-arquitetural posterior que a regra de ouro do CLAUDE.md permite.
+arquitetural posterior que a regra de ouro do CLAUDE.md permite. A mesma
+incompatibilidade foi reconfirmada no ADR-0033 (streamlit_echarts, usado
+no app.py de referencia de Gestao_OS, ainda quebra neste ambiente com o
+Streamlit 1.57).
 
 O grafico e renderizado para HTML autocontido, com o JS do ECharts
 embutido inline (ver painel/assets/echarts.min.js) em vez de referenciar o
@@ -17,6 +20,37 @@ Rotulos (Categoria, codigo de motivo) vem de `dados.rotulo_categoria`/
 `dados.rotulo_motivo` - fonte unica compartilhada com os filtros das
 telas (ver ADR-0031), nunca `categoria.value`/codigo cru direto num
 grafico.
+
+## Sistema de layout (ADR-0033)
+
+Pedido explicito do responsavel do produto: "Apenas as Abas deverao ter
+titulos (os Graficos deverao ter apenas a legenda abaixo do grafico) e
+todos os rotulos do eixo x e y aparecendo" - referenciando o padrao ja
+usado no app.py de Gestao_OS (`streamlit_echarts`, legenda sempre em
+`bottom`, sem `title` no option). Regra unica, sem excecao por
+contexto (ao contrario do ADR-0032, que so escondia titulo/legenda em
+alguns casos - a fonte dos varios bugs de sobreposicao relatados):
+
+- Todo grafico usa `_SEM_TITULO` (`title_opts` sempre oculto) - quem
+  identifica o bloco e o `st.expander(titulo, ...)` em
+  `painel/telas/*.py`, nunca o proprio ECharts.
+- Todo grafico usa `_legenda_inferior_opts()` (legenda sempre visivel,
+  horizontal, embaixo, com paginacao automatica se nao couber numa
+  linha) - unica excecao e o gauge (`grafico_gauge_percentual`, nao e um
+  grafico categorico, nao ha o que legendar).
+- Todo grafico cartesiano (barra/linha/scatter) usa `_aplicar_grid()`
+  com `is_contain_label=True` e margem generosa o bastante pra caber
+  rotulo de eixo rotacionado + a linha de legenda embaixo, sem cortar
+  nenhum dos dois.
+- Pizza/donut/sankey/sunburst deslocam seu centro pra cima (`center`)
+  pra abrir espaco pra legenda embaixo, em vez da legenda lateral usada
+  antes do ADR-0033.
+
+Quando dois graficos dividem o mesmo `st.expander` (ex.: ranking +
+donut de sintoma em Falhas), a diferenciacao entre os dois vira um
+`st.caption(...)` do Streamlit acima de cada grafico em
+`painel/telas/*.py` - nunca um titulo dentro do proprio ECharts, que
+violaria a regra acima.
 """
 
 from __future__ import annotations
@@ -41,6 +75,28 @@ _MARCADOR_SCRIPT_CDN = (
 )
 
 
+# Paleta do painel (ADR-0032) - alinhada as cores de marca ja usadas nos
+# cards KPI (painel/estilo.py: kpi-border-blue/red/amber): azul para
+# indicadores de produtividade (Visao Geral), vermelho para indicadores
+# de alerta/severidade de falha, ambar para os demais indicadores de
+# falha. Nunca uma cor arbitraria nova por grafico.
+COR_PRODUTIVIDADE = "#2563EB"
+COR_FALHA_INFO = "#F59E0B"
+COR_FALHA_ALERTA = "#DC2626"
+
+_COR_GRADE = "#E2E8F0"
+_COR_EIXO = "#94A3B8"
+_COR_TEXTO_EIXO = "#475569"
+
+_ITEM_STYLE_BARRA_VERTICAL = opts.ItemStyleOpts(border_radius=[4, 4, 0, 0])
+_ITEM_STYLE_BARRA_HORIZONTAL = opts.ItemStyleOpts(border_radius=[0, 4, 4, 0])
+
+# Titulo sempre oculto (ADR-0033) - constante unica reaproveitada em todo
+# grafico em vez de criar um `opts.TitleOpts(is_show=False)` novo a cada
+# funcao.
+_SEM_TITULO = opts.TitleOpts(is_show=False)
+
+
 def _horas(duracao: timedelta) -> float:
     return round(duracao.total_seconds() / 3600, 2)
 
@@ -57,65 +113,114 @@ def _altura_lista_px(quantidade_itens: int) -> int:
     return max(320, 40 * quantidade_itens + 100)
 
 
-# ----------------------------------------------------------------------
-# Layout compartilhado (ADR-0031): titulo e legenda com posicoes fixas
-# que nunca se sobrepoem, mesmo com muitas categorias de nome longo - bug
-# real relatado em 2026-07-31 (titulo e legenda desenhados um em cima do
-# outro em varios graficos). Toda funcao de grafico com titulo/legenda
-# usa um destes dois helpers em vez de deixar o pyecharts no padrao.
-# ----------------------------------------------------------------------
-def _titulo_opts(titulo: str) -> opts.TitleOpts:
-    return opts.TitleOpts(title=titulo, pos_left="center", pos_top="0%")
-
-
-def _legenda_lateral_opts() -> opts.LegendOpts:
-    """Legenda vertical na lateral esquerda, comecando bem abaixo do
-    titulo - para pizza/donut com muitas fatias."""
+def _legenda_inferior_opts() -> opts.LegendOpts:
+    """Legenda horizontal, sempre embaixo do grafico (ADR-0033) - unica
+    posicao de legenda usada no painel inteiro, em vez de uma posicao
+    diferente por tipo de grafico (lateral para pizza, superior para
+    barra empilhada, oculta para serie unica) como era antes. `type_=
+    "scroll"` faz a lista paginar com setas quando os itens nao cabem
+    numa linha so, em vez de quebrar em varias linhas e crescer a altura
+    do grafico de forma imprevisivel."""
     return opts.LegendOpts(
         type_="scroll",
-        orient="vertical",
-        pos_left="1%",
-        pos_top="16%",
-        pos_bottom="2%",
+        orient="horizontal",
+        pos_bottom="1%",
+        pos_left="center",
         item_width=14,
         item_height=10,
-        textstyle_opts=opts.TextStyleOpts(font_size=11),
+        textstyle_opts=opts.TextStyleOpts(font_size=11, color=_COR_TEXTO_EIXO),
     )
 
 
-def _legenda_superior_opts() -> opts.LegendOpts:
-    """Legenda horizontal, empurrada para baixo do titulo - para
-    graficos de barra/linha com varias series (uma por categoria)."""
-    return opts.LegendOpts(type_="scroll", pos_top="9%", textstyle_opts=opts.TextStyleOpts(font_size=11))
+def _aplicar_grid(grafico, bottom: str = "20%", top: str = "6%", left: str = "3%"):
+    """Aplica a area de plotagem (grid) com `is_contain_label=True`
+    (ADR-0032/0033): pede ao ECharts para reservar de verdade o espaco
+    ocupado pelos rotulos do eixo (numero de caracteres, rotacao, fonte)
+    antes de posicionar a area de plotagem. Sem isso, rotulo rotacionado
+    com nome longo (ex.: "Deslocamento rodoviario" a 35 graus) estoura a
+    margem reservada e e cortado na borda do canvas em vez de aparecer
+    inteiro - bug real relatado com dado real em 2026-07-31 no grafico
+    HH por categoria.
+
+    `bottom` default generoso o bastante pra caber rotulo de eixo
+    rotacionado **e** a linha de legenda (ADR-0033: legenda agora sempre
+    embaixo, ver `_legenda_inferior_opts`) sem os dois brigarem por
+    espaco - cada grafico ajusta esse valor conforme o rotulo do seu
+    eixo (mais margem pra rotulo rotacionado longo, menos pra eixo
+    numerico ou categoria sem rotacao).
+
+    Escrito direto em `grafico.options["grid"]` em vez de passado como
+    `grid_opts` para `set_global_opts` porque o pyecharts 2.1 (versao
+    instalada neste ambiente) removeu esse parametro da assinatura de
+    `Chart.set_global_opts` - `grid` so e configuravel via o container
+    composto `pyecharts.charts.Grid` nessa versao, que exigiria reescrever
+    todo grafico como uma composicao de dois objetos so para ajustar
+    margem. Escrever direto em `.options` e o mesmo mecanismo que o
+    proprio pyecharts usa internamente para xAxis/yAxis (ver
+    `RectChart.add_xaxis`) - `options` e um dict simples, vira o JSON do
+    ECharts do jeito esperado."""
+    grafico.options["grid"] = opts.GridOpts(
+        is_contain_label=True, pos_top=top, pos_bottom=bottom, pos_left=left, pos_right="4%"
+    ).opts
+    return grafico
+
+
+def _eixo_valor_opts(nome: str = "") -> opts.AxisOpts:
+    """Eixo numerico com estilo consistente entre todos os graficos do
+    painel (linha suave + grade tracejada clara) em vez do preto solido
+    padrao do ECharts, que destoa do restante do card."""
+    return opts.AxisOpts(
+        name=nome,
+        name_gap=18,
+        axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(color=_COR_EIXO)),
+        axislabel_opts=opts.LabelOpts(color=_COR_TEXTO_EIXO, font_size=11),
+        splitline_opts=opts.SplitLineOpts(
+            is_show=True, linestyle_opts=opts.LineStyleOpts(type_="dashed", color=_COR_GRADE)
+        ),
+    )
+
+
+def _eixo_categoria_opts(rotate: int = 0) -> opts.AxisOpts:
+    """Eixo de categoria (rotulo de texto) com mesmo estilo do eixo
+    numerico - usado no eixo com os nomes (categoria/colaborador/data),
+    rotacionado quando o rotulo e longo demais para caber na horizontal."""
+    return opts.AxisOpts(
+        axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(color=_COR_EIXO)),
+        axislabel_opts=opts.LabelOpts(rotate=rotate, font_size=11, color=_COR_TEXTO_EIXO, margin=10),
+    )
 
 
 # ----------------------------------------------------------------------
 # Visao geral - HH por categoria/colaborador/tempo (Incremento 9,
-# corrigido e ampliado no ADR-0031)
+# corrigido e ampliado no ADR-0031, reescrito no ADR-0033)
 # ----------------------------------------------------------------------
 def grafico_hh_por_categoria(por_categoria: Dict[Optional[Categoria], timedelta]) -> Bar:
     itens = sorted(por_categoria.items(), key=lambda kv: kv[1], reverse=True)
     rotulos = [rotulo_categoria(c) for c, _ in itens]
     valores = [_horas(d) for _, d in itens]
 
-    return (
-        Bar(init_opts=opts.InitOpts(width="100%", height="460px"))
+    grafico = (
+        Bar(init_opts=opts.InitOpts(width="100%", height="540px"))
         .add_xaxis(rotulos)
-        .add_yaxis("HH (horas)", valores)
+        .add_yaxis("HH (horas)", valores, color=COR_PRODUTIVIDADE, itemstyle_opts=_ITEM_STYLE_BARRA_VERTICAL)
         .set_global_opts(
-            title_opts=_titulo_opts("HH por categoria"),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=35, font_size=11)),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
+            xaxis_opts=_eixo_categoria_opts(rotate=35),
+            yaxis_opts=_eixo_valor_opts("HH (horas)"),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
         )
+        .set_series_opts(label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO))
     )
+    return _aplicar_grid(grafico, bottom="34%")
 
 
 def grafico_distribuicao_pizza(por_categoria: Dict[Optional[Categoria], timedelta]) -> Pie:
     dados = [(rotulo_categoria(c), _horas(d)) for c, d in por_categoria.items()]
     return (
-        Pie(init_opts=opts.InitOpts(width="100%", height="480px"))
-        .add("HH", dados, radius="60%", center=["63%", "58%"])
-        .set_global_opts(title_opts=_titulo_opts("Distribuição de HH"), legend_opts=_legenda_lateral_opts())
+        Pie(init_opts=opts.InitOpts(width="100%", height="520px"))
+        .add("HH", dados, radius="55%", center=["50%", "42%"])
+        .set_global_opts(title_opts=_SEM_TITULO, legend_opts=_legenda_inferior_opts())
         .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {d}%", font_size=11))
     )
 
@@ -131,16 +236,28 @@ def grafico_evolucao_diaria(linhas: List[LinhaEvento]) -> Line:
     rotulos = [dia.strftime("%d/%m/%Y") for dia in dias_ordenados]
     valores = [_horas(totais_por_dia[dia]) for dia in dias_ordenados]
 
-    return (
-        Line(init_opts=opts.InitOpts(width="100%", height="420px"))
+    grafico = (
+        Line(init_opts=opts.InitOpts(width="100%", height="440px"))
         .add_xaxis(rotulos)
-        .add_yaxis("HH (horas)", valores, is_smooth=True)
+        .add_yaxis(
+            "HH (horas)",
+            valores,
+            is_smooth=True,
+            symbol_size=7,
+            linestyle_opts=opts.LineStyleOpts(width=3, color=COR_PRODUTIVIDADE),
+            itemstyle_opts=opts.ItemStyleOpts(color=COR_PRODUTIVIDADE),
+            areastyle_opts=opts.AreaStyleOpts(opacity=0.12, color=COR_PRODUTIVIDADE),
+            label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO),
+        )
         .set_global_opts(
-            title_opts=_titulo_opts("Evolução diária de HH"),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30, font_size=11)),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
+            xaxis_opts=_eixo_categoria_opts(rotate=30),
+            yaxis_opts=_eixo_valor_opts("HH (horas)"),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
         )
     )
+    return _aplicar_grid(grafico, bottom="26%")
 
 
 def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:
@@ -157,17 +274,18 @@ def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:
             totais[rotulo].get(linha.colaborador_matricula, timedelta()) + linha.duracao
         )
 
-    grafico = Bar(init_opts=opts.InitOpts(width="100%", height="460px")).add_xaxis(colaboradores)
+    grafico = Bar(init_opts=opts.InitOpts(width="100%", height="540px")).add_xaxis(colaboradores)
     for rotulo in rotulos_categoria:
         valores = [_horas(totais[rotulo].get(colaborador, timedelta())) for colaborador in colaboradores]
         grafico.add_yaxis(rotulo, valores, stack="total")
     grafico.set_global_opts(
-        title_opts=_titulo_opts("HH por colaborador"),
+        title_opts=_SEM_TITULO,
         tooltip_opts=opts.TooltipOpts(trigger="axis"),
-        legend_opts=_legenda_superior_opts(),
-        xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=20, font_size=11)),
+        legend_opts=_legenda_inferior_opts(),
+        xaxis_opts=_eixo_categoria_opts(rotate=20),
+        yaxis_opts=_eixo_valor_opts("HH (horas)"),
     )
-    return grafico
+    return _aplicar_grid(grafico, bottom="24%", top="4%")
 
 
 def grafico_hh_por_motivo(linhas: List[LinhaEvento]) -> Tuple[Bar, int]:
@@ -197,15 +315,18 @@ def grafico_hh_por_motivo(linhas: List[LinhaEvento]) -> Tuple[Bar, int]:
     grafico = (
         Bar(init_opts=opts.InitOpts(width="100%", height=f"{altura_px}px"))
         .add_xaxis(rotulos)
-        .add_yaxis("HH (horas)", valores, color="#0f4c81")
+        .add_yaxis("HH (horas)", valores, color=COR_PRODUTIVIDADE, itemstyle_opts=_ITEM_STYLE_BARRA_HORIZONTAL)
         .reversal_axis()
         .set_global_opts(
-            title_opts=_titulo_opts("HH por motivo/justificativa"),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
-            yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(font_size=11)),
+            xaxis_opts=_eixo_valor_opts("HH (horas)"),
+            yaxis_opts=_eixo_categoria_opts(),
         )
-        .set_series_opts(label_opts=opts.LabelOpts(position="right"))
+        .set_series_opts(label_opts=opts.LabelOpts(position="right", color=_COR_TEXTO_EIXO, font_size=10))
     )
+    grafico = _aplicar_grid(grafico, bottom="10%", top="4%")
     return grafico, altura_px
 
 
@@ -221,17 +342,31 @@ def grafico_utilizacao_por_colaborador(utilizacao_por_colaborador: Dict[str, Opt
     colaboradores = [colaborador for colaborador, _ in itens]
     percentuais = [round(fracao * 100, 1) for _, fracao in itens]
 
-    return (
-        Bar(init_opts=opts.InitOpts(width="100%", height="460px"))
+    grafico = (
+        Bar(init_opts=opts.InitOpts(width="100%", height="500px"))
         .add_xaxis(colaboradores)
-        .add_yaxis("Utilização HH (%)", percentuais, color="#0f4c81")
+        .add_yaxis(
+            "Utilização HH (%)", percentuais, color=COR_PRODUTIVIDADE, itemstyle_opts=_ITEM_STYLE_BARRA_VERTICAL
+        )
         .set_global_opts(
-            title_opts=_titulo_opts("Utilização HH por colaborador (rentável / total)"),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=20, font_size=11)),
-            yaxis_opts=opts.AxisOpts(name="%", max_=100),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
+            xaxis_opts=_eixo_categoria_opts(rotate=20),
+            yaxis_opts=opts.AxisOpts(
+                name="Utilização (%)",
+                max_=100,
+                name_gap=18,
+                axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(color=_COR_EIXO)),
+                axislabel_opts=opts.LabelOpts(color=_COR_TEXTO_EIXO, font_size=11),
+                splitline_opts=opts.SplitLineOpts(
+                    is_show=True, linestyle_opts=opts.LineStyleOpts(type_="dashed", color=_COR_GRADE)
+                ),
+            ),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
         )
+        .set_series_opts(label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO))
     )
+    return _aplicar_grid(grafico, bottom="24%")
 
 
 def grafico_scatter_duracao_frequencia(dados_por_motivo: Dict[str, Tuple[int, timedelta]]) -> Scatter:
@@ -242,8 +377,15 @@ def grafico_scatter_duracao_frequencia(dados_por_motivo: Dict[str, Tuple[int, ti
     de 1 ponto (em vez de um único eixo categórico) para o tooltip padrão
     do ECharts mostrar o nome do motivo sem precisar de JS customizado.
     `dados_por_motivo` vem de `contagem_e_duracao_media_por_motivo`
-    (painel/dados.py): motivo -> (frequência, duração média)."""
-    grafico = Scatter(init_opts=opts.InitOpts(width="100%", height="480px"))
+    (painel/dados.py): motivo -> (frequência, duração média).
+
+    ADR-0033: a legenda (um item por motivo, ate ~19) foi movida da
+    lateral esquerda pra embaixo do grafico, junto com todo o resto do
+    painel - isso tambem resolve, de graca, o bug do ADR-0032 (legenda
+    lateral larga colidindo com os pontos de frequencia baixa perto do
+    eixo Y): uma legenda horizontal embaixo, com paginacao automatica
+    (`type_="scroll"`), nunca disputa espaco com a area de plotagem."""
+    grafico = Scatter(init_opts=opts.InitOpts(width="100%", height="500px"))
     grafico.add_xaxis([])
     for motivo, (frequencia, duracao_media) in dados_por_motivo.items():
         grafico.add_yaxis(
@@ -253,13 +395,21 @@ def grafico_scatter_duracao_frequencia(dados_por_motivo: Dict[str, Tuple[int, ti
             label_opts=opts.LabelOpts(is_show=False),
         )
     grafico.set_global_opts(
-        title_opts=_titulo_opts("Duração média x frequência por motivo"),
-        xaxis_opts=opts.AxisOpts(name="Frequência (nº de ocorrências)", type_="value"),
-        yaxis_opts=opts.AxisOpts(name="Duração média (horas)", type_="value"),
+        title_opts=_SEM_TITULO,
+        xaxis_opts=opts.AxisOpts(
+            name="Frequência (nº de ocorrências)",
+            type_="value",
+            axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(color=_COR_EIXO)),
+            axislabel_opts=opts.LabelOpts(color=_COR_TEXTO_EIXO, font_size=11),
+            splitline_opts=opts.SplitLineOpts(
+                is_show=True, linestyle_opts=opts.LineStyleOpts(type_="dashed", color=_COR_GRADE)
+            ),
+        ),
+        yaxis_opts=_eixo_valor_opts("Duração média (horas)"),
         tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{a}<br/>Freq.: {c}"),
-        legend_opts=_legenda_lateral_opts(),
+        legend_opts=_legenda_inferior_opts(),
     )
-    return grafico
+    return _aplicar_grid(grafico, bottom="16%", top="6%")
 
 
 def grafico_sankey_colaborador_categoria(linhas: List[LinhaEvento]) -> Sankey:
@@ -282,21 +432,27 @@ def grafico_sankey_colaborador_categoria(linhas: List[LinhaEvento]) -> Sankey:
         if duracao > timedelta()
     ]
 
-    grafico = Sankey(init_opts=opts.InitOpts(width="100%", height="520px"))
+    grafico = Sankey(init_opts=opts.InitOpts(width="100%", height="600px"))
     grafico.add(
         "HH",
         nodes,
         links,
+        pos_top="4%",
+        pos_bottom="14%",
         linestyle_opt=opts.LineStyleOpts(opacity=0.3, curve=0.5, color="source"),
-        label_opts=opts.LabelOpts(font_size=11),
+        label_opts=opts.LabelOpts(font_size=11, color=_COR_TEXTO_EIXO),
     )
-    grafico.set_global_opts(title_opts=_titulo_opts("Fluxo de HH: colaborador → categoria"))
+    grafico.set_global_opts(
+        title_opts=_SEM_TITULO,
+        legend_opts=_legenda_inferior_opts(),
+        tooltip_opts=opts.TooltipOpts(trigger="item", trigger_on="mousemove"),
+    )
     return grafico
 
 
 # ----------------------------------------------------------------------
 # Falhas - tempo de atendimento e detalhamento (ADR-0029, ampliado no
-# ADR-0031)
+# ADR-0031, reescrito no ADR-0033)
 # ----------------------------------------------------------------------
 def grafico_ranking_duracao_falhas(linhas: List[LinhaAtendimentoFalha], top_n: int = 15) -> Tuple[Bar, int]:
     """Ranking horizontal das N falhas de maior duração (ADR-0029),
@@ -320,15 +476,20 @@ def grafico_ranking_duracao_falhas(linhas: List[LinhaAtendimentoFalha], top_n: i
     grafico = (
         Bar(init_opts=opts.InitOpts(width="100%", height=f"{altura_px}px"))
         .add_xaxis(rotulos)
-        .add_yaxis("Duração (horas)", valores, color="#f5c400")
+        .add_yaxis(
+            "Duração (horas)", valores, color=COR_FALHA_ALERTA, itemstyle_opts=_ITEM_STYLE_BARRA_HORIZONTAL
+        )
         .reversal_axis()
         .set_global_opts(
-            title_opts=_titulo_opts(f"Top {len(ordenadas)} atendimentos por duração"),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
-            yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(font_size=11)),
+            xaxis_opts=_eixo_valor_opts("Duração (horas)"),
+            yaxis_opts=_eixo_categoria_opts(),
         )
-        .set_series_opts(label_opts=opts.LabelOpts(position="right"))
+        .set_series_opts(label_opts=opts.LabelOpts(position="right", color=_COR_TEXTO_EIXO, font_size=10))
     )
+    grafico = _aplicar_grid(grafico, bottom="10%", top="4%")
     return grafico, altura_px
 
 
@@ -336,12 +497,19 @@ def grafico_donut_contagem(titulo: str, contagem: Dict[str, int]) -> Pie:
     """Donut genérico rótulo->contagem (ADR-0029) - usado para a
     distribuição de atendimentos de falha por sintoma/objeto. Diferente
     de grafico_distribuicao_pizza (que soma duração por Categoria), este
-    soma contagem de ocorrências por um rótulo de texto livre."""
+    soma contagem de ocorrências por um rótulo de texto livre.
+
+    `titulo` (ADR-0033) não aparece mais como título dentro do ECharts
+    (regra única do painel: só a aba tem título) - vira o nome da série,
+    usado pelo tooltip padrão do ECharts (`{a}`) ao passar o mouse sobre
+    uma fatia. Quem chama (`painel/telas/falhas.py`) usa `st.caption()`
+    acima do gráfico para rotular visualmente, quando ele divide o
+    expander com outro gráfico."""
     dados = sorted(contagem.items(), key=lambda item: item[1], reverse=True)
     return (
-        Pie(init_opts=opts.InitOpts(width="100%", height="480px"))
-        .add("Ocorrências", dados, radius=["38%", "62%"], center=["63%", "58%"])
-        .set_global_opts(title_opts=_titulo_opts(titulo), legend_opts=_legenda_lateral_opts())
+        Pie(init_opts=opts.InitOpts(width="100%", height="520px"))
+        .add(titulo, dados, radius=["32%", "52%"], center=["50%", "42%"])
+        .set_global_opts(title_opts=_SEM_TITULO, legend_opts=_legenda_inferior_opts())
         .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}", font_size=11))
     )
 
@@ -353,9 +521,9 @@ def grafico_gauge_percentual(titulo: str, fracao: float) -> Gauge:
     workforce_core.consolidacao.utilizacao_hh) - a conversao para
     percentual e so de exibicao, feita aqui, nunca antes.
 
-    Sem titulo interno nem rotulo de nome (ADR-0031: o texto duplicava
-    literalmente o titulo do card KPI do Streamlit logo acima, as duas
-    strings idênticas se sobrepondo na tela) - só o mostrador com o
+    Sem titulo interno nem legenda (ADR-0031/0033: nao e um grafico
+    categorico, nao ha o que legendar, e o texto duplicava literalmente
+    o titulo do card KPI do Streamlit logo acima) - so o mostrador com o
     percentual. O `titulo` continua descrevendo o indicador para quem
     chama (Streamlit exibe isso fora do gráfico)."""
     percentual = round(fracao * 100, 1)
@@ -367,8 +535,9 @@ def grafico_gauge_percentual(titulo: str, fracao: float) -> Gauge:
             min_=0,
             max_=100,
             title_label_opts=opts.LabelOpts(is_show=False),
+            itemstyle_opts=opts.ItemStyleOpts(color=COR_PRODUTIVIDADE),
         )
-        .set_global_opts(title_opts=opts.TitleOpts(is_show=False))
+        .set_global_opts(title_opts=_SEM_TITULO, legend_opts=opts.LegendOpts(is_show=False))
     )
 
 
@@ -383,16 +552,28 @@ def grafico_evolucao_diaria_falhas(linhas: List[LinhaAtendimentoFalha]) -> Line:
     rotulos = [dia.strftime("%d/%m/%Y") for dia in dias_ordenados]
     valores = [_horas(totais_por_dia[dia]) for dia in dias_ordenados]
 
-    return (
-        Line(init_opts=opts.InitOpts(width="100%", height="420px"))
+    grafico = (
+        Line(init_opts=opts.InitOpts(width="100%", height="440px"))
         .add_xaxis(rotulos)
-        .add_yaxis("Duração (horas)", valores, is_smooth=True, color="#f5c400")
+        .add_yaxis(
+            "Duração (horas)",
+            valores,
+            is_smooth=True,
+            symbol_size=7,
+            linestyle_opts=opts.LineStyleOpts(width=3, color=COR_FALHA_INFO),
+            itemstyle_opts=opts.ItemStyleOpts(color=COR_FALHA_INFO),
+            areastyle_opts=opts.AreaStyleOpts(opacity=0.14, color=COR_FALHA_INFO),
+            label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO),
+        )
         .set_global_opts(
-            title_opts=_titulo_opts("Evolução diária de atendimentos de falha"),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30, font_size=11)),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
+            xaxis_opts=_eixo_categoria_opts(rotate=30),
+            yaxis_opts=_eixo_valor_opts("Duração (horas)"),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
         )
     )
+    return _aplicar_grid(grafico, bottom="26%")
 
 
 def grafico_hh_falhas_por_colaborador(linhas: List[LinhaAtendimentoFalha]) -> Bar:
@@ -407,16 +588,20 @@ def grafico_hh_falhas_por_colaborador(linhas: List[LinhaAtendimentoFalha]) -> Ba
     colaboradores = [colaborador for colaborador, _ in itens]
     valores = [_horas(duracao) for _, duracao in itens]
 
-    return (
-        Bar(init_opts=opts.InitOpts(width="100%", height="420px"))
+    grafico = (
+        Bar(init_opts=opts.InitOpts(width="100%", height="480px"))
         .add_xaxis(colaboradores)
-        .add_yaxis("Duração (horas)", valores, color="#f5c400")
+        .add_yaxis("Duração (horas)", valores, color=COR_FALHA_INFO, itemstyle_opts=_ITEM_STYLE_BARRA_VERTICAL)
         .set_global_opts(
-            title_opts=_titulo_opts("HH de atendimento de falha por colaborador"),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=20, font_size=11)),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
+            xaxis_opts=_eixo_categoria_opts(rotate=20),
+            yaxis_opts=_eixo_valor_opts("Duração (horas)"),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
         )
+        .set_series_opts(label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO))
     )
+    return _aplicar_grid(grafico, bottom="24%")
 
 
 def grafico_duracao_media_por_sintoma(duracao_media: Dict[str, timedelta]) -> Tuple[Bar, int]:
@@ -434,15 +619,20 @@ def grafico_duracao_media_por_sintoma(duracao_media: Dict[str, timedelta]) -> Tu
     grafico = (
         Bar(init_opts=opts.InitOpts(width="100%", height=f"{altura_px}px"))
         .add_xaxis(rotulos)
-        .add_yaxis("Duração média (horas)", valores, color="#b3261e")
+        .add_yaxis(
+            "Duração média (horas)", valores, color=COR_FALHA_ALERTA, itemstyle_opts=_ITEM_STYLE_BARRA_HORIZONTAL
+        )
         .reversal_axis()
         .set_global_opts(
-            title_opts=_titulo_opts("Duração média por sintoma"),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
-            yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(font_size=11)),
+            xaxis_opts=_eixo_valor_opts("Duração média (horas)"),
+            yaxis_opts=_eixo_categoria_opts(),
         )
-        .set_series_opts(label_opts=opts.LabelOpts(position="right"))
+        .set_series_opts(label_opts=opts.LabelOpts(position="right", color=_COR_TEXTO_EIXO, font_size=10))
     )
+    grafico = _aplicar_grid(grafico, bottom="10%", top="4%")
     return grafico, altura_px
 
 
@@ -462,15 +652,18 @@ def grafico_reincidencia_ativos(reincidentes: Dict[str, int]) -> Tuple[Bar, int]
     grafico = (
         Bar(init_opts=opts.InitOpts(width="100%", height=f"{altura_px}px"))
         .add_xaxis(ativos)
-        .add_yaxis("Atendimentos", quantidades, color="#b3261e")
+        .add_yaxis("Atendimentos", quantidades, color=COR_FALHA_ALERTA, itemstyle_opts=_ITEM_STYLE_BARRA_HORIZONTAL)
         .reversal_axis()
         .set_global_opts(
-            title_opts=_titulo_opts("Ativos reincidentes (mais de 1 atendimento)"),
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
             tooltip_opts=opts.TooltipOpts(trigger="axis"),
-            yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(font_size=11)),
+            xaxis_opts=_eixo_valor_opts("Atendimentos"),
+            yaxis_opts=_eixo_categoria_opts(),
         )
-        .set_series_opts(label_opts=opts.LabelOpts(position="right"))
+        .set_series_opts(label_opts=opts.LabelOpts(position="right", color=_COR_TEXTO_EIXO, font_size=10))
     )
+    grafico = _aplicar_grid(grafico, bottom="10%", top="4%")
     return grafico, altura_px
 
 
@@ -490,14 +683,19 @@ def grafico_sunburst_ativo_sintoma(agrupado: Dict[str, Dict[str, timedelta]]) ->
     ]
 
     return (
-        Sunburst(init_opts=opts.InitOpts(width="100%", height="520px"))
+        Sunburst(init_opts=opts.InitOpts(width="100%", height="600px"))
         .add(
             "Falhas",
             dados,
-            radius=[0, "90%"],
-            label_opts=opts.LabelOpts(font_size=11),
+            radius=[0, "68%"],
+            center=["50%", "44%"],
+            label_opts=opts.LabelOpts(font_size=11, color=_COR_TEXTO_EIXO),
         )
-        .set_global_opts(title_opts=_titulo_opts("Falhas por ativo e sintoma"))
+        .set_global_opts(
+            title_opts=_SEM_TITULO,
+            legend_opts=_legenda_inferior_opts(),
+            tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}: {c}h"),
+        )
     )
 
 

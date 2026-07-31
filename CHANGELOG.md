@@ -1,5 +1,139 @@
 # Changelog
 
+## [2026-07-31] Reescrita dos gráficos (legenda inferior, sem título interno) e logo em vídeo na sidebar (ADR-0033)
+
+Ver `docs/60_ADR_0033_REESCRITA_GRAFICOS_LEGENDA_INFERIOR_E_LOGO_SIDEBAR.md`
+para a decisão completa. Pedido explícito do responsável do produto:
+"os gráficos estão estranhos, refaça do zero" - substitui as regras
+condicionais do ADR-0032 (título/legenda escondidos caso a caso) por
+uma regra única sem exceção, inspirada no padrão já usado em produção
+no app.py de Gestão_OS (`streamlit_echarts`, legenda sempre embaixo,
+sem título no option).
+
+### Alterado
+- `painel/graficos.py` **reescrito por completo**: todo gráfico usa
+  `title_opts=_SEM_TITULO` (nunca mostra título interno - quem
+  identifica o bloco é o `st.expander` em `painel/telas/*.py`) e
+  `legend_opts=_legenda_inferior_opts()` (legenda sempre visível,
+  horizontal, embaixo do gráfico, com paginação automática) - única
+  exceção é o gauge, que não tem série pra legendar. Todo gráfico
+  cartesiano usa `_aplicar_grid()` com margem generosa o bastante pra
+  caber rótulo de eixo rotacionado **e** a legenda embaixo, sem cortar
+  nenhum dos dois.
+- Efeito colateral positivo: mover a legenda do scatter "Duração média
+  x frequência por motivo" da lateral pra baixo resolve de graça o bug
+  do ADR-0032 (colisão com os pontos de frequência baixa) - uma
+  legenda horizontal embaixo nunca disputa espaço com o gráfico. O
+  `left="30%"` (correção pontual anterior) foi removido.
+- `painel/telas/dashboard.py`, `painel/telas/falhas.py`: alturas dos
+  `components.html` ajustadas ao novo layout; `st.caption(...)`
+  adicionado acima de cada gráfico nos expanders que dividem o bloco
+  entre dois gráficos (ex.: ranking + donut de sintoma) - a forma de
+  diferenciar os dois sem usar título interno no ECharts.
+
+### Adicionado
+- Logo em vídeo do produto (`Logo - SGO Workforce 1x1.mp4`, fornecido
+  pelo responsável do produto) na sidebar do painel
+  (`painel/app.py`, `painel/assets/logo_sgo_workforce.mp4`) - abaixo do
+  logo corporativo MRS já existente (`st.logo`), via `st.sidebar.video`
+  (autoplay, loop, mudo). `st.video` em vez de HTML cru em base64: o
+  Streamlit reexecuta o script inteiro a cada interação de filtro, e o
+  arquivo de mídia servido pelo endpoint dedicado do Streamlit é
+  cacheado pelo navegador - um vídeo embutido em base64 seria reenviado
+  por inteiro (~3.8MB) a cada rerun.
+
+### Validação
+- `python -m py_compile` nos 4 módulos tocados: OK.
+- 16 funções de gráfico renderizadas com dado realista e inspecionadas
+  via `dump_options()`: título sempre oculto, legenda sempre visível
+  embaixo (exceto gauge), grid com `containLabel=True` sem exceção.
+- `pytest` completo: 299 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log - confirma que o launcher (incluindo o novo vídeo na
+  sidebar) executa sem erro em runtime.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0033, seção "Validação NÃO realizada").
+
+## [2026-07-31] Revisão premium dos gráficos e abas recolhíveis (ADR-0032)
+
+Ver `docs/59_ADR_0032_REVISAO_PREMIUM_GRAFICOS_E_ABAS_RECOLHIVEIS.md`
+para a decisão completa. Pedido explícito do responsável do produto após
+relatar (com captura de tela real) o eixo X cortado e um novo caso de
+legenda sobreposta ao título no gráfico "HH por categoria", mais o
+pedido de agrupar cada bloco de gráfico numa aba recolhível e revisar o
+design de todos os gráficos.
+
+### Corrigido
+- **Sobreposição título/legenda (bug real, dado de produção)**: 12
+  funções de gráfico de série única (`grafico_hh_por_categoria`,
+  `grafico_evolucao_diaria`, `grafico_hh_por_motivo`,
+  `grafico_utilizacao_por_colaborador`,
+  `grafico_sankey_colaborador_categoria`,
+  `grafico_ranking_duracao_falhas`, `grafico_evolucao_diaria_falhas`,
+  `grafico_hh_falhas_por_colaborador`,
+  `grafico_duracao_media_por_sintoma`, `grafico_reincidencia_ativos`,
+  `grafico_sunburst_ativo_sintoma`, `grafico_gauge_percentual`) nunca
+  passavam `legend_opts` - o pyecharts registra uma legenda por padrão
+  mesmo assim, e sem posição explícita o ECharts centraliza essa legenda
+  no topo, exatamente sobre o título. Nova `_legenda_oculta_opts()`
+  aplicada em todas.
+- **Eixo X cortado na base**: nenhum gráfico usava `containLabel` na
+  área de plotagem - rótulo rotacionado com nome longo estourava a
+  margem reservada e era cortado na borda do canvas. Nova
+  `_aplicar_grid()` (`is_contain_label=True` + margem generosa) aplicada
+  em todo gráfico cartesiano.
+- **Descoberta de API**: o pyecharts 2.1.0 (versão instalada) removeu o
+  parâmetro `grid_opts` de `set_global_opts` - `_aplicar_grid` escreve
+  direto em `grafico.options["grid"]`, mesmo mecanismo que o próprio
+  pyecharts usa para `xAxis`/`yAxis`.
+
+### Adicionado
+- `painel/telas/dashboard.py`, `painel/telas/falhas.py`: cada bloco de
+  gráfico agora fica dentro de `st.expander(titulo, expanded=True)` em
+  vez de `st.subheader` solto - abas recolhíveis, nada escondido por
+  padrão.
+- `painel/graficos.py`: paleta unificada (`COR_PRODUTIVIDADE`,
+  `COR_FALHA_INFO`, `COR_FALHA_ALERTA`) alinhada às cores de marca dos
+  cards KPI, eixos com estilo consistente
+  (`_eixo_valor_opts`/`_eixo_categoria_opts`), nome no eixo de valor nos
+  gráficos que perderam a legenda, cantos arredondados nas barras, área
+  sob a linha nos gráficos de evolução diária.
+
+### Corrigido (mesmo dia, após relato adicional)
+- **Legenda lateral do scatter "Duração média x frequência por motivo"
+  colidindo com os pontos**: `_aplicar_grid` fixava a margem esquerda em
+  2% para todo gráfico, mas esse scatter usa uma série por motivo (até
+  ~19) na legenda lateral, que precisa de bem mais espaço horizontal -
+  os pontos de frequência baixa ficavam desenhados por baixo da lista de
+  nomes. `_aplicar_grid` ganhou parâmetro `left` configurável
+  (`left="30%"` nesse gráfico); o gráfico também saiu da coluna de
+  metade da tela e ganhou expander próprio em largura cheia.
+- **Título do gráfico duplicando o cabeçalho do expander**: agora que
+  todo bloco tem `st.expander(titulo, ...)` visível acima (seção
+  "Adicionado"), o título interno do ECharts repetia o mesmo texto
+  quando o gráfico é o único do bloco (relatado com captura de tela real
+  no gráfico "HH por motivo/justificativa"). `_titulo_opts` ganhou
+  `mostrar: bool = True`, e 8 funções de gráfico ganharam
+  `mostrar_titulo: bool = True` repassado a ela. `painel/telas/
+  dashboard.py`/`falhas.py` passam `mostrar_titulo=False` só nos
+  expanders com um único gráfico - nos que dividem o bloco entre dois
+  gráficos (ex.: ranking + donut de sintoma), o título interno continua
+  a única forma de diferenciar os dois.
+
+### Validação
+- `python -m py_compile` nos módulos tocados: OK.
+- 13 funções de gráfico renderizadas com dado realista (19 categorias,
+  nomes longos) e inspecionadas via `dump_options()`: legenda oculta nos
+  gráficos de série única, grid com `containLabel=True`, sem exceção;
+  grid do scatter confirmado com `left=30%`; toggle `mostrar_titulo`
+  confirmado (`title[0].show` False/True conforme esperado) nas 8
+  funções que o recebem.
+- `pytest` completo: 299 passed, sem regressão (rodado de novo após cada
+  correção - scatter e depois título duplicado).
+- Teste manual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium instalado (ver ADR-0032, seção "Validação NÃO
+  realizada").
+
 ## [2026-07-31] Dashboard completo de produtividade/execução e detalhamento de falhas (ADR-0031)
 
 Ver `docs/58_ADR_0031_DASHBOARD_COMPLETO_PRODUTIVIDADE_FALHAS.md` para a
