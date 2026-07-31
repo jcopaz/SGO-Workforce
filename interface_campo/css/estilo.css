@@ -280,3 +280,9 @@ body {
   color: #7c8a96;
   padding: 1rem;
 }
+
+.rodape-versao {
+  margin: 0.25rem 0 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-07-31] Número de versão visível no rodapé da interface de campo
+
+### Adicionado
+- `interface_campo/index.html`: rodapé agora mostra "Versão vNN",
+  sincronizado manualmente com `CACHE_VERSAO` de `service-worker.js` a
+  cada mudança. Motivo: dois relatos seguidos de "a correção não
+  apareceu" que na verdade eram deploy/cache do navegador ainda não
+  atualizado (código já estava correto no repositório nos dois casos,
+  confirmado por `git log`/`grep`) — sem um número visível, não dava pra
+  distinguir rapidamente "ainda não chegou" de "bug novo". `CACHE_VERSAO`
+  incrementada (`v16` → `v17`).
+
 ## [2026-07-31] "Sincronizar agora" só aparece com a jornada encerrada
 
 ### Alterado
