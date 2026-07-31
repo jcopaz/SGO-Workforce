@@ -54,5 +54,23 @@
     tempos padrão por tipo de atividade, etc.) antes de qualquer tela
     mostrar Performance. A fórmula já está pronta em
     `workforce_core.consolidacao.performance`.
+15. Revisar classificação de `EE16` "Desmontar atividade" — hoje
+    `IMPRODUTIVA` em `catalogo.py` (validado no ADR-0023), mas o manual
+    original do OptJob (`Referencias/Códigos de Pausas com Figuras
+    produção_Via v6`, achado em 2026-07-30 — ver
+    `docs/21_APRENDIZADOS_HERDADOS_SGO.md`) classifica "Desmontar
+    atividade" como "Produtiva Não Rentável", categoria mais próxima de
+    produtivo do que de improdutivo. Pode ser um mismatch real ou uma
+    reclassificação intencional já feita no ADR-0023 — só o responsável
+    do produto pode confirmar qual das duas.
+16. Adotar (ou não) uma quarta categoria em `ClassificacaoHH` equivalente
+    a "Produtiva Não Rentável" do OptJob original — cobriria deslocamento,
+    preparar/desmontar atividade, carregar/descarregar veículo, SMS,
+    manutenção não planejada e treinamento, hoje todos simplesmente
+    `PRODUTIVA` no Workforce. Sem essa distinção, o indicador de
+    Utilização HH (ADR-0027) mistura produtivo-rentável com
+    produtivo-não-rentável no mesmo numerador — pode ou não ser o
+    resultado desejado; decisão de negócio do responsável do produto, não
+    inferida pelo agente.
 
 Nenhuma decisão deve ser inventada pelo agente. Registrar ADR após validação operacional.

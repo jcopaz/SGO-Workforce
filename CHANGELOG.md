@@ -1,5 +1,33 @@
 # Changelog
 
+## [2026-07-30] Aprendizados dos manuais originais do OptJob
+
+Leitura completa dos 27 PDFs em `Referencias/` (procedimentos
+operacionais do OptJob MF/Via Permanente, pedido explícito do
+responsável do produto). Só documentação — nenhum código alterado.
+
+### Adicionado
+- `docs/21_APRENDIZADOS_HERDADOS_SGO.md`: nova seção com achados
+  confirmados por texto real dos manuais — motivação histórica das
+  Regras de Ouro nº 2 e nº 5 (o OptJob desktop tinha exclusão real de
+  apontamento e digitação manual de HH via "Produção Complementar"),
+  sincronização manual/esquecível (já mitigada no Workforce por sync
+  automático), a taxonomia original de 5 níveis de "Tipo de Hora" (o
+  Workforce tem 4, sem "Produtiva Não Rentável"), a proveniência
+  provável (mas não confirmada) dos códigos EE01-EE23, uma ambiguidade
+  de sigla "EE" a evitar, e a diferença deliberada de apontar por
+  indivíduo (Workforce) vs. por equipe (OptJob).
+- `docs/23_DECISOES_PENDENTES.md`: itens 15 e 16 — revisar a
+  classificação de `EE16` "Desmontar atividade" (possível mismatch com
+  o original) e se vale adotar uma quarta categoria "Produtiva Não
+  Rentável" em `ClassificacaoHH`. Nenhuma das duas foi decidida ou
+  aplicada no código — são decisões de negócio do responsável do
+  produto, não inferência do agente.
+- Confirmado nos manuais: **nenhuma fórmula de "Utilização de HH" ou
+  "Performance" foi encontrada** nos procedimentos operacionais do
+  OptJob — reforça a abordagem já tomada no ADR-0027 (fórmulas puras,
+  sem nenhum dado fabricado).
+
 ## [2026-07-30] Indicadores de Utilização HH e Performance (ADR-0027)
 
 Ver `docs/54_ADR_0027_INDICADORES_UTILIZACAO_HH_E_PERFORMANCE.md` para a
