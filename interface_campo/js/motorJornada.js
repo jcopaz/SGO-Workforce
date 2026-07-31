@@ -44,7 +44,26 @@ function validarDadosFalhaCompletos(dados) {
   }
 }
 
+// Retrocompatibilidade com jornadas gravadas no IndexedDB antes de
+// eventosSecundarios (ADR-0024) ou ordensServico (ADR-0025) existirem no
+// formato - mesmo principio ja aplicado no lado Python
+// (workforce_storage/serializacao.py, sempre `.get(..., [])`). Sem isso,
+// reabrir o app com uma jornada antiga ja persistida no navegador quebra
+// aPartirDe/identificarEstadoAtivo com "Cannot read properties of
+// undefined (reading 'filter')" - bug real de producao encontrado em
+// 2026-07-31 (usuario testando em um navegador com jornada previamente
+// salva sem esses campos).
+function normalizarCamposRetrocompativeis(jornada) {
+  jornada.atividades = jornada.atividades ?? [];
+  jornada.eventosSecundarios = jornada.eventosSecundarios ?? [];
+  for (const atividade of jornada.atividades) {
+    atividade.pausas = atividade.pausas ?? [];
+    atividade.ordensServico = atividade.ordensServico ?? [];
+  }
+}
+
 export function identificarEstadoAtivo(jornada) {
+  normalizarCamposRetrocompativeis(jornada);
   const atividadesEmAndamento = jornada.atividades.filter(
     (a) => a.estado === EstadoAtividade.ATIVA || a.estado === EstadoAtividade.PAUSADA
   );

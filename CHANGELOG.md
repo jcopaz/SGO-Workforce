@@ -1,5 +1,35 @@
 # Changelog
 
+## [2026-07-31] Corrige crash ao reabrir jornada antiga (bug real relatado pelo usuário)
+
+### Corrigido
+- **Bug real de produção**: `interface_campo/js/motorJornada.js::identificarEstadoAtivo`
+  (chamada por `MotorJornada.aPartirDe`, usada na recuperação de estado ao
+  reabrir o app) quebrava com `Cannot read properties of undefined
+  (reading 'filter')` sempre que a jornada já persistida no IndexedDB do
+  navegador tinha sido gravada **antes** de `eventosSecundarios`
+  (ADR-0024) ou `ordensServico` (ADR-0025) existirem no formato — o app
+  ficava travado em "Carregando..." com o erro cru exibido na tela,
+  impossível de usar. O lado Python (`workforce_storage/serializacao.py`)
+  já tinha essa retrocompatibilidade desde sempre (`.get(..., [])`); o
+  lado JS nunca ganhou o equivalente.
+- `normalizarCamposRetrocompativeis` (nova função interna): preenche
+  `jornada.eventosSecundarios`/`atividade.ordensServico`/`atividade.pausas`
+  ausentes com `[]` antes de qualquer leitura, chamada no início de
+  `identificarEstadoAtivo` — mesmo princípio do lado Python.
+- `interface_campo/service-worker.js`: `CACHE_VERSAO` incrementada
+  (`v13` → `v14`) — sem isso a correção não chega ao navegador de quem
+  já tem o app instalado/cacheado.
+- `tests/js/motorJornada.test.mjs`: novo teste reproduzindo exatamente o
+  formato antigo (jornada sem `eventosSecundarios`, atividade sem
+  `ordensServico`) e confirmando que `aPartirDe` recupera normalmente em
+  vez de lançar exceção.
+
+### Testes
+- `node --check` em `motorJornada.js`/`service-worker.js`: OK.
+- `node --test tests/js/*.test.mjs`: 105/105 (era 104).
+- `pytest`: 275/275 (inalterado, mudança só no lado JS).
+
 ## [2026-07-31] Corrige aviso desatualizado na interface de campo
 
 ### Corrigido

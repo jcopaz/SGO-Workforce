@@ -243,6 +243,42 @@ test("recuperacao de estado: MotorJornada.aPartirDe reconstroi ativos corretamen
   assert.equal(calculo.duracaoPausasAtividade(atividade), 20 * 60000);
 });
 
+// Bug real de producao (2026-07-31): uma jornada gravada no IndexedDB
+// antes de eventosSecundarios (ADR-0024)/ordensServico (ADR-0025)
+// existirem no formato nao tem esses campos - aPartirDe quebrava com
+// "Cannot read properties of undefined (reading 'filter')" ao reabrir o
+// app. jornada_de_dict (lado Python) ja tinha essa retrocompatibilidade
+// desde sempre (`.get(..., [])`); o lado JS nao tinha o equivalente.
+test("recuperacao de estado: aPartirDe tolera jornada antiga sem eventosSecundarios/ordensServico", () => {
+  const jornadaAntiga = {
+    id: "jornada-formato-antigo",
+    colaboradorMatricula: "12345",
+    inicio: dt(8, 0),
+    fim: null,
+    estado: "ABERTA",
+    atividades: [
+      {
+        id: "atividade-1",
+        inicio: dt(8, 10),
+        fim: null,
+        estado: "ATIVA",
+        pausas: [],
+        // ordensServico ausente de proposito (formato anterior ao ADR-0025).
+      },
+    ],
+    // eventosSecundarios ausente de proposito (formato anterior ao ADR-0024).
+  };
+
+  const recuperado = MotorJornada.aPartirDe(jornadaAntiga);
+
+  assert.equal(recuperado._atividadeAtiva.id, "atividade-1");
+  assert.deepEqual(recuperado.jornada.eventosSecundarios, []);
+  assert.deepEqual(recuperado.jornada.atividades[0].ordensServico, []);
+  // A jornada recuperada continua utilizavel normalmente depois do reparo.
+  recuperado.encerrarAtividade(dt(10, 0));
+  recuperado.encerrarJornada(dt(10, 0));
+});
+
 // ----------------------------------------------------------------------
 // Atendimento de falha (ADR-0021, espelha tests/test_atendimento_falha.py)
 // ----------------------------------------------------------------------
