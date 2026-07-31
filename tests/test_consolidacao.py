@@ -223,9 +223,12 @@ def test_resumo_por_classificacao_hh_usa_classificacao_real_do_catalogo():
 
     resumo = consolidacao.resumo_por_classificacao_hh(jornada, catalogo)
 
-    # EE12 (30min) + EE17 (2h50, atividade liquida apos descontar a pausa)
-    # + EE21 (30min) = 3h50 produtiva.
-    assert resumo[ClassificacaoHH.PRODUTIVA] == timedelta(hours=3, minutes=50)
+    # EE17 (2h50, atividade liquida apos descontar a pausa) + EE21 (30min)
+    # = 3h20 produtiva (rentavel - ADR-0028 moveu EE12 para
+    # PRODUTIVA_NAO_RENTAVEL, EE17/EE21 continuam PRODUTIVA).
+    assert resumo[ClassificacaoHH.PRODUTIVA] == timedelta(hours=3, minutes=20)
+    # EE12 (30min de deslocamento) -> produtiva nao rentavel.
+    assert resumo[ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL] == timedelta(minutes=30)
     # EE02 (10min de pausa) -> nao computavel.
     assert resumo[ClassificacaoHH.NAO_COMPUTAVEL] == timedelta(minutes=10)
     # reconcilia com a jornada bruta inteira (4h, sem nenhuma lacuna nesta linha do tempo).
@@ -236,7 +239,8 @@ def test_resumo_consolidado_por_classificacao_hh_com_catalogo_real():
     jornada = _jornada_relatorio_1()
     resumo = consolidacao.resumo_consolidado([jornada], catalogo_relatorio_1_manutencao())
 
-    assert resumo.por_classificacao_hh[ClassificacaoHH.PRODUTIVA] == timedelta(hours=3, minutes=50)
+    assert resumo.por_classificacao_hh[ClassificacaoHH.PRODUTIVA] == timedelta(hours=3, minutes=20)
+    assert resumo.por_classificacao_hh[ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL] == timedelta(minutes=30)
     assert resumo.por_classificacao_hh[ClassificacaoHH.NAO_COMPUTAVEL] == timedelta(minutes=10)
 
 
@@ -252,8 +256,9 @@ def test_utilizacao_hh_com_jornada_relatorio_1():
 
     fracao = consolidacao.utilizacao_hh(horas_produtivas, resumo.jornada_bruta_total)
 
-    # 3h50 produtivas / 4h totais.
-    assert fracao == pytest.approx(timedelta(hours=3, minutes=50) / timedelta(hours=4))
+    # 3h20 produtivas (rentaveis) / 4h totais - o deslocamento (EE12) agora
+    # e PRODUTIVA_NAO_RENTAVEL e nao entra mais neste numerador (ADR-0028).
+    assert fracao == pytest.approx(timedelta(hours=3, minutes=20) / timedelta(hours=4))
 
 
 def test_utilizacao_hh_zero_horas_totais_retorna_none_sem_dividir_por_zero():

@@ -15,6 +15,7 @@ from dados import (
     formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
+    horas_produtiva_nao_rentavel_do_resumo,
     montar_linhas_eventos,
     montar_resumo,
     utilizacao_hh_do_resumo,
@@ -123,6 +124,18 @@ def test_utilizacao_hh_do_resumo_com_dados_de_exemplo(tmp_path):
 def test_utilizacao_hh_do_resumo_sem_jornada_bruta_retorna_none():
     resumo = ResumoConsolidado()  # jornada_bruta_total == timedelta() (padrao)
     assert utilizacao_hh_do_resumo(resumo) is None
+
+
+def test_horas_produtiva_nao_rentavel_do_resumo_com_dados_de_exemplo(tmp_path):
+    # gerar_jornadas_exemplo usa DESLOCAMENTO_TESTE (motivo de teste,
+    # NAO_DEFINIDO) para o evento secundario, entao nao cai em
+    # PRODUTIVA_NAO_RENTAVEL - o valor deve ser zero, mas nunca ausente
+    # (dict.get com default).
+    gerar_jornadas_exemplo(tmp_path, quantidade=1)
+    jornadas, _ = carregar_jornadas(tmp_path)
+    resumo = montar_resumo(jornadas)
+
+    assert horas_produtiva_nao_rentavel_do_resumo(resumo) == timedelta()
 
 
 def test_carregar_jornadas_reporta_arquivo_corrompido_sem_apagar(tmp_path):

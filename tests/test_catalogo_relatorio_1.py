@@ -26,7 +26,7 @@ def test_catalogo_relatorio_1_tem_23_codigos():
     assert {"EE01", "EE17", "EE21", "EE23"} <= codigos
 
 
-def test_catalogo_relatorio_1_classificacao_hh_validada(): # ADR-0023
+def test_catalogo_relatorio_1_classificacao_hh_validada(): # ADR-0023, reclassificado no ADR-0028
     catalogo = catalogo_relatorio_1_manutencao()
     esperado = {
         "EE01": ClassificacaoHH.IMPRODUTIVA,
@@ -39,18 +39,18 @@ def test_catalogo_relatorio_1_classificacao_hh_validada(): # ADR-0023
         "EE08": ClassificacaoHH.IMPRODUTIVA,
         "EE09": ClassificacaoHH.IMPRODUTIVA,
         "EE10": ClassificacaoHH.IMPRODUTIVA,
-        "EE11": ClassificacaoHH.PRODUTIVA,
-        "EE12": ClassificacaoHH.PRODUTIVA,
-        "EE13": ClassificacaoHH.PRODUTIVA,
-        "EE14": ClassificacaoHH.PRODUTIVA,
-        "EE15": ClassificacaoHH.PRODUTIVA,
-        "EE16": ClassificacaoHH.IMPRODUTIVA,
+        "EE11": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE12": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE13": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE14": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE15": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE16": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
         "EE17": ClassificacaoHH.PRODUTIVA,
-        "EE18": ClassificacaoHH.PRODUTIVA,
-        "EE19": ClassificacaoHH.PRODUTIVA,
-        "EE20": ClassificacaoHH.PRODUTIVA,
+        "EE18": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE19": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
+        "EE20": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
         "EE21": ClassificacaoHH.PRODUTIVA,
-        "EE22": ClassificacaoHH.PRODUTIVA,
+        "EE22": ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL,
         "EE23": ClassificacaoHH.PRODUTIVA,
     }
     for codigo, classificacao in esperado.items():

@@ -30,6 +30,7 @@ from dados import (
     formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
+    horas_produtiva_nao_rentavel_do_resumo,
     montar_linhas_eventos,
     montar_resumo,
     utilizacao_hh_do_resumo,
@@ -293,8 +294,9 @@ if not linhas_filtradas:
 
 por_categoria_filtrado = agrupar_duracao_por_categoria(linhas_filtradas)
 fracao_utilizacao_hh = utilizacao_hh_do_resumo(resumo)
+horas_produtiva_nao_rentavel = horas_produtiva_nao_rentavel_do_resumo(resumo)
 
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 with c1:
     st.markdown(
         _cartao_kpi("Jornadas encerradas", str(resumo.quantidade_jornadas), "No período filtrado", "blue"),
@@ -324,8 +326,18 @@ with c5:
         _cartao_kpi(
             "Utilização HH",
             f"{fracao_utilizacao_hh * 100:.1f}%" if fracao_utilizacao_hh is not None else "--",
-            "Produtivo / Total (ADR-0027)",
+            "Rentável / Total (ADR-0027)",
             "blue",
+        ),
+        unsafe_allow_html=True,
+    )
+with c6:
+    st.markdown(
+        _cartao_kpi(
+            "HH produtivo não rentável",
+            formatar_horas(horas_produtiva_nao_rentavel),
+            "Deslocamento, preparo, treinamento etc. (ADR-0028)",
+            "gray",
         ),
         unsafe_allow_html=True,
     )
@@ -338,7 +350,7 @@ with col_gauge:
     else:
         components.html(
             renderizar_embutido(
-                grafico_gauge_percentual("Utilização HH (Produtivo / Total)", fracao_utilizacao_hh)
+                grafico_gauge_percentual("Utilização HH (Produtivo rentável / Total)", fracao_utilizacao_hh)
             ),
             height=360,
             scrolling=False,

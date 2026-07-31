@@ -105,12 +105,26 @@ def montar_linhas_eventos(
 def utilizacao_hh_do_resumo(resumo: ResumoConsolidado) -> Optional[float]:
     """Utilizacao HH (ADR-0027) = Horas Produtivas / Horas Totais, a partir
     de um ResumoConsolidado ja calculado (montar_resumo). Horas Produtivas
-    vem de por_classificacao_hh[PRODUTIVA] (zero se nenhum evento
-    produtivo no filtro); Horas Totais e jornada_bruta_total. Retorna
-    None quando jornada_bruta_total e zero (nenhuma jornada encerrada
-    valida no filtro) - nunca ZeroDivisionError."""
+    vem de por_classificacao_hh[PRODUTIVA] - desde o ADR-0028, PRODUTIVA e
+    especificamente "produtiva rentavel" (ex.: EE17/EE21), separada de
+    PRODUTIVA_NAO_RENTAVEL (deslocamento, preparar/desmontar atividade
+    etc.) - esta funcao NAO soma as duas, de proposito (ver
+    horas_produtiva_nao_rentavel_do_resumo para o outro numero). Horas
+    Totais e jornada_bruta_total. Retorna None quando jornada_bruta_total
+    e zero (nenhuma jornada encerrada valida no filtro) - nunca
+    ZeroDivisionError."""
     horas_produtivas = resumo.por_classificacao_hh.get(ClassificacaoHH.PRODUTIVA, timedelta())
     return utilizacao_hh(horas_produtivas, resumo.jornada_bruta_total)
+
+
+def horas_produtiva_nao_rentavel_do_resumo(resumo: ResumoConsolidado) -> timedelta:
+    """Horas classificadas como PRODUTIVA_NAO_RENTAVEL (ADR-0028) num
+    ResumoConsolidado ja calculado - deslocamento, preparar/desmontar
+    atividade, carregar/descarregar veiculo, SMS, treinamento e consulta a
+    documentacao tecnica (EE11-EE16, EE18-EE20, EE22). Exibida ao lado de
+    Utilizacao HH no painel para o gestor ver as duas fatias do tempo
+    produtivo separadas, nunca misturadas."""
+    return resumo.por_classificacao_hh.get(ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, timedelta())
 
 
 def agrupar_duracao_por_categoria(linhas: List[LinhaEvento]) -> Dict[Optional[Categoria], timedelta]:

@@ -1,5 +1,36 @@
 # Changelog
 
+## [2026-07-31] Reintrodução de "Produtiva Não Rentável" (ADR-0028)
+
+Ver `docs/55_ADR_0028_PRODUTIVA_NAO_RENTAVEL.md` para a decisão completa.
+Decisão do responsável do produto ("Pode classificar como Produtiva Não
+Rentável"), respondendo aos itens 15/16 registrados na sessão anterior.
+
+### Adicionado
+- `src/workforce_core/catalogo.py`: novo valor `ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL`.
+  `EE11`, `EE12`, `EE13`, `EE14`, `EE15`, `EE16`, `EE18`, `EE19`, `EE20`,
+  `EE22` reclassificados de `PRODUTIVA`/`IMPRODUTIVA` para
+  `PRODUTIVA_NAO_RENTAVEL` — mesma correspondência da tabela original do
+  OptJob (consulta a documentação técnica, deslocamento, preparar/
+  desmontar atividade, carregar/descarregar veículo, SMS, treinamento).
+  `EE17`/`EE21` continuam `PRODUTIVA` (deliberado, ver ADR-0028 e novo
+  item 17 em `docs/23_DECISOES_PENDENTES.md`).
+- `painel/dados.py::horas_produtiva_nao_rentavel_do_resumo`: novo card KPI
+  "HH produtivo não rentável" em `painel/telas/dashboard.py` (6ª coluna),
+  ao lado de Utilização HH — o gestor vê as duas fatias sempre separadas.
+- `docs/23_DECISOES_PENDENTES.md`: itens 15/16 marcados resolvidos; novo
+  item 17 (se `EE21` deveria virar `PRODUTIVA_NAO_RENTAVEL` também).
+
+### Alterado
+- **Comportamento do indicador de Utilização HH muda**: "Horas Produtivas"
+  no numerador agora significa só produtivo *rentável* (`EE17`/`EE21`) —
+  antes incluía também deslocamento/preparação/etc. O percentual exibido
+  no painel tende a cair depois desta mudança; é intencional, não um bug.
+
+### Testes
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest`: 265/265 (era 264).
+
 ## [2026-07-30] Aprendizados dos manuais originais do OptJob
 
 Leitura completa dos 27 PDFs em `Referencias/` (procedimentos

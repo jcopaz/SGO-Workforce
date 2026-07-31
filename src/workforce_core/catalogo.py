@@ -79,6 +79,14 @@ class ClassificacaoHH(str, Enum):
     """
 
     PRODUTIVA = "PRODUTIVA"
+    # Tempo de manutencao executavel mas que nao gera faturamento direto
+    # (deslocamento, preparar/desmontar atividade, carregar/descarregar
+    # veiculo, SMS, treinamento, consulta a documentacao tecnica) -
+    # distincao herdada do OptJob original ("Horas Presentes Produtivas
+    # Nao Rentaveis", ver docs/21_APRENDIZADOS_HERDADOS_SGO.md) e
+    # reintroduzida por decisao do responsavel pelo produto em 2026-07-31
+    # (docs/55_ADR_0028_PRODUTIVA_NAO_RENTAVEL.md).
+    PRODUTIVA_NAO_RENTAVEL = "PRODUTIVA_NAO_RENTAVEL"
     IMPRODUTIVA = "IMPRODUTIVA"
     NAO_COMPUTAVEL = "NAO_COMPUTAVEL"
     NAO_DEFINIDO = "NAO_DEFINIDO"
@@ -245,6 +253,22 @@ def catalogo_padrao() -> CatalogoMotivos:
 # como evento_secundario sem atribuir um tipo; classificado como APOIO por
 # decisao do responsavel pelo produto em 2026-07-28 (conversa registrada
 # no incremento de Evento Secundario na interface de campo).
+#
+# Reclassificacao de 2026-07-31 (ADR-0028): EE11-EE16, EE18-EE20 e EE22
+# passam de PRODUTIVA para PRODUTIVA_NAO_RENTAVEL - decisao do responsavel
+# pelo produto ao revisar a taxonomia original do OptJob (5 niveis, ver
+# docs/21_APRENDIZADOS_HERDADOS_SGO.md), que ja distinguia esses mesmos
+# codigos (consulta a documentacao tecnica, deslocamento, preparar/
+# desmontar atividade, carregar/descarregar veiculo, SMS, treinamento)
+# como produtivos mas nao rentaveis. Resolve tambem o mismatch apontado
+# para EE16 (estava IMPRODUTIVA, o original classificava como produtivo
+# nao rentavel). EE17 (Manutencao Programada) e EE21 (Atendimento de
+# Falha) permanecem PRODUTIVA - correspondem a "Ordem de Servico" no
+# original, a unica categoria plenamente rentavel da tabela OptJob;
+# EE21/"manutencao nao planejada" tem uma leitura razoavel como produtivo
+# nao rentavel no original, mas a correspondencia nao e inequivoca o
+# suficiente para mudar sem confirmacao explicita - fica registrado como
+# pergunta em aberto em docs/23_DECISOES_PENDENTES.md.
 _RELATORIO_1_ENTRADAS = [
     ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
     ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL, None),
@@ -256,18 +280,18 @@ _RELATORIO_1_ENTRADAS = [
     ("EE08", "Serviço interno da coordenação", Categoria.SERVICO_INTERNO_COORDENACAO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
     ("EE09", "Trabalho não distribuído", Categoria.TRABALHO_NAO_DISTRIBUIDO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
     ("EE10", "Aguardando sequência de serviço", Categoria.AGUARDANDO_SEQUENCIA_SERVICO, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.ESPERA),
-    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA, None),
-    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.DESLOCAMENTO),
-    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.DESLOCAMENTO),
-    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.DESLOCAMENTO),
-    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.APOIO),
-    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
+    ("EE11", "Consulta à documentação técnica", Categoria.CONSULTA_DOCUMENTACAO_TECNICA, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
+    ("EE12", "Deslocamento rodoviário", Categoria.DESLOCAMENTO_RODOVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.DESLOCAMENTO),
+    ("EE13", "Deslocamento ferroviário", Categoria.DESLOCAMENTO_FERROVIARIO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.DESLOCAMENTO),
+    ("EE14", "Deslocamento a pé", Categoria.DESLOCAMENTO_A_PE, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.DESLOCAMENTO),
+    ("EE15", "Preparar atividade", Categoria.PREPARAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
+    ("EE16", "Desmontar atividade", Categoria.DESMONTAR_ATIVIDADE, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE17", "Manutenção Programada", Categoria.ATIVIDADE_PLANEJADA, "atividade", ClassificacaoHH.PRODUTIVA, None),
-    ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.APOIO),
-    ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA, TipoEventoSecundario.APOIO),
-    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA, None),
+    ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
+    ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
+    ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
     ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA, None),
-    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA, None),
+    ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
     ("EE23", "Manutenção Programada Não Concluída", Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA, "atividade", ClassificacaoHH.PRODUTIVA, None),
 ]
 
