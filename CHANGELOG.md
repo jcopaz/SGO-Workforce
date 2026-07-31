@@ -1,5 +1,112 @@
 # Changelog
 
+## [2026-07-30] Indicadores de Utilização HH e Performance (ADR-0027)
+
+Ver `docs/54_ADR_0027_INDICADORES_UTILIZACAO_HH_E_PERFORMANCE.md` para a
+decisão completa.
+
+### Adicionado
+- `src/workforce_core/consolidacao.py`: `resumo_por_classificacao_hh`
+  (agrega HH de uma jornada por `ClassificacaoHH`, mesmo padrão de
+  `resumo_por_categoria`); `ResumoConsolidado.por_classificacao_hh`
+  (agregado multi-jornada, populado em `resumo_consolidado`);
+  `utilizacao_hh(horas_produtivas, horas_totais)` = Horas Produtivas /
+  Horas Totais; `performance(tempo_planejado, tempo_real)` = Tempo
+  Planejado / Tempo Real — ambas funções puras, sem fonte de dado
+  embutida, retornam `None` (nunca `ZeroDivisionError`) quando o
+  denominador é zero.
+- `painel/dados.py::utilizacao_hh_do_resumo(resumo)`: conveniência que
+  usa `por_classificacao_hh[PRODUTIVA]` e `jornada_bruta_total` do
+  `ResumoConsolidado` já calculado pelo resto do painel.
+- `painel/graficos.py::grafico_gauge_percentual`: primeiro gráfico gauge
+  do painel (tipo já recomendado em `docs/12_DASHBOARDS_ECHARTS.md` para
+  capacidade/utilização, nunca usado até este incremento).
+- `painel/telas/dashboard.py`: 5º card KPI "Utilização HH" e uma nova
+  seção "Indicadores" com o gauge; ao lado, um aviso explícito de que
+  Performance ainda não tem tela (depende de fonte de tempo planejado,
+  ver decisão pendente abaixo) em vez de simplesmente omitir o assunto.
+- `docs/23_DECISOES_PENDENTES.md`: novo item 14, fonte de tempo
+  planejado por atividade/OS para o indicador de Performance — decisão
+  de negócio pendente, não inventada.
+- `docs/07_MOTOR_EVENTOS_E_HH.md` e `docs/12_DASHBOARDS_ECHARTS.md`
+  atualizados com os dois indicadores.
+- `tests/test_consolidacao.py` (8 testes novos): classificação real via
+  catálogo do Relatório 1 (EE12/EE02/EE17/EE21) reconciliando com a
+  jornada bruta, agregação multi-jornada, e as duas fórmulas com guarda
+  de divisão por zero.
+- `tests/test_painel.py` (4 testes novos): `por_classificacao_hh`/
+  `utilizacao_hh_do_resumo` com dados de exemplo, `None` sem HH bruto, e
+  o gauge renderizando HTML autocontido sem CDN.
+
+### Testes
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest`: 264/264 (era 252, ver entrada anterior deste changelog).
+
+### Riscos
+- Nenhuma meta/limiar de "boa" Utilização HH foi definida — o card e o
+  gauge só mostram o número, sem cor de alerta associada a nenhum
+  patamar (evita inventar uma meta que só o responsável do produto pode
+  validar).
+- Performance continua sem nenhuma tela até a decisão pendente (item 14)
+  ser resolvida.
+
+## [2026-07-30] Reparo retroativo de tipo_evento_secundario (ADR-0026) — bug real de produção
+
+Ver `docs/53_ADR_0026_REPARO_TIPO_EVENTO_SECUNDARIO.md` para a decisão
+completa.
+
+### Corrigido
+- **Bug real de produção** relatado em 2026-07-29: a interface de campo
+  travava com "O tipo do evento secundário (DESLOCAMENTO/ESPERA/APOIO) é
+  obrigatório." toda vez que o colaborador tentava "Iniciar deslocamento/
+  espera/apoio" (ex.: `EE01 - Preparação para jornada`, o código padrão
+  logo após abrir a jornada). Causa raiz: o `ALTER TABLE ... ADD COLUMN`
+  que criou `tipo_evento_secundario` (ADR-0024) nunca preencheu dado
+  retroativo, e o reseed automático só roda com a tabela vazia — em
+  produção a tabela já existia desde o ADR-0014/0019, então os 15 códigos
+  `evento_secundario` ficaram com `tipo_evento_secundario = NULL`
+  permanentemente (o próprio ADR-0024 já registrava isso como ação manual
+  pendente, nunca executada).
+- `src/workforce_api/repositorio_catalogo_postgres.py`:
+  `RepositorioCatalogoPostgres._reparar_tipo_evento_secundario()`, novo
+  passo idempotente no `__init__` (mesmo padrão do `ALTER TABLE ... IF
+  NOT EXISTS` já existente) que preenche `tipo_evento_secundario` de
+  qualquer linha que ainda esteja `NULL`, sem nunca sobrescrever um valor
+  já definido. Corrige produção sozinho no próximo boot do backend, sem
+  exigir chamadas manuais de `POST /catalogo`.
+- `interface_campo/js/catalogoMotivos.js`: `obterEventosSecundarios`
+  agora repara `tipo_evento_secundario` ausente no cliente também
+  (mapeamento estático local, mesma tabela do ADR-0024), para não
+  depender só do backend já ter sido reiniciado com a correção acima —
+  cobre também cache antigo em `localStorage` do navegador do
+  colaborador.
+- Confirmado por leitura de código que o "leque de opções" ao abrir
+  jornada (Iniciar atividade / Iniciar atendimento de falha / Iniciar
+  deslocamento-espera-apoio / Encerrar jornada) e sua reaparição
+  automática após encerrar uma atividade já estavam implementados desde
+  o ADR-0024/0025 — o problema reportado era este bug travando o uso do
+  bloco de evento secundário, não a ausência do leque.
+- `tests/test_repositorio_catalogo_postgres.py` (novo, 3 testes): mapeamento
+  puro cobre exatamente os 15 códigos, EE01 mapeado como APOIO, e o reparo
+  (com conexão/cursor falsos) só atualiza linhas com `tipo_evento_secundario
+  IS NULL`.
+- `tests/js/catalogoMotivos.test.mjs`: 2 testes novos reproduzindo o
+  payload exato que o backend não migrado devolvia (`tipo_evento_secundario:
+  null`) e confirmando que o reparo local nunca sobrescreve um tipo que já
+  veio preenchido.
+
+### Testes
+- `python -m py_compile` no módulo alterado: OK.
+- `pytest`: 252/252 (era 249).
+- `node --check` em `catalogoMotivos.js`: OK.
+- `node --test tests/js/*.test.mjs`: 104/104 (era 102).
+
+### Riscos
+- Depende do backend em produção (Render) efetivamente reiniciar com este
+  código — histórico conhecido de auto-deploy do Render falhando
+  silenciosamente (ver entrada de 2026-07-27 abaixo). Se não reiniciar
+  sozinho, precisa de "Manual Deploy" no painel do Render.
+
 ## [Unreleased]
 
 ### Adicionado

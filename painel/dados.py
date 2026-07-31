@@ -17,8 +17,14 @@ from typing import Dict, List, Optional, Tuple, Union
 import requests
 
 from workforce_core import MotorJornada, TipoEventoSecundario
-from workforce_core.catalogo import Categoria, CatalogoMotivos, catalogo_completo
-from workforce_core.consolidacao import LinhaEvento, ResumoConsolidado, linhas_eventos_classificadas, resumo_consolidado
+from workforce_core.catalogo import Categoria, CatalogoMotivos, ClassificacaoHH, catalogo_completo
+from workforce_core.consolidacao import (
+    LinhaEvento,
+    ResumoConsolidado,
+    linhas_eventos_classificadas,
+    resumo_consolidado,
+    utilizacao_hh,
+)
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
@@ -94,6 +100,17 @@ def montar_linhas_eventos(
     motivo/justificativa) - uma linha por atividade/pausa/evento
     secundario encerrado. Mesmo catalogo padrao de montar_resumo()."""
     return linhas_eventos_classificadas(jornadas, catalogo or catalogo_completo())
+
+
+def utilizacao_hh_do_resumo(resumo: ResumoConsolidado) -> Optional[float]:
+    """Utilizacao HH (ADR-0027) = Horas Produtivas / Horas Totais, a partir
+    de um ResumoConsolidado ja calculado (montar_resumo). Horas Produtivas
+    vem de por_classificacao_hh[PRODUTIVA] (zero se nenhum evento
+    produtivo no filtro); Horas Totais e jornada_bruta_total. Retorna
+    None quando jornada_bruta_total e zero (nenhuma jornada encerrada
+    valida no filtro) - nunca ZeroDivisionError."""
+    horas_produtivas = resumo.por_classificacao_hh.get(ClassificacaoHH.PRODUTIVA, timedelta())
+    return utilizacao_hh(horas_produtivas, resumo.jornada_bruta_total)
 
 
 def agrupar_duracao_por_categoria(linhas: List[LinhaEvento]) -> Dict[Optional[Categoria], timedelta]:

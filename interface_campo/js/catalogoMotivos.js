@@ -75,6 +75,45 @@ function filtrarPorTipoRegistro(lista, tipoRegistro) {
   return lista.filter((motivo) => motivo.tipo_registro === tipoRegistro && motivo.ativo);
 }
 
+// Reparo defensivo (bug real de producao em 2026-07-29): o backend
+// (repositorio_catalogo_postgres.py) criou a coluna tipo_evento_secundario
+// via ALTER TABLE (ADR-0024) sem preencher dado retroativo, e o reseed
+// automatico so roda com a tabela vazia - qualquer ambiente de producao
+// que ja tinha o catalogo antes desse incremento ficou com os 15 codigos
+// evento_secundario permanentemente com tipo_evento_secundario NULL, e
+// motor.iniciarEventoSecundario sempre travava com
+// EventoSecundarioTipoObrigatorioError. O backend agora se auto-repara no
+// boot (RepositorioCatalogoPostgres._reparar_tipo_evento_secundario), mas
+// isso so alcanca producao depois de um redeploy do backend - o proximo
+// deploy do Render historicamente nao e imediato (ver CHANGELOG). Este
+// mapeamento espelha o mesmo de la (ADR-0024 secao 1) e so preenche a
+// lacuna quando o catalogo dinamico vier sem tipo - nunca sobrescreve um
+// tipo que ja veio preenchido, mesmo principio do reparo do backend.
+const TIPO_EVENTO_SECUNDARIO_CONHECIDO = {
+  EE01: "APOIO",
+  EE03: "ESPERA",
+  EE04: "ESPERA",
+  EE05: "ESPERA",
+  EE06: "ESPERA",
+  EE08: "APOIO",
+  EE09: "ESPERA",
+  EE10: "ESPERA",
+  EE12: "DESLOCAMENTO",
+  EE13: "DESLOCAMENTO",
+  EE14: "DESLOCAMENTO",
+  EE15: "APOIO",
+  EE16: "APOIO",
+  EE18: "APOIO",
+  EE19: "APOIO",
+};
+
+function repararTipoEventoSecundarioAusente(motivo) {
+  if (motivo.tipo_evento_secundario) return motivo;
+  const tipoConhecido = TIPO_EVENTO_SECUNDARIO_CONHECIDO[motivo.codigo];
+  if (!tipoConhecido) return motivo;
+  return { ...motivo, tipo_evento_secundario: tipoConhecido };
+}
+
 // Busca o catalogo completo do backend, com fallback em cascata:
 // 1. GET /catalogo bem-sucedido -> grava cache, retorna a lista completa.
 // 2. Falha de rede ou sincronizacao nao configurada -> usa o cache da
@@ -126,7 +165,7 @@ export async function obterMotivosPausa(opcoes = {}) {
 // manual na interface.
 export async function obterEventosSecundarios(opcoes = {}) {
   const lista = await buscarCatalogoCompleto(opcoes);
-  return filtrarPorTipoRegistro(lista, "evento_secundario");
+  return filtrarPorTipoRegistro(lista, "evento_secundario").map(repararTipoEventoSecundarioAusente);
 }
 
 // So para os testes isolarem o cache entre casos - o app real nunca

@@ -47,5 +47,12 @@
     depender do Postgres de produção dele, antecipando a Fase 5 do
     roadmap) — responsável pelo produto decidiu adiar por enquanto. Ver
     `docs/45_ADR_0018_FILTROS_E_GRAFICOS_DASHBOARD.md`.
+14. Fonte de tempo planejado por atividade/OS para o indicador de
+    Performance (Tempo Planejado / Tempo Real, ADR-0027). Nem `OrdemServico`
+    nem `Atividade` têm hoje uma duração estimada — precisa de decisão do
+    responsável pelo produto (ex.: vir do SGO na Fase 5, uma tabela de
+    tempos padrão por tipo de atividade, etc.) antes de qualquer tela
+    mostrar Performance. A fórmula já está pronta em
+    `workforce_core.consolidacao.performance`.
 
 Nenhuma decisão deve ser inventada pelo agente. Registrar ADR após validação operacional.

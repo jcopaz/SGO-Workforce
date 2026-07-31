@@ -32,10 +32,12 @@ from dados import (
     gerar_jornadas_exemplo,
     montar_linhas_eventos,
     montar_resumo,
+    utilizacao_hh_do_resumo,
 )
 from graficos import (
     grafico_distribuicao_pizza,
     grafico_evolucao_diaria,
+    grafico_gauge_percentual,
     grafico_hh_por_categoria,
     grafico_hh_por_colaborador,
     grafico_motivos_treemap,
@@ -290,8 +292,9 @@ if not linhas_filtradas:
     st.stop()
 
 por_categoria_filtrado = agrupar_duracao_por_categoria(linhas_filtradas)
+fracao_utilizacao_hh = utilizacao_hh_do_resumo(resumo)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
     st.markdown(
         _cartao_kpi("Jornadas encerradas", str(resumo.quantidade_jornadas), "No período filtrado", "blue"),
@@ -315,6 +318,38 @@ with c4:
             "HH não classificado", formatar_horas(resumo.tempo_nao_classificado_total), "Lacunas sem evento", "red"
         ),
         unsafe_allow_html=True,
+    )
+with c5:
+    st.markdown(
+        _cartao_kpi(
+            "Utilização HH",
+            f"{fracao_utilizacao_hh * 100:.1f}%" if fracao_utilizacao_hh is not None else "--",
+            "Produtivo / Total (ADR-0027)",
+            "blue",
+        ),
+        unsafe_allow_html=True,
+    )
+
+st.subheader("Indicadores")
+col_gauge, col_performance = st.columns(2)
+with col_gauge:
+    if fracao_utilizacao_hh is None:
+        st.info("Sem HH bruto no período filtrado para calcular Utilização HH.")
+    else:
+        components.html(
+            renderizar_embutido(
+                grafico_gauge_percentual("Utilização HH (Produtivo / Total)", fracao_utilizacao_hh)
+            ),
+            height=360,
+            scrolling=False,
+        )
+with col_performance:
+    st.info(
+        "Performance (Tempo Planejado / Tempo Real) ainda não aparece aqui: "
+        "o sistema não tem, hoje, nenhuma fonte de tempo planejado por "
+        "atividade/OS (ver docs/23_DECISOES_PENDENTES.md). A fórmula já "
+        "está pronta em `workforce_core.consolidacao.performance` para "
+        "quando essa fonte existir."
     )
 
 st.subheader("Distribuição de HH por categoria")

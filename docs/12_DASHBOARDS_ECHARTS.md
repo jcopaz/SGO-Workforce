@@ -31,3 +31,13 @@ Jornadas abertas, lacunas, eventos sobrepostos, falhas sem fechamento técnico, 
 
 ## Reconciliabilidade
 Cada visual deve permitir drill-down ou exportação da base correspondente. Totais precisam coincidir com CSV/XLSX.
+
+## Indicadores implementados (ADR-0027)
+- **Utilização HH** (Horas Produtivas / Horas Totais): card KPI + gauge
+  na aba "Visão geral" (`painel/telas/dashboard.py`), calculado a partir
+  do mesmo `ResumoConsolidado` dos outros cards de HH — nunca diverge.
+- **Performance** (Tempo Planejado / Tempo Real): fórmula pronta em
+  `workforce_core.consolidacao.performance`, mas ainda sem tela — depende
+  de uma fonte de tempo planejado por atividade/OS que o sistema não tem
+  (`docs/23_DECISOES_PENDENTES.md` item 14). O painel mostra um aviso
+  explícito no lugar do indicador em vez de omitir o assunto.

@@ -42,11 +42,23 @@ ALTER TABLE motivos_catalogo ADD COLUMN IF NOT EXISTS tipo_evento_secundario TEX
 """
 
 
+def _mapeamento_reparo_tipo_evento_secundario() -> List[tuple]:
+    """Lista (tipo_evento_secundario, codigo) para os 15 codigos reais que
+    tem tipo definido em `catalogo_relatorio_1_manutencao()` - extraida
+    como funcao pura (sem conexao) para poder ser testada sem Postgres."""
+    return [
+        (entrada.tipo_evento_secundario.value, entrada.codigo)
+        for entrada in catalogo_relatorio_1_manutencao().todos()
+        if entrada.tipo_evento_secundario is not None
+    ]
+
+
 class RepositorioCatalogoPostgres:
     def __init__(self, dsn: str):
         self._dsn = dsn
         self._garantir_tabela()
         self._semear_se_vazio()
+        self._reparar_tipo_evento_secundario()
 
     def _conectar(self):
         return psycopg2.connect(self._dsn)
@@ -56,6 +68,39 @@ class RepositorioCatalogoPostgres:
             with conexao.cursor() as cursor:
                 cursor.execute(_CRIAR_TABELA_SQL)
                 cursor.execute(_ALTER_TABELA_SQL)
+            conexao.commit()
+
+    def _reparar_tipo_evento_secundario(self) -> None:
+        """Preenche `tipo_evento_secundario` de linhas que ja existiam antes
+        da coluna ser criada (ADR-0024) e continuam NULL.
+
+        `_ALTER_TABELA_SQL` so cria a coluna - nunca preenche dado
+        retroativo - e `_semear_se_vazio` so roda com a tabela vazia
+        (contagem > 0 em qualquer ambiente que ja tinha o catalogo do
+        ADR-0014/0019 antes deste incremento). Sem este reparo, os 15
+        codigos "evento_secundario" ficariam permanentemente sem tipo em
+        qualquer banco existente, e
+        `motor.iniciarEventoSecundario`/`iniciar_evento_secundario` sempre
+        levantaria `EventoSecundarioTipoObrigatorioError` - bug real
+        encontrado em producao em 2026-07-29 (ver CHANGELOG e
+        docs/53_ADR_0026_REPARO_TIPO_EVENTO_SECUNDARIO.md), porque o reseed
+        manual via `POST /catalogo` descrito como pendente no ADR-0024
+        nunca foi executado. So preenche onde esta NULL - nunca sobrescreve
+        um valor ja definido (inclusive por edicao manual via painel),
+        idempotente, roda toda vez que o repositorio inicializa (mesmo
+        espirito do ALTER TABLE acima).
+        """
+        mapeamento = _mapeamento_reparo_tipo_evento_secundario()
+        with self._conectar() as conexao:
+            with conexao.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    UPDATE motivos_catalogo
+                    SET tipo_evento_secundario = %s
+                    WHERE codigo = %s AND tipo_evento_secundario IS NULL
+                    """,
+                    mapeamento,
+                )
             conexao.commit()
 
     def _semear_se_vazio(self) -> None:

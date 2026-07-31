@@ -38,5 +38,19 @@ A jornada contém eventos. Evento tem início, fim, categoria, motivo, vínculo 
 - HH da OS = soma de eventos líquidos associados;
 - jornada conciliada = eventos + lacunas + intervalos não computáveis.
 
+## Indicadores (ADR-0027)
+- **Utilização HH** = Horas Produtivas / Horas Totais — quanto do
+  período de trabalho o colaborador converteu em manutenção executável.
+  Horas Produtivas soma a duração classificada como `ClassificacaoHH.PRODUTIVA`
+  no catálogo (`workforce_core.consolidacao.resumo_por_classificacao_hh`);
+  Horas Totais é a jornada bruta. Implementado em
+  `workforce_core.consolidacao.utilizacao_hh`.
+- **Performance** = Tempo Planejado / Tempo Real — quão aderente o
+  colaborador esteve ao tempo planejado de execução da(s) atividade(s).
+  Fórmula implementada em `workforce_core.consolidacao.performance`, mas
+  **sem fonte de "tempo planejado" ainda** (decisão pendente, ver
+  `docs/23_DECISOES_PENDENTES.md` item 14) — não exibida em nenhuma tela
+  até essa fonte existir.
+
 ## Rateio
 Quando um evento cobrir várias OS, aplicar regra explícita: proporcional ao HH planejado, divisão igual ou apontamento individual. Registrar qual regra foi usada.

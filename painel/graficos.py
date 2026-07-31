@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from pyecharts import options as opts
-from pyecharts.charts import Bar, Line, Pie, TreeMap
+from pyecharts.charts import Bar, Gauge, Line, Pie, TreeMap
 
 from workforce_core.catalogo import Categoria
 from workforce_core.consolidacao import LinhaEvento
@@ -133,6 +133,20 @@ def grafico_motivos_treemap(linhas: List[LinhaEvento]) -> TreeMap:
         TreeMap(init_opts=opts.InitOpts(width="100%", height="420px"))
         .add("HH por motivo", dados)
         .set_global_opts(title_opts=opts.TitleOpts(title="HH por motivo/justificativa"))
+    )
+
+
+def grafico_gauge_percentual(titulo: str, fracao: float) -> Gauge:
+    """Gauge 0-100% - tipo de grafico recomendado em
+    docs/12_DASHBOARDS_ECHARTS.md para capacidade/utilizacao (ADR-0027,
+    indicador de Utilizacao HH). `fracao` e um valor 0..1 (ex.: saida de
+    workforce_core.consolidacao.utilizacao_hh) - a conversao para
+    percentual e so de exibicao, feita aqui, nunca antes."""
+    percentual = round(fracao * 100, 1)
+    return (
+        Gauge(init_opts=opts.InitOpts(width="100%", height="320px"))
+        .add(titulo, [(titulo, percentual)], min_=0, max_=100)
+        .set_global_opts(title_opts=opts.TitleOpts(title=titulo))
     )
 
 

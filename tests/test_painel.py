@@ -17,18 +17,20 @@ from dados import (
     gerar_jornadas_exemplo,
     montar_linhas_eventos,
     montar_resumo,
+    utilizacao_hh_do_resumo,
 )
 from graficos import (
     CAMINHO_ECHARTS_JS_LOCAL,
     grafico_distribuicao_pizza,
     grafico_evolucao_diaria,
+    grafico_gauge_percentual,
     grafico_hh_por_categoria,
     grafico_hh_por_colaborador,
     grafico_motivos_treemap,
     renderizar_embutido,
 )
-from workforce_core.catalogo import Categoria
-from workforce_core.consolidacao import LinhaEvento
+from workforce_core.catalogo import Categoria, ClassificacaoHH
+from workforce_core.consolidacao import LinhaEvento, ResumoConsolidado
 from workforce_storage import RepositorioJornadaArquivo
 
 
@@ -89,6 +91,38 @@ def test_montar_linhas_eventos_e_agrupar_por_categoria_com_dados_de_exemplo(tmp_
     assert sum(por_categoria.values(), timedelta()) == sum(
         (linha.duracao for linha in linhas), timedelta()
     )
+
+
+def test_montar_resumo_por_classificacao_hh_com_dados_de_exemplo(tmp_path):
+    # gerar_jornadas_exemplo usa DESLOCAMENTO_TESTE/PAUSA_TESTE (motivos de
+    # teste, NAO_DEFINIDO) para pausa/evento, mas as atividades (planejada
+    # e atendimento de falha) caem nas mesmas Categoria de EE17/EE21, que
+    # catalogo_completo() (usado por montar_resumo) ja classifica como
+    # PRODUTIVA (ADR-0023) - por isso o bucket PRODUTIVA existe mesmo em
+    # dados de exemplo.
+    gerar_jornadas_exemplo(tmp_path, quantidade=2)
+    jornadas, _ = carregar_jornadas(tmp_path)
+
+    resumo = montar_resumo(jornadas)
+
+    assert ClassificacaoHH.PRODUTIVA in resumo.por_classificacao_hh
+    assert resumo.por_classificacao_hh[ClassificacaoHH.PRODUTIVA] > timedelta()
+
+
+def test_utilizacao_hh_do_resumo_com_dados_de_exemplo(tmp_path):
+    gerar_jornadas_exemplo(tmp_path, quantidade=2)
+    jornadas, _ = carregar_jornadas(tmp_path)
+    resumo = montar_resumo(jornadas)
+
+    fracao = utilizacao_hh_do_resumo(resumo)
+
+    assert fracao is not None
+    assert 0 < fracao <= 1
+
+
+def test_utilizacao_hh_do_resumo_sem_jornada_bruta_retorna_none():
+    resumo = ResumoConsolidado()  # jornada_bruta_total == timedelta() (padrao)
+    assert utilizacao_hh_do_resumo(resumo) is None
 
 
 def test_carregar_jornadas_reporta_arquivo_corrompido_sem_apagar(tmp_path):
@@ -190,6 +224,15 @@ def test_grafico_motivos_treemap_ignora_linhas_sem_motivo():
     assert "<script>" in html
     assert "cdn" not in html.lower()
     assert "EE02" in html
+
+
+def test_grafico_gauge_percentual_renderiza_html_autocontido():
+    grafico = grafico_gauge_percentual("Utilização HH", 0.75)
+    html = renderizar_embutido(grafico)
+
+    assert "<script>" in html
+    assert "cdn" not in html.lower()
+    assert "75" in html
 
 
 def test_renderizar_embutido_falha_se_asset_local_ausente(tmp_path, monkeypatch):

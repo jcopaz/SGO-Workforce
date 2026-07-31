@@ -8,8 +8,10 @@ abertas anormais, taxa de GPS valido).
 from datetime import datetime, timedelta
 from uuid import uuid4
 
+import pytest
+
 from workforce_core import MotorJornada, PulsoGps, QualidadePulso, TipoEventoSecundario, consolidacao
-from workforce_core.catalogo import Categoria, catalogo_padrao
+from workforce_core.catalogo import Categoria, ClassificacaoHH, catalogo_padrao, catalogo_relatorio_1_manutencao
 
 
 def _dt(hora, minuto, dia=1):
@@ -157,6 +159,21 @@ def test_resumo_consolidado_soma_varias_jornadas():
     )
 
 
+def test_resumo_consolidado_soma_por_classificacao_hh_varias_jornadas():
+    # catalogo_padrao() nao tem entrada com categoria=ATENDIMENTO_FALHA/
+    # ATIVIDADE_PLANEJADA, entao as atividades caem em NAO_DEFINIDO - so o
+    # deslocamento (DESLOCAMENTO_TESTE) tem classificacao_hh (NAO_DEFINIDO
+    # tambem, por ser catalogo de teste) - o que importa aqui e que o
+    # agregado bate com a soma das duas jornadas.
+    j1 = _jornada_completa("1")
+    j2 = _jornada_completa("2")
+    catalogo = catalogo_padrao()
+
+    resumo = consolidacao.resumo_consolidado([j1, j2], catalogo)
+
+    assert resumo.por_classificacao_hh[ClassificacaoHH.NAO_DEFINIDO] == resumo.jornada_bruta_total
+
+
 def test_resumo_consolidado_ignora_jornadas_nao_encerradas():
     motor_aberta = MotorJornada("3")
     motor_aberta.iniciar_jornada(_dt(8, 0))
@@ -171,6 +188,85 @@ def test_resumo_consolidado_lista_vazia():
     resumo = consolidacao.resumo_consolidado([], catalogo_padrao())
     assert resumo.quantidade_jornadas == 0
     assert resumo.por_categoria == {}
+
+
+# ----------------------------------------------------------------------
+# Indicadores de HH (Utilizacao e Performance) - ADR-0027
+# ----------------------------------------------------------------------
+def _jornada_relatorio_1(matricula="12345"):
+    """Mesma linha do tempo de _jornada_completa, mas com codigos reais do
+    Relatorio 1 (EE01-EE23) em vez de motivos *_TESTE, para exercitar
+    resumo_por_classificacao_hh com classificacao_hh de verdade (validada
+    no ADR-0023) em vez de NAO_DEFINIDO."""
+    motor = MotorJornada(matricula)
+    motor.iniciar_jornada(_dt(8, 0))
+
+    motor.iniciar_evento_secundario(_dt(8, 0), TipoEventoSecundario.DESLOCAMENTO, "EE12")
+    motor.encerrar_evento_secundario(_dt(8, 30))
+
+    motor.iniciar_atividade(_dt(8, 30))
+    motor.iniciar_pausa(_dt(9, 0), "EE02")  # Refeicao 1 hora -> NAO_COMPUTAVEL
+    motor.finalizar_pausa(_dt(9, 10))
+    motor.encerrar_atividade(_dt(11, 30))  # vira EE17 (Manutencao Programada) -> PRODUTIVA
+
+    motor.iniciar_atendimento_falha(_dt(11, 30))
+    motor.registrar_dados_falha(nota="1", ativo="A", sintoma="S", objeto="O", observacao="Obs")
+    motor.encerrar_atividade(_dt(12, 0))  # EE21 (Atendimento de Falha) -> PRODUTIVA
+
+    motor.encerrar_jornada(_dt(12, 0))
+    return motor.jornada
+
+
+def test_resumo_por_classificacao_hh_usa_classificacao_real_do_catalogo():
+    jornada = _jornada_relatorio_1()
+    catalogo = catalogo_relatorio_1_manutencao()
+
+    resumo = consolidacao.resumo_por_classificacao_hh(jornada, catalogo)
+
+    # EE12 (30min) + EE17 (2h50, atividade liquida apos descontar a pausa)
+    # + EE21 (30min) = 3h50 produtiva.
+    assert resumo[ClassificacaoHH.PRODUTIVA] == timedelta(hours=3, minutes=50)
+    # EE02 (10min de pausa) -> nao computavel.
+    assert resumo[ClassificacaoHH.NAO_COMPUTAVEL] == timedelta(minutes=10)
+    # reconcilia com a jornada bruta inteira (4h, sem nenhuma lacuna nesta linha do tempo).
+    assert sum(resumo.values(), timedelta()) == timedelta(hours=4)
+
+
+def test_resumo_consolidado_por_classificacao_hh_com_catalogo_real():
+    jornada = _jornada_relatorio_1()
+    resumo = consolidacao.resumo_consolidado([jornada], catalogo_relatorio_1_manutencao())
+
+    assert resumo.por_classificacao_hh[ClassificacaoHH.PRODUTIVA] == timedelta(hours=3, minutes=50)
+    assert resumo.por_classificacao_hh[ClassificacaoHH.NAO_COMPUTAVEL] == timedelta(minutes=10)
+
+
+def test_utilizacao_hh_formula():
+    # Utilizacao HH = Horas Produtivas / Horas Totais.
+    assert consolidacao.utilizacao_hh(timedelta(hours=6), timedelta(hours=8)) == 0.75
+
+
+def test_utilizacao_hh_com_jornada_relatorio_1():
+    jornada = _jornada_relatorio_1()
+    resumo = consolidacao.resumo_consolidado([jornada], catalogo_relatorio_1_manutencao())
+    horas_produtivas = resumo.por_classificacao_hh.get(ClassificacaoHH.PRODUTIVA, timedelta())
+
+    fracao = consolidacao.utilizacao_hh(horas_produtivas, resumo.jornada_bruta_total)
+
+    # 3h50 produtivas / 4h totais.
+    assert fracao == pytest.approx(timedelta(hours=3, minutes=50) / timedelta(hours=4))
+
+
+def test_utilizacao_hh_zero_horas_totais_retorna_none_sem_dividir_por_zero():
+    assert consolidacao.utilizacao_hh(timedelta(hours=2), timedelta()) is None
+
+
+def test_performance_formula():
+    # Performance = Tempo Planejado / Tempo Real.
+    assert consolidacao.performance(timedelta(hours=4), timedelta(hours=5)) == 0.8
+
+
+def test_performance_zero_tempo_real_retorna_none_sem_dividir_por_zero():
+    assert consolidacao.performance(timedelta(hours=1), timedelta()) is None
 
 
 # ----------------------------------------------------------------------
