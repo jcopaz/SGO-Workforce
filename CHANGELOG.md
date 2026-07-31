@@ -1,5 +1,25 @@
 # Changelog
 
+## [2026-07-31] Corrige aviso desatualizado na interface de campo
+
+### Corrigido
+- `interface_campo/index.html`: o rótulo "Incremento 4" no cabeçalho e o
+  aviso de piloto ficaram desatualizados por vários incrementos — o texto
+  dizia "GPS, atendimento de falhas e sincronização com servidor ainda
+  não existem aqui" e "deslocamento/espera/apoio ainda não tem tela
+  própria", quando na verdade os três já existem desde os ADRs 0017/0021/0024.
+  Texto corrigido para refletir o estado real (GPS pontual no atendimento
+  de falha, sem pulso periódico ainda; os 23 códigos do Relatório 1 já
+  têm tela própria e classificação validada).
+- `interface_campo/service-worker.js`: `CACHE_VERSAO` incrementada
+  (`v12` → `v13`) — o service worker cacheia `index.html`, sem isso a
+  correção não chegaria ao navegador do colaborador (mesma lição do
+  primeiro bug real deste projeto, ver entrada mais antiga deste
+  changelog).
+
+### Testes
+- `node --check` em `service-worker.js`: OK.
+
 ## [2026-07-31] Aba "Falhas" no painel — tempo de atendimento (ADR-0029)
 
 Ver `docs/56_ADR_0029_ABA_FALHAS_PAINEL.md` para a decisão completa.
