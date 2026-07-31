@@ -13,6 +13,12 @@ Sankey da jornada, barras empilhadas por categoria, série temporal e comparaç�
 ### Falhas
 Top sintomas, causas, ações, sistemas, componentes, impacto, reincidência e HH consumido.
 
+**Implementado parcialmente no ADR-0029** (`painel/telas/falhas.py`):
+tempo de atendimento (KPIs de total/média/maior duração/duração total,
+ranking por duração, distribuição por sintoma, contagem por ativo).
+Causa, ação, sistemas, componentes, impacto e reincidência continuam sem
+tela.
+
 ### Capacidade
 Capacidade bruta, indisponibilidades, perdas, capacidade efetiva e utilização do plano.
 

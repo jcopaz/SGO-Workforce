@@ -22,7 +22,7 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Gauge, Line, Pie, TreeMap
 
 from workforce_core.catalogo import Categoria
-from workforce_core.consolidacao import LinhaEvento
+from workforce_core.consolidacao import LinhaAtendimentoFalha, LinhaEvento
 
 _DIRETORIO_MODULO = Path(__file__).resolve().parent
 CAMINHO_ECHARTS_JS_LOCAL = _DIRETORIO_MODULO / "assets" / "echarts.min.js"
@@ -133,6 +133,54 @@ def grafico_motivos_treemap(linhas: List[LinhaEvento]) -> TreeMap:
         TreeMap(init_opts=opts.InitOpts(width="100%", height="420px"))
         .add("HH por motivo", dados)
         .set_global_opts(title_opts=opts.TitleOpts(title="HH por motivo/justificativa"))
+    )
+
+
+def grafico_ranking_duracao_falhas(linhas: List[LinhaAtendimentoFalha], top_n: int = 15) -> Bar:
+    """Ranking horizontal das N falhas de maior duração (ADR-0029),
+    inspirado na visão de referência do responsável do produto - barra
+    ordenada por duração decrescente, rótulo = sintoma + ativo. Duração em
+    horas (`_horas`, mesmo arredondamento dos outros gráficos do painel).
+    Limitado a `top_n` para não sobrecarregar o gráfico com centenas de
+    barras - a tabela completa (fora deste gráfico) cobre o restante."""
+    ordenadas = sorted(linhas, key=lambda linha: linha.duracao, reverse=True)[:top_n]
+    # Barra horizontal (reversal_axis): a maior duração fica no topo, por
+    # isso a lista é revertida antes de virar eixo Y do pyecharts.
+    ordenadas = list(reversed(ordenadas))
+    rotulos = [
+        f"{linha.sintoma or 'Sem sintoma'} · {linha.ativo or 'Sem ativo'}" for linha in ordenadas
+    ]
+    valores = [_horas(linha.duracao) for linha in ordenadas]
+
+    return (
+        Bar(init_opts=opts.InitOpts(width="100%", height="480px"))
+        .add_xaxis(rotulos)
+        .add_yaxis("Duração (horas)", valores, color="#f5c400")
+        .reversal_axis()
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title=f"Top {len(ordenadas)} atendimentos por duração"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(font_size=11)),
+        )
+        .set_series_opts(label_opts=opts.LabelOpts(position="right"))
+    )
+
+
+def grafico_donut_contagem(titulo: str, contagem: Dict[str, int]) -> Pie:
+    """Donut genérico rótulo->contagem (ADR-0029) - usado para a
+    distribuição de atendimentos de falha por sintoma, mesmo visual
+    (rosca) da referência do responsável do produto. Diferente de
+    grafico_distribuicao_pizza (que soma duração por Categoria), este
+    soma contagem de ocorrências por um rótulo de texto livre."""
+    dados = sorted(contagem.items(), key=lambda item: item[1], reverse=True)
+    return (
+        Pie(init_opts=opts.InitOpts(width="100%", height="420px"))
+        .add("Ocorrências", dados, radius=["40%", "70%"])
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title=titulo),
+            legend_opts=opts.LegendOpts(type_="scroll", orient="vertical", pos_left="left"),
+        )
+        .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
     )
 
 

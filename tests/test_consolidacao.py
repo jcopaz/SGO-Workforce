@@ -140,6 +140,126 @@ def test_linhas_eventos_classificadas_varias_jornadas_mantem_colaborador_por_lin
 
 
 # ----------------------------------------------------------------------
+# Atendimentos de falha (ADR-0029)
+# ----------------------------------------------------------------------
+def test_linhas_atendimento_falha_uma_linha_por_atendimento_encerrado():
+    jornada = _jornada_completa("12345")
+
+    linhas = consolidacao.linhas_atendimento_falha([jornada])
+
+    assert len(linhas) == 1
+    linha = linhas[0]
+    assert linha.colaborador_matricula == "12345"
+    assert linha.data == _dt(11, 30).date()
+    assert linha.duracao == timedelta(minutes=30)  # 11:30 -> 12:00, bruta
+    assert linha.nota == "1"
+    assert linha.ativo == "A"
+    assert linha.sintoma == "S"
+    assert linha.objeto == "O"
+
+
+def test_linhas_atendimento_falha_ignora_atividade_comum():
+    motor = MotorJornada("1")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atividade(_dt(8, 0))
+    motor.encerrar_atividade(_dt(9, 0))
+    motor.encerrar_jornada(_dt(9, 0))
+
+    assert consolidacao.linhas_atendimento_falha([motor.jornada]) == []
+
+
+def test_linhas_atendimento_falha_ignora_atendimento_em_andamento():
+    motor = MotorJornada("1")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atendimento_falha(_dt(8, 0))
+    motor.registrar_dados_falha(nota="1", ativo="A", sintoma="S", objeto="O", observacao="Obs")
+    # atendimento nao encerrado (sem atividade.fim).
+
+    assert consolidacao.linhas_atendimento_falha([motor.jornada]) == []
+
+
+def test_linhas_atendimento_falha_inclui_jornada_ainda_aberta():
+    # Diferente de linhas_eventos_classificadas: um atendimento de falha
+    # ja concluido deve aparecer mesmo que o colaborador continue
+    # trabalhando (jornada nao encerrada) - decisao deliberada do ADR-0029.
+    motor = MotorJornada("1")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atendimento_falha(_dt(8, 0))
+    motor.registrar_dados_falha(nota="1", ativo="A", sintoma="S", objeto="O", observacao="Obs")
+    motor.encerrar_atividade(_dt(9, 0))
+    # jornada permanece aberta.
+
+    linhas = consolidacao.linhas_atendimento_falha([motor.jornada])
+    assert len(linhas) == 1
+    assert linhas[0].duracao == timedelta(hours=1)
+
+
+def test_resumo_atendimentos_falha_calcula_media_e_maior():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha(
+            colaborador_matricula="1",
+            data=_dt(8, 0).date(),
+            inicio=_dt(8, 0),
+            fim=_dt(9, 0),
+            duracao=timedelta(hours=1),
+            nota="1",
+            ativo="A",
+            sintoma="Sintoma A",
+            objeto="O",
+        ),
+        consolidacao.LinhaAtendimentoFalha(
+            colaborador_matricula="2",
+            data=_dt(8, 0).date(),
+            inicio=_dt(8, 0),
+            fim=_dt(11, 0),
+            duracao=timedelta(hours=3),
+            nota="2",
+            ativo="B",
+            sintoma="Sintoma B",
+            objeto="O",
+        ),
+    ]
+
+    resumo = consolidacao.resumo_atendimentos_falha(linhas)
+
+    assert resumo.quantidade == 2
+    assert resumo.duracao_total == timedelta(hours=4)
+    assert resumo.duracao_media == timedelta(hours=2)
+    assert resumo.maior_duracao == timedelta(hours=3)
+
+
+def test_resumo_atendimentos_falha_lista_vazia_nunca_quebra():
+    resumo = consolidacao.resumo_atendimentos_falha([])
+    assert resumo.quantidade == 0
+    assert resumo.duracao_total == timedelta()
+    assert resumo.duracao_media is None
+    assert resumo.maior_duracao is None
+
+
+def test_contagem_por_sintoma_agrupa_e_trata_ausente():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "1", "A", "Sintoma A", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "2", "A", "Sintoma A", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "3", "B", None, "O"),
+    ]
+
+    contagem = consolidacao.contagem_por_sintoma(linhas)
+
+    assert contagem == {"Sintoma A": 2, "Sem sintoma informado": 1}
+
+
+def test_contagem_por_ativo_agrupa_e_trata_ausente():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "1", "ATIVO-1", "S", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "2", None, "S", "O"),
+    ]
+
+    contagem = consolidacao.contagem_por_ativo(linhas)
+
+    assert contagem == {"ATIVO-1": 1, "Sem ativo informado": 1}
+
+
+# ----------------------------------------------------------------------
 # Consolidacao multi-jornada
 # ----------------------------------------------------------------------
 def test_resumo_consolidado_soma_varias_jornadas():

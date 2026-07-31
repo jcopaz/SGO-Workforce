@@ -19,9 +19,15 @@ import requests
 from workforce_core import MotorJornada, TipoEventoSecundario
 from workforce_core.catalogo import Categoria, CatalogoMotivos, ClassificacaoHH, catalogo_completo
 from workforce_core.consolidacao import (
+    LinhaAtendimentoFalha,
     LinhaEvento,
+    ResumoAtendimentosFalha,
     ResumoConsolidado,
+    contagem_por_ativo,
+    contagem_por_sintoma,
+    linhas_atendimento_falha,
     linhas_eventos_classificadas,
+    resumo_atendimentos_falha,
     resumo_consolidado,
     utilizacao_hh,
 )
@@ -100,6 +106,28 @@ def montar_linhas_eventos(
     motivo/justificativa) - uma linha por atividade/pausa/evento
     secundario encerrado. Mesmo catalogo padrao de montar_resumo()."""
     return linhas_eventos_classificadas(jornadas, catalogo or catalogo_completo())
+
+
+def montar_linhas_atendimento_falha(jornadas: List[Jornada]) -> List[LinhaAtendimentoFalha]:
+    """Base para a aba "Falhas" do painel (ADR-0029) - uma linha por
+    atendimento de falha encerrado. Diferente de montar_linhas_eventos,
+    inclui jornadas ainda abertas (ver linhas_atendimento_falha)."""
+    return linhas_atendimento_falha(jornadas)
+
+
+def resumo_atendimentos_falha_do_periodo(linhas: List[LinhaAtendimentoFalha]) -> ResumoAtendimentosFalha:
+    """KPIs (quantidade, duração total/média, maior duração) de uma lista
+    de LinhaAtendimentoFalha já filtrada pelo período/colaborador
+    selecionados no painel."""
+    return resumo_atendimentos_falha(linhas)
+
+
+def contagem_atendimentos_por_sintoma(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    return contagem_por_sintoma(linhas)
+
+
+def contagem_atendimentos_por_ativo(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    return contagem_por_ativo(linhas)
 
 
 def utilizacao_hh_do_resumo(resumo: ResumoConsolidado) -> Optional[float]:

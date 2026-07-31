@@ -37,6 +37,7 @@ pagina = st.navigation(
     {
         "Análise de Dados": [
             st.Page("telas/dashboard.py", title="Visão geral", icon="📊", default=True),
+            st.Page("telas/falhas.py", title="Falhas", icon="🛠️"),
             st.Page("telas/mapa_operacional.py", title="Mapa Operacional", icon="🗺️"),
             st.Page("telas/capacidade_pcm.py", title="Capacidade PCM", icon="🏭"),
         ],

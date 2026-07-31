@@ -221,6 +221,113 @@ def linhas_eventos_classificadas(
 
 
 # ----------------------------------------------------------------------
+# Atendimentos de falha (ADR-0029) - uma linha por atendimento encerrado,
+# base para a aba "Falhas" do painel (docs/12_DASHBOARDS_ECHARTS.md, "Top
+# sintomas, causas, ..., HH consumido", nunca implementada ate aqui).
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class LinhaAtendimentoFalha:
+    colaborador_matricula: str
+    data: date
+    inicio: datetime
+    fim: datetime
+    duracao: timedelta
+    nota: Optional[str]
+    ativo: Optional[str]
+    sintoma: Optional[str]
+    objeto: Optional[str]
+
+
+def linhas_atendimento_falha(jornadas: List[Jornada]) -> List[LinhaAtendimentoFalha]:
+    """Achata as jornadas em uma linha por atendimento de falha encerrado
+    (Atividade com `dados_falha`, ver `DadosFalha`).
+
+    `duracao` usa `calculo.duracao_atividade_bruta` (fim - inicio, tempo
+    total decorrido) - deliberadamente diferente de `linhas_eventos_classificadas`,
+    que usa a duracao liquida (descontando pausas) para fins de HH do
+    colaborador. Aqui o interesse e "quanto tempo a falha ficou em
+    aberto" (tempo de atendimento de ponta a ponta), nao HH liquido.
+
+    Diferente de `linhas_eventos_classificadas`, NAO exige
+    `jornada.estado == ENCERRADA` - um atendimento de falha ja concluido
+    dentro de uma jornada ainda aberta (colaborador segue trabalhando)
+    deve aparecer no painel de falhas imediatamente, nao só no fim do
+    turno (decisao deliberada para uma visao operacional de falhas, ver
+    ADR-0029).
+
+    Inclui atendimentos com `dados_falha` incompleto (ex.: transferidos
+    via `docs/49_ADR_0022_GPS_FOTO_TRANSFERENCIA_ATENDIMENTO_FALHA.md`
+    antes de preencher tudo) - campos ausentes ficam `None`, nunca
+    descarta a linha; quem consome decide como exibir.
+    """
+    linhas: List[LinhaAtendimentoFalha] = []
+    for jornada in jornadas:
+        for atividade in jornada.atividades:
+            if atividade.dados_falha is None or atividade.fim is None:
+                continue
+            dados = atividade.dados_falha
+            linhas.append(
+                LinhaAtendimentoFalha(
+                    colaborador_matricula=jornada.colaborador_matricula,
+                    data=atividade.inicio.date(),
+                    inicio=atividade.inicio,
+                    fim=atividade.fim,
+                    duracao=calculo.duracao_atividade_bruta(atividade),
+                    nota=dados.nota,
+                    ativo=dados.ativo,
+                    sintoma=dados.sintoma,
+                    objeto=dados.objeto,
+                )
+            )
+    return linhas
+
+
+@dataclass
+class ResumoAtendimentosFalha:
+    quantidade: int = 0
+    duracao_total: timedelta = field(default_factory=timedelta)
+    duracao_media: Optional[timedelta] = None
+    maior_duracao: Optional[timedelta] = None
+
+
+def resumo_atendimentos_falha(linhas: List[LinhaAtendimentoFalha]) -> ResumoAtendimentosFalha:
+    """KPIs agregados de uma lista de LinhaAtendimentoFalha - quantidade,
+    duracao total, media e maior duracao. `duracao_media`/`maior_duracao`
+    ficam `None` (nunca ZeroDivisionError/erro em lista vazia) quando nao
+    ha nenhuma linha."""
+    if not linhas:
+        return ResumoAtendimentosFalha()
+    duracoes = [linha.duracao for linha in linhas]
+    total = sum(duracoes, timedelta())
+    return ResumoAtendimentosFalha(
+        quantidade=len(linhas),
+        duracao_total=total,
+        duracao_media=total / len(linhas),
+        maior_duracao=max(duracoes),
+    )
+
+
+def contagem_por_sintoma(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    """Conta atendimentos por sintoma - sintoma ausente/None entra no
+    rotulo "Sem sintoma informado" (nunca descartado)."""
+    totais: Dict[str, int] = {}
+    for linha in linhas:
+        chave = linha.sintoma or "Sem sintoma informado"
+        totais[chave] = totais.get(chave, 0) + 1
+    return totais
+
+
+def contagem_por_ativo(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    """Conta atendimentos por ativo - ativo ausente/None entra no rotulo
+    "Sem ativo informado" (nunca descartado)."""
+    totais: Dict[str, int] = {}
+    for linha in linhas:
+        chave = linha.ativo or "Sem ativo informado"
+        totais[chave] = totais.get(chave, 0) + 1
+    return totais
+
+
+# ----------------------------------------------------------------------
 # Consolidacao multi-jornada
 # ----------------------------------------------------------------------
 @dataclass

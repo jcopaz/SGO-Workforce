@@ -1,5 +1,44 @@
 # Changelog
 
+## [2026-07-31] Aba "Falhas" no painel — tempo de atendimento (ADR-0029)
+
+Ver `docs/56_ADR_0029_ABA_FALHAS_PAINEL.md` para a decisão completa.
+Pedido explícito do responsável do produto, com uma captura de tela de
+referência de outro painel operacional da MRS.
+
+### Adicionado
+- `src/workforce_core/consolidacao.py`: `LinhaAtendimentoFalha`,
+  `linhas_atendimento_falha` (duração **bruta**, fim-início, diferente de
+  `linhas_eventos_classificadas`; inclui jornadas ainda abertas, desvio
+  deliberado do padrão existente), `ResumoAtendimentosFalha`,
+  `resumo_atendimentos_falha`, `contagem_por_sintoma`, `contagem_por_ativo`.
+- `painel/dados.py`: wrappers finos para a tela; `painel/graficos.py`:
+  `grafico_ranking_duracao_falhas` (barra horizontal top 15 por duração),
+  `grafico_donut_contagem` (rosca genérica rótulo→contagem).
+- `painel/telas/falhas.py` (novo): KPIs (total, tempo médio, maior
+  duração, duração total), ranking por duração, donut por sintoma,
+  contagem por ativo, tabela completa para drill-down. Registrada em
+  `painel/app.py` entre "Visão geral" e "Mapa Operacional".
+- `tests/test_falhas_painel.py` (novo): **primeira tela do painel testada
+  de ponta a ponta** via `streamlit.testing.v1.AppTest` (script real
+  rodando em runtime Streamlit "bare mode", não só `dados.py`/`graficos.py`
+  isolados) — confirma zero exceções com dados de exemplo e com
+  diretório vazio.
+- `tests/test_consolidacao.py` (8 testes novos) cobrindo o novo domínio.
+- `docs/12_DASHBOARDS_ECHARTS.md` atualizado.
+
+### Testes
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest`: 275/275 (era 265).
+
+### Riscos
+- Só a dimensão "tempo de atendimento" foi implementada — causa, ação,
+  sistemas, componentes, impacto e reincidência (as demais dimensões
+  já previstas em `docs/12`) continuam sem tela.
+- Nenhuma validação com a operação de que "ranking por duração +
+  sintoma + ativo" são as dimensões certas — seguiu a referência
+  fornecida, não um indicador oficial validado.
+
 ## [2026-07-31] Reintrodução de "Produtiva Não Rentável" (ADR-0028)
 
 Ver `docs/55_ADR_0028_PRODUTIVA_NAO_RENTAVEL.md` para a decisão completa.
