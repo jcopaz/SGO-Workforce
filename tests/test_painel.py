@@ -326,13 +326,19 @@ def test_grafico_hh_por_motivo_ignora_linhas_sem_motivo_e_usa_rotulo_descritivo(
 
 def test_grafico_utilizacao_por_colaborador_ordena_do_maior_para_o_menor():
     grafico = grafico_utilizacao_por_colaborador({"C1": 0.4, "C2": 0.9, "C3": None})
-    html = renderizar_embutido(grafico)
 
+    # Inspeciona o eixo X (categorias) direto no JSON de opcoes do ECharts,
+    # em vez de procurar a substring "C3" no HTML renderizado - o HTML
+    # embute 1MB+ de JS do ECharts, que tem codigos de cor hexadecimais
+    # (ex.: "#B0B6C3") onde "C3" aparece por coincidencia, dando falso
+    # positivo numa checagem ingenua de substring.
+    opcoes = json.loads(grafico.dump_options())
+    categorias_eixo_x = opcoes["xAxis"][0]["data"]
+    assert categorias_eixo_x == ["C2", "C1"]  # ordenado do maior para o menor, C3 (None) fora
+
+    html = renderizar_embutido(grafico)
     assert "<script>" in html
     assert "cdn" not in html.lower()
-    assert "C1" in html
-    assert "C2" in html
-    assert "C3" not in html  # None fica de fora, nunca vira 0% enganoso
 
 
 def test_grafico_scatter_duracao_frequencia_renderiza_com_rotulo_descritivo():
