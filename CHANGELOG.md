@@ -1,5 +1,23 @@
 # Changelog
 
+## [2026-07-31] "Sincronizar agora" só aparece com a jornada encerrada
+
+### Alterado
+- `interface_campo/js/app.js`: o botão "Sincronizar agora" deixou de
+  aparecer em toda tela com jornada aberta (pausa, atividade, evento
+  secundário, lista de ações) e passou a aparecer só na tela de jornada
+  encerrada — pedido do responsável do produto. A sincronização
+  automática best-effort (após cada transição, `persistir()` →
+  `dispararSincronizacao()`) continua acontecendo do mesmo jeito; o botão
+  manual agora só serve como conferência final antes de fechar o app.
+- `interface_campo/service-worker.js`: `CACHE_VERSAO` incrementada
+  (`v15` → `v16`).
+
+### Testes
+- `node --check` em todos os arquivos de `interface_campo/js/`: OK.
+- `node --test tests/js/*.test.mjs`: 107/107 (inalterado).
+- `pytest`: 276/276 (inalterado, mudança só no lado JS).
+
 ## [2026-07-31] Lista única de ações na interface de campo (ADR-0030)
 
 Ver `docs/57_ADR_0030_LISTA_UNICA_DE_ACOES.md` para a decisão completa.

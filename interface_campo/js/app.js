@@ -626,11 +626,16 @@ function render() {
   }
 
   els.matricula.disabled = true;
-  els.botoes.appendChild(botao("Sincronizar agora", () => dispararSincronizacao()));
 
   if (motor.jornada.estado === "ENCERRADA") {
     els.status.textContent = `Jornada encerrada as ${formatoHora(motor.jornada.fim)}.`;
     renderResumoEncerrado();
+    // "Sincronizar agora" so aparece aqui (jornada encerrada) - pedido do
+    // responsavel do produto em 2026-07-31: durante a jornada em
+    // andamento o app ja sincroniza sozinho apos cada transicao
+    // (persistir() -> dispararSincronizacao(), best-effort), o botao
+    // manual so faz sentido como conferencia final antes de fechar o app.
+    els.botoes.appendChild(botao("Sincronizar agora", () => dispararSincronizacao()));
     els.botoes.appendChild(
       botao(
         "Iniciar nova jornada",
