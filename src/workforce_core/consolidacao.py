@@ -327,6 +327,54 @@ def contagem_por_ativo(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
     return totais
 
 
+def contagem_por_objeto(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    """Conta atendimentos por objeto (componente causador, catalogo RASF)
+    - objeto ausente/None entra no rotulo "Sem objeto informado" (nunca
+    descartado). Mesmo padrao de contagem_por_sintoma/contagem_por_ativo."""
+    totais: Dict[str, int] = {}
+    for linha in linhas:
+        chave = linha.objeto or "Sem objeto informado"
+        totais[chave] = totais.get(chave, 0) + 1
+    return totais
+
+
+def duracao_media_por_sintoma(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, timedelta]:
+    """Duracao media (nao total) de atendimento por sintoma - "quais
+    sintomas tipicamente demoram mais para resolver", distinto do ranking
+    de piores ocorrencias individuais (que mostra so o pior caso, nao a
+    tendencia). Sintoma ausente/None entra no rotulo "Sem sintoma
+    informado"."""
+    total_por_sintoma: Dict[str, timedelta] = {}
+    contagem: Dict[str, int] = {}
+    for linha in linhas:
+        chave = linha.sintoma or "Sem sintoma informado"
+        total_por_sintoma[chave] = total_por_sintoma.get(chave, timedelta()) + linha.duracao
+        contagem[chave] = contagem.get(chave, 0) + 1
+    return {chave: total / contagem[chave] for chave, total in total_por_sintoma.items()}
+
+
+def ativos_reincidentes(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    """Ativos com mais de um atendimento de falha no periodo - reincidencia
+    e definida como "aconteceu mais de uma vez" (piso 2, nao um limiar de
+    negocio inventado). Ativo ausente/None nunca conta como reincidente
+    (nao da pra saber se e o mesmo ativo sem identificacao)."""
+    contagem = contagem_por_ativo([linha for linha in linhas if linha.ativo])
+    return {ativo: quantidade for ativo, quantidade in contagem.items() if quantidade > 1}
+
+
+def agrupar_ativo_sintoma(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, Dict[str, timedelta]]:
+    """Duracao total por (ativo, sintoma) - base do detalhamento
+    hierarquico ativo > sintoma no painel. Ausentes entram nos mesmos
+    rotulos "Sem ativo/sintoma informado" de contagem_por_ativo/sintoma."""
+    agrupado: Dict[str, Dict[str, timedelta]] = {}
+    for linha in linhas:
+        chave_ativo = linha.ativo or "Sem ativo informado"
+        chave_sintoma = linha.sintoma or "Sem sintoma informado"
+        por_sintoma = agrupado.setdefault(chave_ativo, {})
+        por_sintoma[chave_sintoma] = por_sintoma.get(chave_sintoma, timedelta()) + linha.duracao
+    return agrupado
+
+
 # ----------------------------------------------------------------------
 # Consolidacao multi-jornada
 # ----------------------------------------------------------------------
@@ -365,6 +413,26 @@ def resumo_consolidado(jornadas: List[Jornada], catalogo: CatalogoMotivos) -> Re
             )
 
     return resumo
+
+
+def resumo_consolidado_por_colaborador(
+    jornadas: List[Jornada], catalogo: CatalogoMotivos
+) -> Dict[str, ResumoConsolidado]:
+    """Mesma consolidacao de resumo_consolidado, mas uma entrada por
+    colaborador_matricula - base do indicador de Utilizacao HH individual
+    (por colaborador) no painel, em vez de so o agregado do periodo
+    inteiro. Colaboradores sem nenhuma jornada encerrada nao aparecem no
+    resultado (mesmo criterio de resumo_consolidado)."""
+    jornadas_por_colaborador: Dict[str, List[Jornada]] = {}
+    for jornada in jornadas:
+        jornadas_por_colaborador.setdefault(jornada.colaborador_matricula, []).append(jornada)
+
+    resultado: Dict[str, ResumoConsolidado] = {}
+    for colaborador, jornadas_do_colaborador in jornadas_por_colaborador.items():
+        resumo = resumo_consolidado(jornadas_do_colaborador, catalogo)
+        if resumo.quantidade_jornadas > 0:
+            resultado[colaborador] = resumo
+    return resultado
 
 
 # ----------------------------------------------------------------------

@@ -259,6 +259,79 @@ def test_contagem_por_ativo_agrupa_e_trata_ausente():
     assert contagem == {"ATIVO-1": 1, "Sem ativo informado": 1}
 
 
+def test_contagem_por_objeto_agrupa_e_trata_ausente():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "1", "A", "S", "Componente X"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "2", "A", "S", "Componente X"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "3", "A", "S", None),
+    ]
+
+    contagem = consolidacao.contagem_por_objeto(linhas)
+
+    assert contagem == {"Componente X": 2, "Sem objeto informado": 1}
+
+
+def test_duracao_media_por_sintoma_calcula_media_nao_total():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "1", "A", "Sintoma A", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=3), "2", "A", "Sintoma A", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=5), "3", "B", "Sintoma B", "O"),
+    ]
+
+    medias = consolidacao.duracao_media_por_sintoma(linhas)
+
+    assert medias == {"Sintoma A": timedelta(hours=2), "Sintoma B": timedelta(hours=5)}
+
+
+def test_ativos_reincidentes_so_lista_quem_tem_mais_de_um_atendimento():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "1", "ATIVO-1", "S", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "2", "ATIVO-1", "S", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "3", "ATIVO-2", "S", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "4", None, "S", "O"),
+    ]
+
+    reincidentes = consolidacao.ativos_reincidentes(linhas)
+
+    assert reincidentes == {"ATIVO-1": 2}  # ATIVO-2 (1x) e ativo ausente ficam de fora
+
+
+def test_agrupar_ativo_sintoma_soma_duracao_por_combinacao():
+    linhas = [
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "1", "ATIVO-1", "Sintoma A", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=2), "2", "ATIVO-1", "Sintoma A", "O"),
+        consolidacao.LinhaAtendimentoFalha("1", _dt(8, 0).date(), _dt(8, 0), _dt(9, 0), timedelta(hours=1), "3", "ATIVO-1", "Sintoma B", "O"),
+    ]
+
+    agrupado = consolidacao.agrupar_ativo_sintoma(linhas)
+
+    assert agrupado == {"ATIVO-1": {"Sintoma A": timedelta(hours=3), "Sintoma B": timedelta(hours=1)}}
+
+
+def test_resumo_consolidado_por_colaborador_separa_cada_um():
+    j1 = _jornada_completa("1")
+    j2 = _jornada_completa("2")
+    catalogo = catalogo_padrao()
+
+    por_colaborador = consolidacao.resumo_consolidado_por_colaborador([j1, j2], catalogo)
+
+    assert set(por_colaborador.keys()) == {"1", "2"}
+    assert por_colaborador["1"].quantidade_jornadas == 1
+    assert por_colaborador["1"].jornada_bruta_total == timedelta(hours=4)
+    assert por_colaborador["2"].jornada_bruta_total == timedelta(hours=4)
+
+
+def test_resumo_consolidado_por_colaborador_ignora_quem_so_tem_jornada_aberta():
+    motor_aberta = MotorJornada("3")
+    motor_aberta.iniciar_jornada(_dt(8, 0))
+
+    por_colaborador = consolidacao.resumo_consolidado_por_colaborador(
+        [motor_aberta.jornada], catalogo_padrao()
+    )
+
+    assert por_colaborador == {}
+
+
 # ----------------------------------------------------------------------
 # Consolidacao multi-jornada
 # ----------------------------------------------------------------------

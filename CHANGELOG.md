@@ -1,5 +1,64 @@
 # Changelog
 
+## [2026-07-31] Dashboard completo de produtividade/execução e detalhamento de falhas (ADR-0031)
+
+Ver `docs/58_ADR_0031_DASHBOARD_COMPLETO_PRODUTIVIDADE_FALHAS.md` para a
+decisão completa. Pedido explícito do responsável do produto após
+relatar (com capturas de tela reais) título/legenda sobrepostos em vários
+gráficos, o gauge com texto duplicado, o treemap ilegível e rótulos de
+categoria em código cru.
+
+### Corrigido
+- **Bugs reais de renderização relatados em produção** (só visíveis com
+  dado real, 12+ categorias — nunca reproduzidos nos smoke tests
+  anteriores, que usavam poucas categorias): título e legenda sobrepostos
+  em `grafico_distribuicao_pizza`, `grafico_hh_por_colaborador` e
+  `grafico_donut_contagem`; gauge de Utilização HH duplicando o mesmo
+  texto (título do gráfico + nome interno da série); treemap "HH por
+  motivo/justificativa" cortando rótulos em "EE" ilegível.
+- `painel/graficos.py`: `_titulo_opts`/`_legenda_lateral_opts`/
+  `_legenda_superior_opts` (posicionamento fixo, nunca sobreposto) usados
+  em todo gráfico com título/legenda. Gauge sem título/nome interno
+  duplicado. Treemap **substituído** por `grafico_hh_por_motivo` (barra
+  horizontal com rótulo completo, mesmo padrão do ranking de falhas).
+- **Performance real**: `renderizar_embutido` relia `echarts.min.js`
+  (1MB+) do disco a cada gráfico — com o dashboard ampliado (10+ gráficos
+  por tela) isso virou um gargalo mensurável (uma bateria de testes que
+  deveria durar segundos passou de dez minutos). `_ler_js_echarts_local`
+  agora cacheia o conteúdo em memória por processo — mesma correção
+  beneficia o Streamlit real, não só os testes.
+
+### Adicionado
+- `painel/dados.py`: `ROTULOS_CATEGORIA`/`rotulo_categoria`/`rotulo_motivo`
+  — fonte única de rótulos legíveis em português, usada tanto pelos
+  filtros das telas quanto pelos gráficos (nunca mais `categoria.value`
+  cru num gráfico).
+- `src/workforce_core/consolidacao.py`: `resumo_consolidado_por_colaborador`,
+  `contagem_por_objeto`, `duracao_media_por_sintoma`, `ativos_reincidentes`,
+  `agrupar_ativo_sintoma`.
+- **Visão Geral**: Utilização HH por colaborador (bar), duração média x
+  frequência por motivo (scatter), fluxo de HH colaborador→categoria
+  (sankey).
+- **Falhas**: distribuição por objeto/componente causador (donut),
+  evolução diária de atendimentos (line), HH por colaborador (bar),
+  duração média por sintoma (bar), reincidência de ativos (bar,
+  condicional — só aparece se houver algum ativo reincidente), falhas
+  por ativo e sintoma (sunburst).
+- `tests/test_consolidacao.py`, `tests/test_painel.py`: testes para toda
+  agregação e gráfico novos, incluindo verificação de posição de
+  título/legenda via inspeção do JSON de opções do ECharts.
+
+### Riscos
+- Heatmap dia x hora (recomendado em `docs/12`) não implementado —
+  exigiria capturar hora do evento em `LinhaEvento`, extensão de domínio
+  maior que ficou fora desta sessão.
+- Causa, ação e sistema continuam sem tela em Falhas — não capturados
+  por `DadosFalha` hoje.
+- Teste manual em navegador real não realizado — a correção de layout
+  foi validada por inspeção do JSON de opções gerado (posições
+  title/legend), não por renderização visual real; o próprio bug
+  relatado nesta sessão só apareceu com uso real em produção.
+
 ## [2026-07-31] Número de versão visível no rodapé da interface de campo
 
 ### Adicionado

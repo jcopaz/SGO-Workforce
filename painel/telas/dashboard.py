@@ -1,5 +1,6 @@
 """Painel gerencial - piloto tecnico (Incremento 9, reorganizado no
-ADR-0020). Aba "Análise de Dados" > "Visão geral".
+ADR-0020, dashboard ampliado no ADR-0031). Aba "Análise de Dados" >
+"Visão geral".
 
 Indicadores obrigatorios por perfil, filtros padrao, metas e periodicidade
 de atualizacao sao decisoes pendentes
@@ -27,13 +28,16 @@ from dados import (
     agrupar_duracao_por_categoria,
     carregar_jornadas,
     carregar_jornadas_via_api,
+    contagem_e_duracao_media_por_motivo,
     formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
     horas_produtiva_nao_rentavel_do_resumo,
     montar_linhas_eventos,
     montar_resumo,
+    rotulo_categoria,
     utilizacao_hh_do_resumo,
+    utilizacao_hh_por_colaborador,
 )
 from graficos import (
     grafico_distribuicao_pizza,
@@ -41,7 +45,10 @@ from graficos import (
     grafico_gauge_percentual,
     grafico_hh_por_categoria,
     grafico_hh_por_colaborador,
-    grafico_motivos_treemap,
+    grafico_hh_por_motivo,
+    grafico_sankey_colaborador_categoria,
+    grafico_scatter_duracao_frequencia,
+    grafico_utilizacao_por_colaborador,
     renderizar_embutido,
 )
 
@@ -172,12 +179,6 @@ else:
 
 st.subheader("Filtros")
 
-_rotulo_sem_categoria = "SEM_CATEGORIA"
-
-
-def _rotulo_categoria(categoria):
-    return categoria.value if categoria is not None else _rotulo_sem_categoria
-
 
 def _sanitizar_multiselect_state(chave, opcoes_validas):
     """Evita StreamlitAPIException quando as opções de um multiselect
@@ -259,7 +260,7 @@ if resumo.quantidade_jornadas == 0:
 
 linhas = montar_linhas_eventos(jornadas_filtradas)
 
-categorias_disponiveis = sorted({_rotulo_categoria(linha.categoria) for linha in linhas})
+categorias_disponiveis = sorted({rotulo_categoria(linha.categoria) for linha in linhas})
 motivos_disponiveis = sorted({linha.motivo for linha in linhas if linha.motivo is not None})
 
 _sanitizar_multiselect_state("painel_filtro_categoria", categorias_disponiveis)
@@ -284,7 +285,7 @@ with col_f4:
 linhas_filtradas = [
     linha
     for linha in linhas
-    if _rotulo_categoria(linha.categoria) in categorias_selecionadas
+    if rotulo_categoria(linha.categoria) in categorias_selecionadas
     and (linha.motivo is None or linha.motivo in motivos_selecionados)
 ]
 
@@ -348,11 +349,10 @@ with col_gauge:
     if fracao_utilizacao_hh is None:
         st.info("Sem HH bruto no período filtrado para calcular Utilização HH.")
     else:
+        st.caption("Utilização HH (Produtivo rentável / Total)")
         components.html(
-            renderizar_embutido(
-                grafico_gauge_percentual("Utilização HH (Produtivo rentável / Total)", fracao_utilizacao_hh)
-            ),
-            height=360,
+            renderizar_embutido(grafico_gauge_percentual("Utilização HH", fracao_utilizacao_hh)),
+            height=340,
             scrolling=False,
         )
 with col_performance:
@@ -364,40 +364,69 @@ with col_performance:
         "quando essa fonte existir."
     )
 
-st.subheader("Distribuição de HH por categoria")
-col_barra, col_pizza = st.columns(2)
-with col_barra:
-    components.html(
-        renderizar_embutido(grafico_hh_por_categoria(por_categoria_filtrado)),
-        height=440,
-        scrolling=False,
-    )
-with col_pizza:
-    components.html(
-        renderizar_embutido(grafico_distribuicao_pizza(por_categoria_filtrado)),
-        height=440,
-        scrolling=False,
-    )
+st.subheader("Produtividade por colaborador")
+st.caption(
+    "Utilização HH individual - quem está convertendo mais período de "
+    "trabalho em manutenção rentável (EE17/EE21), no mesmo filtro de "
+    "colaborador/período acima."
+)
+utilizacao_por_colaborador = utilizacao_hh_por_colaborador(jornadas_filtradas)
+components.html(
+    renderizar_embutido(grafico_utilizacao_por_colaborador(utilizacao_por_colaborador)),
+    height=500,
+    scrolling=False,
+)
 
-st.subheader("Evolução diária e por colaborador")
-col_evolucao, col_colaborador = st.columns(2)
+st.subheader("Distribuição de HH por categoria")
+components.html(
+    renderizar_embutido(grafico_hh_por_categoria(por_categoria_filtrado)),
+    height=500,
+    scrolling=False,
+)
+components.html(
+    renderizar_embutido(grafico_distribuicao_pizza(por_categoria_filtrado)),
+    height=520,
+    scrolling=False,
+)
+
+st.subheader("Evolução diária e relação duração x frequência")
+col_evolucao, col_scatter = st.columns(2)
 with col_evolucao:
     components.html(
         renderizar_embutido(grafico_evolucao_diaria(linhas_filtradas)),
-        height=440,
+        height=460,
         scrolling=False,
     )
-with col_colaborador:
-    components.html(
-        renderizar_embutido(grafico_hh_por_colaborador(linhas_filtradas)),
-        height=440,
-        scrolling=False,
-    )
+with col_scatter:
+    dados_motivo = contagem_e_duracao_media_por_motivo(linhas_filtradas)
+    if not dados_motivo:
+        st.info("Nenhum evento com motivo (pausa/deslocamento/espera/apoio) no filtro atual.")
+    else:
+        components.html(
+            renderizar_embutido(grafico_scatter_duracao_frequencia(dados_motivo)),
+            height=500,
+            scrolling=False,
+        )
+
+st.subheader("HH por colaborador (detalhado por categoria)")
+components.html(
+    renderizar_embutido(grafico_hh_por_colaborador(linhas_filtradas)),
+    height=500,
+    scrolling=False,
+)
 
 st.subheader("HH por motivo/justificativa")
+_grafico_motivo, _altura_motivo = grafico_hh_por_motivo(linhas_filtradas)
 components.html(
-    renderizar_embutido(grafico_motivos_treemap(linhas_filtradas)),
-    height=440,
+    renderizar_embutido(_grafico_motivo),
+    height=_altura_motivo + 30,
+    scrolling=False,
+)
+
+st.subheader("Fluxo de HH: colaborador → categoria")
+components.html(
+    renderizar_embutido(grafico_sankey_colaborador_categoria(linhas_filtradas)),
+    height=540,
     scrolling=False,
 )
 

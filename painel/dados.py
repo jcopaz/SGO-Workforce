@@ -23,18 +23,90 @@ from workforce_core.consolidacao import (
     LinhaEvento,
     ResumoAtendimentosFalha,
     ResumoConsolidado,
+    agrupar_ativo_sintoma,
+    ativos_reincidentes,
     contagem_por_ativo,
+    contagem_por_objeto,
     contagem_por_sintoma,
+    duracao_media_por_sintoma,
     linhas_atendimento_falha,
     linhas_eventos_classificadas,
     resumo_atendimentos_falha,
     resumo_consolidado,
+    resumo_consolidado_por_colaborador,
     utilizacao_hh,
 )
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
 from workforce_storage.serializacao import jornada_de_dict
+
+# Rotulos legiveis para o gestor (pedido em 2026-07-31: "o gestor nao tem
+# de cabeca os motivos, precisa ser descritivo") - o gestor via as
+# categorias como ATIVIDADE_PLANEJADA/DESLOCAMENTO_A_PE cruas nos
+# graficos. Fonte unica usada tanto pelos graficos (painel/graficos.py)
+# quanto pelos filtros da tela (painel/telas/dashboard.py), para o rotulo
+# de um multiselect e o de uma legenda nunca divergirem. Cobre todos os
+# valores de Categoria (workforce_core/catalogo.py) - texto livre em
+# portugues, nao e dado de negocio (nao precisa de validacao do
+# responsavel do produto, e so apresentacao).
+ROTULOS_CATEGORIA: Dict[Categoria, str] = {
+    Categoria.ATIVIDADE_PLANEJADA: "Atividade planejada",
+    Categoria.ATENDIMENTO_FALHA: "Atendimento de falha",
+    Categoria.DESLOCAMENTO_RODOVIARIO: "Deslocamento rodoviário",
+    Categoria.DESLOCAMENTO_FERROVIARIO: "Deslocamento ferroviário",
+    Categoria.DESLOCAMENTO_A_PE: "Deslocamento a pé",
+    Categoria.REFEICAO: "Refeição",
+    Categoria.DDS: "DDS",
+    Categoria.REUNIAO: "Reunião",
+    Categoria.TREINAMENTO: "Treinamento",
+    Categoria.AGUARDANDO_MATERIAL: "Aguardando material",
+    Categoria.AGUARDANDO_INTERVALO_LIBERACAO: "Aguardando intervalo/liberação",
+    Categoria.APOIO_OPERACIONAL: "Apoio operacional",
+    Categoria.ATIVIDADE_ADMINISTRATIVA: "Atividade administrativa",
+    Categoria.OUTROS_CATALOGADOS: "Outros catalogados",
+    Categoria.PREPARACAO_JORNADA: "Preparação para jornada",
+    Categoria.AGUARDANDO_CCO: "Aguardando CCO",
+    Categoria.TREM_PARADO_FRENTE_SERVICO: "Trem parado na frente de serviço",
+    Categoria.RESTRICAO_INFRAESTRUTURA: "Restrição de infraestrutura",
+    Categoria.SERVICO_INTERNO_COORDENACAO: "Serviço interno da coordenação",
+    Categoria.TRABALHO_NAO_DISTRIBUIDO: "Trabalho não distribuído",
+    Categoria.AGUARDANDO_SEQUENCIA_SERVICO: "Aguardando sequência de serviço",
+    Categoria.CONSULTA_DOCUMENTACAO_TECNICA: "Consulta à documentação técnica",
+    Categoria.PREPARAR_ATIVIDADE: "Preparar atividade",
+    Categoria.DESMONTAR_ATIVIDADE: "Desmontar atividade",
+    Categoria.CARREGAR_VEICULO: "Carregar veículo",
+    Categoria.DESCARREGAR_VEICULO: "Descarregar veículo",
+    # Categoria.SMS e o valor historico do codigo EE20 "DDS / APR" no
+    # catalogo (nome herdado, nao "Segurança/Meio ambiente/Saúde"
+    # generico) - rotulo usa a descricao real do codigo para nao confundir.
+    Categoria.SMS: "DDS / APR",
+    Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA: "Atividade planejada não concluída",
+}
+
+ROTULO_SEM_CATEGORIA = "Sem categoria"
+
+
+def rotulo_categoria(categoria: Optional[Categoria]) -> str:
+    """Rotulo legivel de uma Categoria - "Sem categoria" para None. Fonte
+    unica para graficos e filtros (ver ROTULOS_CATEGORIA acima)."""
+    if categoria is None:
+        return ROTULO_SEM_CATEGORIA
+    return ROTULOS_CATEGORIA.get(categoria, categoria.value)
+
+
+def rotulo_motivo(codigo: Optional[str], catalogo: CatalogoMotivos | None = None) -> str:
+    """Rotulo legivel de um codigo de motivo (pausa/evento secundario) -
+    "codigo - descricao" (mesmo formato ja usado nos seletores da
+    interface de campo, familiar para a operacao) em vez do codigo cru.
+    Cai no proprio codigo se ele nao estiver no catalogo informado (nunca
+    quebra por um motivo desconhecido/de teste)."""
+    if codigo is None:
+        return "Sem motivo"
+    entrada = (catalogo or catalogo_completo()).obter(codigo)
+    if entrada is None:
+        return codigo
+    return f"{codigo} - {entrada.descricao}"
 
 
 def carregar_jornadas(diretorio: Union[str, Path]) -> Tuple[List[Jornada], List[str]]:
@@ -130,6 +202,22 @@ def contagem_atendimentos_por_ativo(linhas: List[LinhaAtendimentoFalha]) -> Dict
     return contagem_por_ativo(linhas)
 
 
+def contagem_atendimentos_por_objeto(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    return contagem_por_objeto(linhas)
+
+
+def duracao_media_atendimentos_por_sintoma(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, timedelta]:
+    return duracao_media_por_sintoma(linhas)
+
+
+def ativos_reincidentes_do_periodo(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, int]:
+    return ativos_reincidentes(linhas)
+
+
+def agrupar_atendimentos_ativo_sintoma(linhas: List[LinhaAtendimentoFalha]) -> Dict[str, Dict[str, timedelta]]:
+    return agrupar_ativo_sintoma(linhas)
+
+
 def utilizacao_hh_do_resumo(resumo: ResumoConsolidado) -> Optional[float]:
     """Utilizacao HH (ADR-0027) = Horas Produtivas / Horas Totais, a partir
     de um ResumoConsolidado ja calculado (montar_resumo). Horas Produtivas
@@ -143,6 +231,21 @@ def utilizacao_hh_do_resumo(resumo: ResumoConsolidado) -> Optional[float]:
     ZeroDivisionError."""
     horas_produtivas = resumo.por_classificacao_hh.get(ClassificacaoHH.PRODUTIVA, timedelta())
     return utilizacao_hh(horas_produtivas, resumo.jornada_bruta_total)
+
+
+def utilizacao_hh_por_colaborador(
+    jornadas: List[Jornada], catalogo: CatalogoMotivos | None = None
+) -> Dict[str, Optional[float]]:
+    """Utilizacao HH (ADR-0027) individual, um valor por colaborador -
+    permite comparar quem esta convertendo mais/menos periodo de trabalho
+    em manutencao rentavel, em vez de so o agregado do periodo inteiro.
+    None para um colaborador especifico so aconteceria com jornada_bruta
+    zero, o que resumo_consolidado_por_colaborador ja evita ao excluir
+    colaboradores sem nenhuma jornada encerrada."""
+    por_colaborador = resumo_consolidado_por_colaborador(jornadas, catalogo or catalogo_completo())
+    return {
+        colaborador: utilizacao_hh_do_resumo(resumo) for colaborador, resumo in por_colaborador.items()
+    }
 
 
 def horas_produtiva_nao_rentavel_do_resumo(resumo: ResumoConsolidado) -> timedelta:
@@ -164,6 +267,23 @@ def agrupar_duracao_por_categoria(linhas: List[LinhaEvento]) -> Dict[Optional[Ca
     for linha in linhas:
         totais[linha.categoria] = totais.get(linha.categoria, timedelta()) + linha.duracao
     return totais
+
+
+def contagem_e_duracao_media_por_motivo(linhas: List[LinhaEvento]) -> Dict[str, Tuple[int, timedelta]]:
+    """Frequencia (numero de ocorrencias) e duracao media por motivo -
+    base do scatter "duracao x frequencia" (docs/12_DASHBOARDS_ECHARTS.md).
+    So considera linhas com motivo preenchido (pausas/eventos secundarios
+    - atividades nao tem motivo, ver LinhaEvento)."""
+    total_por_motivo: Dict[str, timedelta] = {}
+    contagem: Dict[str, int] = {}
+    for linha in linhas:
+        if linha.motivo is None:
+            continue
+        total_por_motivo[linha.motivo] = total_por_motivo.get(linha.motivo, timedelta()) + linha.duracao
+        contagem[linha.motivo] = contagem.get(linha.motivo, 0) + 1
+    return {
+        motivo: (contagem[motivo], total / contagem[motivo]) for motivo, total in total_por_motivo.items()
+    }
 
 
 def formatar_data_hora(data: Optional[datetime]) -> str:

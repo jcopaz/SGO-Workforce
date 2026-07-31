@@ -1,12 +1,12 @@
-"""Falhas - tempo de atendimento (ADR-0029). Aba "Análise de Dados" >
-"Falhas".
+"""Falhas - tempo de atendimento e detalhamento (ADR-0029, ampliado no
+ADR-0031). Aba "Análise de Dados" > "Falhas".
 
 Preenche a aba "Falhas/RASF" prevista desde `docs/11_TELAS_E_UX.md` e
 `docs/12_DASHBOARDS_ECHARTS.md` ("Top sintomas, causas, ações, sistemas,
-componentes, impacto, reincidência e HH consumido") mas nunca construída
-até este incremento - pedido explícito do responsável do produto, com
-uma visão de referência (ranking por duração + KPIs + distribuição por
-motivo) de outro painel operacional da MRS.
+componentes, impacto, reincidência e HH consumido"). "Causa", "ação" e
+"sistema" continuam sem tela: não são campos capturados por
+`DadosFalha`/interface de campo hoje (ver ADR-0031) - mostrar essas
+dimensões exigiria inventar dado, não é feito aqui.
 
 Mesma disciplina das demais telas: números vêm só do motor de domínio já
 testado (`workforce_core.consolidacao`), sem indicador oficial validado
@@ -28,16 +28,29 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from dados import (
+    agrupar_atendimentos_ativo_sintoma,
+    ativos_reincidentes_do_periodo,
     carregar_jornadas,
     carregar_jornadas_via_api,
     contagem_atendimentos_por_ativo,
+    contagem_atendimentos_por_objeto,
     contagem_atendimentos_por_sintoma,
+    duracao_media_atendimentos_por_sintoma,
     formatar_data_hora,
     formatar_horas,
     montar_linhas_atendimento_falha,
     resumo_atendimentos_falha_do_periodo,
 )
-from graficos import grafico_donut_contagem, grafico_ranking_duracao_falhas, renderizar_embutido
+from graficos import (
+    grafico_donut_contagem,
+    grafico_duracao_media_por_sintoma,
+    grafico_evolucao_diaria_falhas,
+    grafico_hh_falhas_por_colaborador,
+    grafico_ranking_duracao_falhas,
+    grafico_reincidencia_ativos,
+    grafico_sunburst_ativo_sintoma,
+    renderizar_embutido,
+)
 
 
 def _obter_secret_seguro(chave: str, default: str = "") -> str:
@@ -245,19 +258,66 @@ with c4:
 st.subheader("Ranking por duração e distribuição por sintoma")
 col_ranking, col_donut = st.columns([3, 2])
 with col_ranking:
-    components.html(
-        renderizar_embutido(grafico_ranking_duracao_falhas(linhas)),
-        height=500,
-        scrolling=False,
-    )
+    _grafico_ranking, _altura_ranking = grafico_ranking_duracao_falhas(linhas)
+    components.html(renderizar_embutido(_grafico_ranking), height=_altura_ranking + 30, scrolling=False)
 with col_donut:
     components.html(
         renderizar_embutido(
             grafico_donut_contagem("Ocorrências por sintoma", contagem_atendimentos_por_sintoma(linhas))
         ),
-        height=440,
+        height=480,
         scrolling=False,
     )
+
+st.subheader("Distribuição por objeto (componente causador)")
+components.html(
+    renderizar_embutido(
+        grafico_donut_contagem("Ocorrências por objeto", contagem_atendimentos_por_objeto(linhas))
+    ),
+    height=480,
+    scrolling=False,
+)
+
+st.subheader("Evolução diária e HH por colaborador")
+col_evolucao_falhas, col_hh_colaborador_falhas = st.columns(2)
+with col_evolucao_falhas:
+    components.html(
+        renderizar_embutido(grafico_evolucao_diaria_falhas(linhas)),
+        height=460,
+        scrolling=False,
+    )
+with col_hh_colaborador_falhas:
+    components.html(
+        renderizar_embutido(grafico_hh_falhas_por_colaborador(linhas)),
+        height=460,
+        scrolling=False,
+    )
+
+st.subheader("Duração média por sintoma e reincidência de ativos")
+col_duracao_media, col_reincidencia = st.columns(2)
+with col_duracao_media:
+    _grafico_duracao_media, _altura_duracao_media = grafico_duracao_media_por_sintoma(
+        duracao_media_atendimentos_por_sintoma(linhas)
+    )
+    components.html(
+        renderizar_embutido(_grafico_duracao_media), height=_altura_duracao_media + 30, scrolling=False
+    )
+with col_reincidencia:
+    reincidentes = ativos_reincidentes_do_periodo(linhas)
+    if not reincidentes:
+        st.info("Nenhum ativo com mais de um atendimento de falha no período filtrado.")
+    else:
+        _grafico_reincidencia, _altura_reincidencia = grafico_reincidencia_ativos(reincidentes)
+        components.html(
+            renderizar_embutido(_grafico_reincidencia), height=_altura_reincidencia + 30, scrolling=False
+        )
+
+st.subheader("Falhas por ativo e sintoma")
+components.html(
+    renderizar_embutido(grafico_sunburst_ativo_sintoma(agrupar_atendimentos_ativo_sintoma(linhas))),
+    height=540,
+    scrolling=False,
+)
 
 st.subheader("Ocorrências por ativo")
 contagem_ativo = contagem_atendimentos_por_ativo(linhas)
