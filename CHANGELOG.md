@@ -87,6 +87,15 @@ sem título no option).
   ativo" (mesma tela) já cobrem a dimensão ativo isoladamente. Expander
   renomeado de "Falhas por ativo e sintoma" para "Duração de falhas por
   sintoma".
+- **Rótulo (nome + valor) dentro da área colorida** - funil, pizza
+  ("Distribuição de HH") e donut ("Ocorrências por sintoma"/"por
+  objeto"): `label_opts` ganhou `position="inside"` (antes: rótulo do
+  lado de fora com linha apontando, padrão default do ECharts) e cor
+  branca pra contraste sobre a fatia colorida. Pizza/donut também
+  ganharam `min_show_label_angle=8` (parâmetro nativo do pyecharts) pra
+  esconder rótulo de fatia fina demais pro texto caber - mesmo
+  raciocínio do `minAngle` do sunburst, necessário porque esses dois
+  gráficos também têm até 19 categorias com o simulador ETL.
 
 ### Validação
 - `python -m py_compile` nos módulos tocados: OK.

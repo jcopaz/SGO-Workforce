@@ -216,12 +216,28 @@ def grafico_hh_por_categoria(por_categoria: Dict[Optional[Categoria], timedelta]
 
 
 def grafico_distribuicao_pizza(por_categoria: Dict[Optional[Categoria], timedelta]) -> Pie:
+    """`position="inside"` (ADR-0033): rotulo nome+percentual centralizado
+    dentro da propria fatia colorida, em vez de fora com uma linha
+    apontando - pedido explicito do responsavel do produto, mesmo
+    tratamento do funil. `min_show_label_angle` (parametro nativo do
+    pyecharts, nao precisa de dict cru) esconde o rotulo de fatia fina
+    demais pro texto caber - mesma ideia do `minAngle` do sunburst
+    (secao 5 do ADR-0033), evitando o mesmo tipo de sobreposicao com
+    muitas categorias (ate 19 aqui)."""
     dados = [(rotulo_categoria(c), _horas(d)) for c, d in por_categoria.items()]
     return (
         Pie(init_opts=opts.InitOpts(width="100%", height="520px"))
-        .add("HH", dados, radius="55%", center=["50%", "42%"])
+        .add(
+            "HH",
+            dados,
+            radius="55%",
+            center=["50%", "42%"],
+            min_show_label_angle=8,
+            label_opts=opts.LabelOpts(
+                formatter="{b}: {d}%", font_size=10, color="#FFFFFF", position="inside"
+            ),
+        )
         .set_global_opts(title_opts=_SEM_TITULO, legend_opts=_legenda_inferior_opts())
-        .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {d}%", font_size=11))
     )
 
 
@@ -504,13 +520,24 @@ def grafico_donut_contagem(titulo: str, contagem: Dict[str, int]) -> Pie:
     usado pelo tooltip padrão do ECharts (`{a}`) ao passar o mouse sobre
     uma fatia. Quem chama (`painel/telas/falhas.py`) usa `st.caption()`
     acima do gráfico para rotular visualmente, quando ele divide o
-    expander com outro gráfico."""
+    expander com outro gráfico.
+
+    `position="inside"`/`min_show_label_angle` (ADR-0033): mesmo
+    tratamento de `grafico_distribuicao_pizza` - rótulo nome+contagem
+    dentro da própria fatia colorida, escondido quando a fatia é fina
+    demais pro texto caber."""
     dados = sorted(contagem.items(), key=lambda item: item[1], reverse=True)
     return (
         Pie(init_opts=opts.InitOpts(width="100%", height="520px"))
-        .add(titulo, dados, radius=["32%", "52%"], center=["50%", "42%"])
+        .add(
+            titulo,
+            dados,
+            radius=["32%", "52%"],
+            center=["50%", "42%"],
+            min_show_label_angle=8,
+            label_opts=opts.LabelOpts(formatter="{b}: {c}", font_size=10, color="#FFFFFF", position="inside"),
+        )
         .set_global_opts(title_opts=_SEM_TITULO, legend_opts=_legenda_inferior_opts())
-        .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}", font_size=11))
     )
 
 
@@ -704,7 +731,9 @@ def grafico_funil_duracao_por_sintoma(agrupado: Dict[str, Dict[str, timedelta]])
             dados,
             sort_="descending",
             gap=2,
-            label_opts=opts.LabelOpts(formatter="{b}: {c}h", font_size=11, color="#FFFFFF"),
+            label_opts=opts.LabelOpts(
+                formatter="{b}: {c}h", font_size=11, color="#FFFFFF", position="inside"
+            ),
             tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}: {c}h", is_confine=True),
         )
         .set_global_opts(

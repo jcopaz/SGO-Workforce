@@ -222,6 +222,28 @@ timedelta]]`, mesmo `agrupar_atendimentos_ativo_sintoma` de
 para "Duração de falhas por sintoma", com `st.caption` explicando a
 diferença pro donut de contagem ao lado.
 
+### 7. Rótulo (nome + valor) dentro da área colorida - funil, pizza e donut
+
+Pedido explícito do responsável do produto: "coloque as legendas e os
+valores dentro das cores" - referenciando a mesma imagem do funil que
+motivou a seção 6, onde cada faixa colorida mostra nome+valor
+centralizado, em vez de rótulo do lado de fora com linha apontando (o
+padrão default do ECharts pra pizza/donut, e o que o funil também
+usava antes deste ajuste).
+
+- `grafico_funil_duracao_por_sintoma`: `label_opts` ganhou
+  `position="inside"`.
+- `grafico_distribuicao_pizza`, `grafico_donut_contagem`:
+  `label_opts` ganhou `position="inside"` e cor branca (contraste sobre
+  a fatia colorida, antes era a cor de texto padrão do eixo - clara
+  demais e ilegível sobre cor saturada). `min_show_label_angle=8`
+  (parâmetro nativo de `Pie.add()`, não precisa do truque de dict cru
+  usado no sunburst) esconde o rótulo de fatia fina demais pro texto
+  caber - mesmo raciocínio do `label.minAngle` do sunburst (seção 5),
+  necessário porque esses dois gráficos também podem ter muitas
+  categorias com o simulador ETL (até 19 na pizza "Distribuição de
+  HH").
+
 ## Validação de qualidade realizada
 
 - `python -m py_compile` em `painel/graficos.py`, `painel/telas/
