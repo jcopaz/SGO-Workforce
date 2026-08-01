@@ -34,14 +34,21 @@ _CSS_SGO = """
     color: #F8FAFC !important;
 }
 
-/* Logo do produto (ADR-0034, GIF animado no slot nativo st.logo) -
-   moldura discreta (cantos arredondados + sombra suave) pra dar
-   acabamento premium, sem mexer no tamanho/posicao que o proprio
-   Streamlit controla via `size="large"`. */
-[data-testid="stLogo"] {
-    border-radius: 10px !important;
-    overflow: hidden !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+/* Logo do produto (ADR-0035, GIF/WebP animado via st.sidebar.image) -
+   `st.logo` (ADR-0034) foi trocado por `st.sidebar.image` porque o
+   slot fixo do `st.logo` nao aumenta o suficiente com `size="large"`
+   nem e centralizavel (relatado com captura de tela real: logo
+   minusculo, encostado no canto). Centralizado + moldura premium
+   (cantos arredondados, sombra) aqui - escopado a `stSidebar` pra nao
+   afetar nenhum outro `st.image` do restante do painel. */
+[data-testid="stSidebar"] [data-testid="stImage"] {
+    display: flex !important;
+    justify-content: center !important;
+    margin: 12px 0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stImage"] img {
+    border-radius: 14px !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* Menu de navegacao (st.navigation/st.Page) - adaptacao do "pill menu"

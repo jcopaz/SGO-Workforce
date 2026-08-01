@@ -1,5 +1,32 @@
 # Changelog
 
+## [2026-07-31] Logo da sidebar - tamanho e centralização (ADR-0035)
+
+Ver `docs/62_ADR_0035_LOGO_SIDEBAR_TAMANHO_CENTRALIZACAO.md` para a
+decisão completa. Pedido do responsável do produto após ver o ADR-0034
+publicado: logo continuava minúsculo mesmo com `size="large"`.
+
+### Alterado
+- `painel/app.py`: `st.logo(...)` trocado por
+  `st.sidebar.image(caminho, width=260)` - `st.logo` é um slot fixo
+  pequeno do Streamlit sem controle real de largura/alinhamento;
+  `st.sidebar.image` é um elemento comum do corpo da sidebar, com
+  largura configurável de verdade.
+- `painel/estilo.py`: centralização + moldura (cantos arredondados,
+  sombra) via CSS escopado a `[data-testid="stSidebar"]
+  [data-testid="stImage"]` - não afeta nenhum outro `st.image` do
+  painel.
+- `app.py` agora procura primeiro `logo_sgo_workforce.webp` (conversão
+  mais leve em andamento) e cai pro `.gif` se ainda não existir.
+
+### Validação
+- `python -m py_compile` em `painel/app.py`, `painel/estilo.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0035).
+
 ## [2026-07-31] Logo animado (GIF) na sidebar, substituindo vídeo e logo estático da MRS (ADR-0034)
 
 Ver `docs/61_ADR_0034_LOGO_GIF_SIDEBAR_PREMIUM.md` para a decisão

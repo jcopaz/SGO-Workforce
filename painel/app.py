@@ -32,18 +32,24 @@ aplicar_estilo_sgo()
 
 _CAMINHO_ASSETS = Path(__file__).resolve().parent / "assets"
 
-# Logo animado do produto no slot fixo do Streamlit (ADR-0033/0034):
-# substitui o logo estatico da MRS a pedido do responsavel do produto.
-# GIF (nao mp4) - anima nativamente dentro de uma tag <img> comum, sem a
-# barra de controles nativa do navegador (play/mudo/volume) que o
-# `st.video` sempre mostra e que o responsavel do produto considerou
-# pouco premium. `size="large"` da mais presenca visual ao logo -
-# comportamento correto do `st.logo` nao foi confirmado num navegador
-# real neste ambiente (sandbox sem Playwright/Chromium, mesma limitacao
-# de sempre) - conferir visualmente apos o proximo deploy.
-_CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.gif"
+# Logo animado do produto na sidebar (ADR-0033/0034/0035): substitui o
+# logo estatico da MRS a pedido do responsavel do produto. GIF (nao
+# mp4) - anima nativamente dentro de uma tag <img> comum, sem a barra
+# de controles nativa do navegador que o `st.video` sempre mostra.
+#
+# `st.sidebar.image` em vez de `st.logo` (ADR-0035): `st.logo` reserva
+# um slot fixo pequeno no topo, ao lado do botao de recolher a sidebar
+# - `size="large"` nao aumenta o suficiente e a posicao nao e
+# centralizavel (relatado com captura de tela real: logo minusculo,
+# encostado no canto). `st.sidebar.image` e um elemento comum do corpo
+# da sidebar (renderiza abaixo do menu de navegacao, que o Streamlit
+# sempre ancora no topo) - controla largura de verdade, e a centralizacao
+# vem do CSS em `painel/estilo.py` (`[data-testid="stImage"]`).
+_CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.webp"
+if not _CAMINHO_LOGO_WORKFORCE.exists():
+    _CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.gif"
 if _CAMINHO_LOGO_WORKFORCE.exists():
-    st.logo(str(_CAMINHO_LOGO_WORKFORCE), size="large")
+    st.sidebar.image(str(_CAMINHO_LOGO_WORKFORCE), width=260)
 
 pagina = st.navigation(
     {
