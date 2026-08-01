@@ -52,12 +52,12 @@ from graficos import (
     grafico_hh_falhas_por_colaborador,
     grafico_hh_por_categoria,
     grafico_hh_por_colaborador,
+    grafico_funil_duracao_por_sintoma,
     grafico_hh_por_motivo,
     grafico_ranking_duracao_falhas,
     grafico_reincidencia_ativos,
     grafico_sankey_colaborador_categoria,
     grafico_scatter_duracao_frequencia,
-    grafico_sunburst_ativo_sintoma,
     grafico_utilizacao_por_colaborador,
     renderizar_embutido,
 )
@@ -485,11 +485,23 @@ def test_grafico_reincidencia_ativos_renderiza_html_autocontido():
     assert altura_px > 0
 
 
-def test_grafico_sunburst_ativo_sintoma_renderiza_html_autocontido():
-    agrupado = {"ATIVO-A": {"Sintoma A": timedelta(hours=1), "Sintoma B": timedelta(minutes=30)}}
-    html = renderizar_embutido(grafico_sunburst_ativo_sintoma(agrupado))
+def test_grafico_funil_duracao_por_sintoma_soma_entre_ativos():
+    # ADR-0033: o funil colapsa a dimensao "ativo" - duracao do mesmo
+    # sintoma em ativos diferentes precisa ser somada num unico item do
+    # funil, nao aparecer duplicada.
+    agrupado = {
+        "ATIVO-A": {"Sintoma A": timedelta(hours=1), "Sintoma B": timedelta(minutes=30)},
+        "ATIVO-B": {"Sintoma A": timedelta(hours=2)},
+    }
+    grafico = grafico_funil_duracao_por_sintoma(agrupado)
 
+    opcoes = json.loads(grafico.dump_options())
+    dados_funil = {item["name"]: item["value"] for item in opcoes["series"][0]["data"]}
+    assert dados_funil["Sintoma A"] == 3.0  # 1h (ATIVO-A) + 2h (ATIVO-B)
+    assert dados_funil["Sintoma B"] == 0.5
+
+    html = renderizar_embutido(grafico)
     assert "<script>" in html
     assert "cdn" not in html.lower()
-    assert "ATIVO-A" in html
+    assert "Sintoma A" in html
     assert "Sintoma A" in html

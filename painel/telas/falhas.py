@@ -45,10 +45,10 @@ from graficos import (
     grafico_donut_contagem,
     grafico_duracao_media_por_sintoma,
     grafico_evolucao_diaria_falhas,
+    grafico_funil_duracao_por_sintoma,
     grafico_hh_falhas_por_colaborador,
     grafico_ranking_duracao_falhas,
     grafico_reincidencia_ativos,
-    grafico_sunburst_ativo_sintoma,
     renderizar_embutido,
 )
 
@@ -318,10 +318,16 @@ with st.expander("Duração média por sintoma e reincidência de ativos", expan
                 renderizar_embutido(_grafico_reincidencia), height=_altura_reincidencia + 30, scrolling=False
             )
 
-with st.expander("Falhas por ativo e sintoma", expanded=True):
+with st.expander("Duração de falhas por sintoma", expanded=True):
+    st.caption(
+        "Duração total de atendimento por sintoma, do maior para o menor - "
+        "quais sintomas mais consomem HH de atendimento (complementar ao "
+        "donut 'Ocorrências por sintoma' acima, que conta ocorrências, não "
+        "soma duração)."
+    )
     components.html(
-        renderizar_embutido(grafico_sunburst_ativo_sintoma(agrupar_atendimentos_ativo_sintoma(linhas))),
-        height=640,
+        renderizar_embutido(grafico_funil_duracao_por_sintoma(agrupar_atendimentos_ativo_sintoma(linhas))),
+        height=580,
         scrolling=False,
     )
 

@@ -191,6 +191,37 @@ anteriores (poucas categorias) tinha revelado:
   altura também aumentados (`"68%"` → `"70%"`, `600px` → `640px`) pra
   dar mais espaço aos rótulos que continuam visíveis.
 
+### 6. Sunburst substituído por funil (mesmo dia)
+
+O ajuste de `minAngle` da seção anterior não foi suficiente - o
+responsável do produto relatou (nova captura de tela real, mesmo dado
+de volume) que o sunburst continuava ilegível, e pediu diretamente a
+troca por um gráfico de funil (referência visual anexada). Diferente
+das correções anteriores desta ADR (todas preservaram o tipo de
+gráfico), esta é uma troca de tipo genuína - o sunburst não escala bem
+com muitas combinações ativo×sintoma independente de ajuste fino de
+rótulo, e o pedido do responsável do produto foi direto.
+
+`grafico_sunburst_ativo_sintoma` foi **substituído** por
+`grafico_funil_duracao_por_sintoma` (`pyecharts.charts.Funnel`).
+Diferença estrutural importante: funil é série única (uma lista
+ordenada de valores), não uma hierarquia de 2 níveis - a dimensão
+"ativo" é colapsada (soma-se a duração de cada sintoma por cima de
+todos os ativos) antes de virar funil. Isso não perde informação
+relevante: "Ativos reincidentes" e a tabela "Ocorrências por ativo"
+(mais abaixo na mesma tela) já cobrem a dimensão ativo isoladamente. O
+funil ranqueado por sintoma (maior duração total primeiro) responde uma
+pergunta nova que nenhum gráfico de Falhas respondia ainda - "quais
+sintomas mais consomem HH de atendimento" (duração, não só contagem de
+ocorrências, que já é o donut "Ocorrências por sintoma" ao lado).
+
+A assinatura de entrada não mudou (`Dict[ativo, Dict[sintoma,
+timedelta]]`, mesmo `agrupar_atendimentos_ativo_sintoma` de
+`painel/dados.py`) - só o que a função faz com o dado. O expander em
+`painel/telas/falhas.py` foi renomeado de "Falhas por ativo e sintoma"
+para "Duração de falhas por sintoma", com `st.caption` explicando a
+diferença pro donut de contagem ao lado.
+
 ## Validação de qualidade realizada
 
 - `python -m py_compile` em `painel/graficos.py`, `painel/telas/
@@ -213,9 +244,15 @@ anteriores (poucas categorias) tinha revelado:
   (`tests/test_painel.py`).
 - Smoke test real do `painel/app.py`: `streamlit run` em background,
   `curl` na porta local devolveu HTTP 200, log do processo sem
-  traceback/exceção - rodado duas vezes (após o vídeo na sidebar e de
-  novo após o simulador ETL) - confirma que `st.sidebar.video(...)` e o
-  resto do launcher executam sem erro em runtime (não só `py_compile`).
+  traceback/exceção - rodado três vezes (após o vídeo na sidebar, após o
+  simulador ETL, e de novo após a troca sunburst→funil) - confirma que
+  `st.sidebar.video(...)` e o resto do launcher executam sem erro em
+  runtime (não só `py_compile`).
+- `grafico_funil_duracao_por_sintoma` testado com dado de 2 ativos
+  compartilhando o mesmo sintoma - confirma que a duração é somada
+  entre ativos, não duplicada (`test_grafico_funil_duracao_por_sintoma_soma_entre_ativos`),
+  e com o volume do simulador (10 ativos x 8 sintomas): itens do funil
+  corretamente ordenados do maior pro menor via `dump_options()`.
 
 ## Validação NÃO realizada
 

@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from pyecharts import options as opts
-from pyecharts.charts import Bar, Gauge, Line, Pie, Sankey, Scatter, Sunburst
+from pyecharts.charts import Bar, Funnel, Gauge, Line, Pie, Sankey, Scatter
 
 from workforce_core.catalogo import Categoria
 from workforce_core.consolidacao import LinhaAtendimentoFalha, LinhaEvento
@@ -667,52 +667,49 @@ def grafico_reincidencia_ativos(reincidentes: Dict[str, int]) -> Tuple[Bar, int]
     return grafico, altura_px
 
 
-def grafico_sunburst_ativo_sintoma(agrupado: Dict[str, Dict[str, timedelta]]) -> Sunburst:
-    """Hierarquia ativo > sintoma por duração (docs/12_DASHBOARDS_ECHARTS.md
-    recomenda sunburst "sistema > ativo > sintoma" - o nível "sistema" não
-    é capturado em `DadosFalha` hoje, então este sunburst cobre só os dois
-    níveis com dado real: ativo e sintoma. Ver ADR-0031.
+def grafico_funil_duracao_por_sintoma(agrupado: Dict[str, Dict[str, timedelta]]) -> Funnel:
+    """Funil de duração total de atendimento por sintoma (ADR-0033) -
+    substitui o sunburst ativo>sintoma do ADR-0031. O sunburst nao
+    escalava com dado em volume: com o simulador ETL (10 ativos x 8
+    sintomas = 80 fatias), nenhum ajuste de `minAngle`/fonte/raio deixou
+    os rotulos legiveis de verdade - bug real relatado com captura de
+    tela mesmo depois da primeira correcao. Pedido explicito do
+    responsavel do produto: trocar por um funil.
 
-    `minAngle` (bug real com dado em volume, ADR-0033): com o simulador
-    ETL gerando dezenas de ativos x sintomas (ex.: 10 x 8 = 80 fatias), a
-    fatia de cada combinação fica fina demais pra caber o texto do
-    rótulo, e todo mundo tentando mostrar o próprio rótulo ao mesmo tempo
-    vira sobreposição ilegível. `label.minAngle` esconde o rótulo de
-    fatias abaixo do ângulo mínimo, mantendo só os rótulos que cabem de
-    verdade - o resto continua acessível pelo tooltip ao passar o mouse.
-    `opts.LabelOpts` não expõe `minAngle` como parametro nomeado - por
-    isso o label_opts vira um dict puro (`.opts` + a chave extra) em vez
-    do objeto `LabelOpts`, que é imutável depois de criado (mesma ideia
-    de `_aplicar_grid`, mas aqui como dict de entrada, nao mutacao pos-
-    criacao, porque o pyecharts so serializa `label_opts` pra dict no
-    momento do `render`/`dump_options`, nao no `.add()`)."""
-    dados = [
-        {
-            "name": ativo,
-            "children": [
-                {"name": sintoma, "value": _horas(duracao)} for sintoma, duracao in por_sintoma.items()
-            ],
-        }
-        for ativo, por_sintoma in agrupado.items()
-    ]
-    label_opts_com_min_angle = {
-        **opts.LabelOpts(font_size=10, color=_COR_TEXTO_EIXO).opts,
-        "minAngle": 8,
-    }
+    Funil e serie unica (uma lista ordenada de valores, nao uma
+    hierarquia de 2 niveis) - por isso a dimensao "ativo" e colapsada
+    aqui (soma-se a duracao de cada sintoma por cima de todos os
+    ativos). Nao perde informacao relevante: "Ativos reincidentes" e a
+    tabela "Ocorrencias por ativo" (mais abaixo na mesma tela) ja cobrem
+    a dimensao ativo isoladamente. O funil ranqueado por sintoma
+    responde uma pergunta que nenhum outro grafico de Falhas respondia
+    ainda: "quais sintomas mais consomem HH de atendimento" (duracao
+    total, nao so contagem de ocorrencias - essa ja e o donut
+    'Ocorrencias por sintoma')."""
+    total_por_sintoma: Dict[str, timedelta] = {}
+    for por_sintoma in agrupado.values():
+        for sintoma, duracao in por_sintoma.items():
+            total_por_sintoma[sintoma] = total_por_sintoma.get(sintoma, timedelta()) + duracao
+
+    dados = sorted(
+        ((sintoma, _horas(duracao)) for sintoma, duracao in total_por_sintoma.items()),
+        key=lambda item: item[1],
+        reverse=True,
+    )
 
     return (
-        Sunburst(init_opts=opts.InitOpts(width="100%", height="640px"))
+        Funnel(init_opts=opts.InitOpts(width="100%", height="560px"))
         .add(
-            "Falhas",
+            "Duração (horas)",
             dados,
-            radius=[0, "70%"],
-            center=["50%", "44%"],
-            label_opts=label_opts_com_min_angle,
+            sort_="descending",
+            gap=2,
+            label_opts=opts.LabelOpts(formatter="{b}: {c}h", font_size=11, color="#FFFFFF"),
+            tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}: {c}h", is_confine=True),
         )
         .set_global_opts(
             title_opts=_SEM_TITULO,
             legend_opts=_legenda_inferior_opts(),
-            tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}: {c}h", is_confine=True),
         )
     )
 

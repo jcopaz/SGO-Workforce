@@ -75,6 +75,19 @@ sem título no option).
   fatia abaixo de 8° (resto continua no tooltip); radius e altura
   também aumentados pra dar mais espaço aos rótulos visíveis.
 
+### Alterado (mesmo dia - pedido direto do responsável do produto)
+- **Sunburst substituído por funil**: o ajuste de `minAngle` acima não
+  foi suficiente - continuou ilegível com o mesmo dado de volume.
+  `grafico_sunburst_ativo_sintoma` (`pyecharts.charts.Sunburst`) virou
+  `grafico_funil_duracao_por_sintoma` (`pyecharts.charts.Funnel`) -
+  única troca de tipo de gráfico desta ADR (todas as outras correções
+  preservaram o tipo). Funil é série única, não hierarquia de 2 níveis:
+  a dimensão "ativo" é colapsada (duração somada por sintoma, todos os
+  ativos juntos) - "Ativos reincidentes" e a tabela "Ocorrências por
+  ativo" (mesma tela) já cobrem a dimensão ativo isoladamente. Expander
+  renomeado de "Falhas por ativo e sintoma" para "Duração de falhas por
+  sintoma".
+
 ### Validação
 - `python -m py_compile` nos módulos tocados: OK.
 - 16 funções de gráfico renderizadas com dado realista e inspecionadas
