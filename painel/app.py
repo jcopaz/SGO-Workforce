@@ -32,23 +32,18 @@ aplicar_estilo_sgo()
 
 _CAMINHO_ASSETS = Path(__file__).resolve().parent / "assets"
 
-if (_CAMINHO_ASSETS / "logo_mrs.png").exists():
-    st.logo(str(_CAMINHO_ASSETS / "logo_mrs.png"))
-
-_CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.mp4"
+# Logo animado do produto no slot fixo do Streamlit (ADR-0033/0034):
+# substitui o logo estatico da MRS a pedido do responsavel do produto.
+# GIF (nao mp4) - anima nativamente dentro de uma tag <img> comum, sem a
+# barra de controles nativa do navegador (play/mudo/volume) que o
+# `st.video` sempre mostra e que o responsavel do produto considerou
+# pouco premium. `size="large"` da mais presenca visual ao logo -
+# comportamento correto do `st.logo` nao foi confirmado num navegador
+# real neste ambiente (sandbox sem Playwright/Chromium, mesma limitacao
+# de sempre) - conferir visualmente apos o proximo deploy.
+_CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.gif"
 if _CAMINHO_LOGO_WORKFORCE.exists():
-    # Video (nao imagem estatica) - identidade visual do produto no corpo
-    # da sidebar, junto do logo corporativo MRS acima (st.logo, no slot
-    # fixo do Streamlit). `st.video` em vez de um <video> HTML cru
-    # embutido em base64: o arquivo (~2.8MB) e servido pelo endpoint de
-    # midia do proprio Streamlit e cacheado pelo navegador, em vez de ser
-    # reenviado por inteiro a cada rerun do script (o que aconteceria com
-    # markdown/unsafe_allow_html, ja que o Streamlit reexecuta o arquivo
-    # inteiro a cada interacao de filtro) - troca deliberada: perde o
-    # controle fino sobre esconder a barra de controles nativa do
-    # navegador, ganha desempenho real numa tela com varios filtros
-    # interativos.
-    st.sidebar.video(str(_CAMINHO_LOGO_WORKFORCE), loop=True, autoplay=True, muted=True, width=180)
+    st.logo(str(_CAMINHO_LOGO_WORKFORCE), size="large")
 
 pagina = st.navigation(
     {

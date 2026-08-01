@@ -34,6 +34,16 @@ _CSS_SGO = """
     color: #F8FAFC !important;
 }
 
+/* Logo do produto (ADR-0034, GIF animado no slot nativo st.logo) -
+   moldura discreta (cantos arredondados + sombra suave) pra dar
+   acabamento premium, sem mexer no tamanho/posicao que o proprio
+   Streamlit controla via `size="large"`. */
+[data-testid="stLogo"] {
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+}
+
 /* Menu de navegacao (st.navigation/st.Page) - adaptacao do "pill menu"
    do Gestao_OS (que la e feito sobre um st.radio customizado). Os
    testids de st.navigation podem variar entre versoes do Streamlit -

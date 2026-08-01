@@ -1,5 +1,43 @@
 # Changelog
 
+## [2026-07-31] Logo animado (GIF) na sidebar, substituindo vídeo e logo estático da MRS (ADR-0034)
+
+Ver `docs/61_ADR_0034_LOGO_GIF_SIDEBAR_PREMIUM.md` para a decisão
+completa. Pedido do responsável do produto após ver o resultado do
+ADR-0033 publicado: "a estética está muito pobre" - o logo da MRS
+pequeno/genérico e o vídeo mostrando a barra de controles nativa do
+navegador por baixo. Pediu pra usar `Logo - SGO Workforce 1x1.gif`
+(mesma animação do mp4, formato GIF) no lugar da MRS, e tirar o vídeo.
+
+### Alterado
+- `painel/app.py`: `st.sidebar.video(...)` (ADR-0033) removido.
+  `st.logo(...)` passou a apontar pra
+  `painel/assets/logo_sgo_workforce.gif` (antes: `logo_mrs.png`), com
+  `size="large"`. GIF anima nativamente numa `<img>` comum, sem
+  precisar de `autoplay`/`loop`/`muted` nem mostrar nenhuma barra de
+  controles - resolve o problema relatado sem código extra.
+- `painel/estilo.py`: moldura discreta (`border-radius` + `box-shadow`)
+  pro slot `[data-testid="stLogo"]` - acabamento premium sem mexer no
+  tamanho/posição que o Streamlit já controla.
+
+### Removido
+- `painel/assets/logo_sgo_workforce.mp4` - não é mais referenciado em
+  lugar nenhum.
+
+### Ressalva conhecida
+- O GIF (17.4MB) é bem mais pesado que o mp4 substituído (2.8MB) - GIF
+  é formato ineficiente pra conteúdo tipo vídeo. Troca aceita
+  deliberadamente (pedido explícito); pode deixar o carregamento
+  inicial da sidebar mais lento numa conexão ruim.
+
+### Validação
+- `python -m py_compile` em `painel/app.py`, `painel/estilo.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0034, seção "Validação NÃO realizada").
+
 ## [2026-07-31] Reescrita dos gráficos (legenda inferior, sem título interno), logo em vídeo na sidebar e simulador ETL (ADR-0033)
 
 Ver `docs/60_ADR_0033_REESCRITA_GRAFICOS_LEGENDA_INFERIOR_E_LOGO_SIDEBAR.md`
