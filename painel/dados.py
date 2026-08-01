@@ -347,6 +347,122 @@ def gerar_jornadas_exemplo(diretorio: Union[str, Path], quantidade: int = 3) -> 
     return criadas
 
 
+# Simulador ETL (ADR-0033) - ativos/sintomas/objetos fabricados para
+# atendimentos de falha simulados, contexto ferroviario (MRS) coerente com
+# o resto do catalogo (Deslocamento ferroviario, Trem parado na frente de
+# servico etc.) - nunca confundir com ativo real, sempre rotulado "(dado
+# simulado)" na observacao.
+_ATIVOS_SIMULADOS = [
+    "Locomotiva 1042", "Locomotiva 2087", "Locomotiva 3311", "Locomotiva 4456",
+    "Vagão HFT-208", "Vagão HFT-311", "Vagão GDT-522",
+    "Chave 12B", "Sinaleira KM 340", "AMV 07",
+]
+_SINTOMAS_SIMULADOS = [
+    "Falha no sistema de freios", "Motor não liga", "Vazamento hidráulico",
+    "Sensor de velocidade com defeito", "Painel de controle travado",
+    "Superaquecimento do motor", "Ruído anormal no truque", "Perda de tração",
+]
+_OBJETOS_SIMULADOS = [
+    "Motor de tração", "Sistema de freios", "Compressor de ar",
+    "Bateria auxiliar", "Sistema elétrico", "Suspensão", "Acoplamento",
+]
+
+
+def gerar_jornadas_exemplo_volumoso(
+    diretorio: Union[str, Path],
+    quantidade_colaboradores: int = 20,
+    dias: int = 30,
+    semente: int = 42,
+) -> List[Jornada]:
+    """Simulador ETL de volume maior (ADR-0033) - gera muitas jornadas
+    variadas (colaboradores x dias, motivo/categoria sorteado entre os
+    ~19 codigos EE01-EE22 realmente usaveis pelo motor) para ver como os
+    graficos do painel se comportam com dado em escala, em vez dos 3
+    exemplos minimos de `gerar_jornadas_exemplo` - útil especificamente
+    para verificar se a legenda com paginacao, o eixo rotacionado e o
+    sankey/scatter com muitas series continuam legiveis quando o numero
+    de categorias/colaboradores/motivos cresce de verdade.
+
+    Cada jornada gerada segue exatamente as mesmas regras do motor de
+    dominio (`MotorJornada` - a mesma classe usada pela interface de
+    campo real): evento secundario (Deslocamento/Espera/Apoio) sempre
+    fora de uma atividade principal, pausa sempre dentro de uma atividade
+    ativa - nao ha atalho que pule essas regras so por ser dado de teste.
+
+    EE23 (Manutencao Programada Nao Concluida, fecha por
+    `encerrar_atividade_nao_concluida` em vez de `encerrar_atividade`) e
+    deliberadamente deixado fora - caso raro em uso real, sem valor extra
+    pra este simulador (o objetivo e volume/variedade visual dos
+    graficos, nao cobertura exaustiva do catalogo).
+
+    Uso exclusivo de teste/demonstracao do piloto tecnico - os dados nao
+    representam nenhuma operacao real e nunca devem ser confundidos com
+    apontamentos verdadeiros (toda observacao de falha simulada e
+    marcada "(dado simulado)")."""
+    aleatorio = random.Random(semente)
+    # So os codigos EE reais (catalogo_relatorio_1_manutencao) - exclui os
+    # motivos legados de catalogo_padrao() (PAUSA_TESTE, REFEICAO, DDS,
+    # REUNIAO, TREINAMENTO etc., todos com tipo_registro default "pausa"),
+    # senao o simulador mistura dois codigos diferentes pro mesmo motivo
+    # real (ex.: "REFEICAO" e "EE02 - Refeição 1 hora" como bars separadas).
+    catalogo = catalogo_completo()
+    eventos_secundarios = [
+        e for e in catalogo.todos() if e.tipo_registro == "evento_secundario" and e.codigo.startswith("EE")
+    ]
+    pausas = [e for e in catalogo.todos() if e.tipo_registro == "pausa" and e.codigo.startswith("EE")]
+
+    repo = RepositorioJornadaArquivo(diretorio)
+    base = datetime(2026, 6, 1, 7, 0)
+    criadas: List[Jornada] = []
+    contador_falha = 0
+
+    for colaborador_idx in range(quantidade_colaboradores):
+        matricula = f"SIM-{colaborador_idx + 1:03d}"
+        for dia_idx in range(dias):
+            if aleatorio.random() < 0.15:
+                continue  # nem todo colaborador trabalha todo dia - folga/férias simulada
+
+            agora = base + timedelta(days=dia_idx, minutes=aleatorio.randint(0, 45))
+            motor = MotorJornada(matricula)
+            motor.iniciar_jornada(agora)
+
+            for entrada in aleatorio.sample(eventos_secundarios, k=aleatorio.randint(1, 3)):
+                motor.iniciar_evento_secundario(agora, entrada.tipo_evento_secundario, entrada.codigo)
+                agora += timedelta(minutes=aleatorio.randint(10, 40))
+                motor.encerrar_evento_secundario(agora)
+
+            motor.iniciar_atividade(agora)
+            for entrada in aleatorio.sample(pausas, k=aleatorio.randint(0, 2)):
+                motor.iniciar_pausa(agora, entrada.codigo)
+                agora += timedelta(minutes=aleatorio.randint(10, 60))
+                motor.finalizar_pausa(agora)
+            agora += timedelta(minutes=aleatorio.randint(60, 210))
+            motor.encerrar_atividade(agora)
+
+            if aleatorio.random() < 0.18:
+                # `iniciar_atendimento_falha` abre a sua propria atividade
+                # principal (nao aninha na EE17 acima) - por isso a EE17
+                # precisa estar encerrada antes de chegar aqui.
+                contador_falha += 1
+                motor.iniciar_atendimento_falha(agora)
+                motor.registrar_dados_falha(
+                    nota=f"SIM-FALHA-{contador_falha:04d}",
+                    ativo=aleatorio.choice(_ATIVOS_SIMULADOS),
+                    sintoma=aleatorio.choice(_SINTOMAS_SIMULADOS),
+                    objeto=aleatorio.choice(_OBJETOS_SIMULADOS),
+                    observacao="Atendimento de falha (dado simulado - simulador ETL, ADR-0033).",
+                )
+                agora += timedelta(minutes=aleatorio.randint(20, 90))
+                motor.encerrar_atividade(agora)
+
+            motor.encerrar_jornada(agora)
+
+            repo.salvar(motor.jornada)
+            criadas.append(motor.jornada)
+
+    return criadas
+
+
 def carregar_pulsos(diretorio: Union[str, Path], jornada_id) -> List[PulsoGps]:
     return RepositorioPulsosGpsArquivo(diretorio).ler_pulsos(jornada_id)
 

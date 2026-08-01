@@ -1,4 +1,4 @@
-# ADR-0033 | Reescrita dos gráficos (legenda inferior, sem título interno) e logo em vídeo na sidebar
+# ADR-0033 | Reescrita dos gráficos (legenda inferior, sem título interno), logo em vídeo na sidebar e simulador ETL
 
 ## Contexto
 
@@ -118,6 +118,49 @@ controles nativa do `<video>` do navegador (não há parâmetro
 `controls` em `st.video` nesta versão do Streamlit), ganha-se
 desempenho real numa tela com vários filtros interativos.
 
+### 4. Simulador ETL de dados em volume
+
+Pedido do responsável do produto: "coloque um simulador de dados ETL
+para ver como vai ficar os gráficos com uma maior quantidade de dados".
+`gerar_jornadas_exemplo` (Incremento 9) já existia, mas gera só 3
+jornadas fixas - não estressa legenda paginada, eixo com muitas
+categorias, sankey/scatter com muitas séries. `painel/dados.py` ganhou
+`gerar_jornadas_exemplo_volumoso(diretorio, quantidade_colaboradores,
+dias, semente)`:
+
+- Usa exatamente o mesmo motor de domínio (`MotorJornada`) que a
+  interface de campo real - nenhum atalho que pule as regras do motor
+  só por ser dado de teste (evento secundário sempre fora de atividade
+  principal, pausa sempre dentro de atividade ativa, atendimento de
+  falha com sua própria atividade). Cada jornada colaborador×dia sorteia
+  1-3 eventos secundários, 0-2 pausas dentro da atividade principal, e
+  ~18% de chance de um atendimento de falha (ativo/sintoma/objeto
+  sorteados de pools fabricados em contexto ferroviário, sempre
+  marcados "dado simulado" na observação).
+- Só sorteia entre os ~19 códigos EE reais
+  (`catalogo_relatorio_1_manutencao`), filtrando explicitamente por
+  `codigo.startswith("EE")` - a primeira versão também sorteava os
+  motivos legados de `catalogo_padrao()` (PAUSA_TESTE, REFEICAO, DDS,
+  REUNIAO, TREINAMENTO), que têm `tipo_registro` "pausa" por padrão e
+  duplicavam visualmente o mesmo motivo com dois códigos diferentes
+  (ex.: "REFEICAO" e "EE02 - Refeição 1 hora" como barras separadas) -
+  corrigido antes de expor a função.
+- EE23 (Manutenção Programada Não Concluída) deliberadamente fora -
+  fecha por um método diferente (`encerrar_atividade_nao_concluida`),
+  caso raro sem valor extra pro objetivo (volume/variedade visual, não
+  cobertura exaustiva do catálogo).
+- `painel/telas/dashboard.py`: novo expander "Simulador de dados (ETL) -
+  testar gráficos com volume maior", com `st.number_input` pra
+  colaboradores/dias e um botão - ao lado do botão de dados de exemplo
+  já existente, mesma aba "Arquivo local".
+
+Bug real encontrado e corrigido durante a implementação:
+`iniciar_atendimento_falha` abre sua própria atividade principal (não
+aninha dentro da atividade EE17 já aberta) - a primeira versão tentava
+abrir o atendimento de falha com a atividade EE17 ainda ativa e
+disparava `AtividadeJaAtivaError` do motor. Corrigido encerrando a
+atividade EE17 antes do bloco de falha condicional.
+
 ## Validação de qualidade realizada
 
 - `python -m py_compile` em `painel/graficos.py`, `painel/telas/
@@ -128,12 +171,21 @@ desempenho real numa tela com vários filtros interativos.
   == True` e `legend[0].bottom == "1%"` em todas exceto o gauge
   (`False`, sem legenda), `grid.containLabel == True` em todo gráfico
   cartesiano (barra/linha/scatter). Sem exceção, sem caso especial.
-- `pytest` completo: 299 passed, sem regressão (rodado de novo após a
-  reescrita completa e de novo após os ajustes de `painel/telas/*.py`).
+- `pytest` completo: 300 passed, sem regressão (rodado de novo após a
+  reescrita completa, de novo após os ajustes de `painel/telas/*.py`, e
+  de novo após o simulador ETL).
+- `gerar_jornadas_exemplo_volumoso` chamado direto (20 colaboradores, 30
+  dias): 513-520 jornadas geradas (varia com a semente/aleatoriedade de
+  "nem todo colaborador trabalha todo dia"), 0 `com_erro` ao recarregar,
+  20 motivos EE distintos, 20 colaboradores distintos, ~90-99
+  atendimentos de falha, 8 sintomas distintos - novo teste
+  `test_gerar_jornadas_exemplo_volumoso_produz_dado_variado` cobre isso
+  (`tests/test_painel.py`).
 - Smoke test real do `painel/app.py`: `streamlit run` em background,
   `curl` na porta local devolveu HTTP 200, log do processo sem
-  traceback/exceção - confirma que `st.sidebar.video(...)` e o resto do
-  launcher executam sem erro em runtime (não só `py_compile`).
+  traceback/exceção - rodado duas vezes (após o vídeo na sidebar e de
+  novo após o simulador ETL) - confirma que `st.sidebar.video(...)` e o
+  resto do launcher executam sem erro em runtime (não só `py_compile`).
 
 ## Validação NÃO realizada
 
@@ -147,8 +199,12 @@ desempenho real numa tela com vários filtros interativos.
 ## Arquivos afetados
 
 - `painel/graficos.py` (reescrito por completo).
-- `painel/telas/dashboard.py`, `painel/telas/falhas.py` (alturas de
-  `components.html` ajustadas ao novo layout, `st.caption` adicionado
-  onde dois gráficos dividem um expander).
+- `painel/telas/dashboard.py` (alturas de `components.html` ajustadas ao
+  novo layout, `st.caption` onde dois gráficos dividem um expander, novo
+  expander do simulador ETL).
+- `painel/telas/falhas.py` (alturas de `components.html` ajustadas,
+  `st.caption` onde dois gráficos dividem um expander).
 - `painel/app.py` (logo em vídeo na sidebar).
 - `painel/assets/logo_sgo_workforce.mp4` (novo).
+- `painel/dados.py` (`gerar_jornadas_exemplo_volumoso`, novo).
+- `tests/test_painel.py` (novo teste do simulador ETL).

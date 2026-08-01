@@ -32,6 +32,7 @@ from dados import (
     formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
+    gerar_jornadas_exemplo_volumoso,
     horas_produtiva_nao_rentavel_do_resumo,
     montar_linhas_eventos,
     montar_resumo,
@@ -121,6 +122,36 @@ if fonte_dados == "Arquivo local":
         if st.button("Gerar dados de exemplo (teste)"):
             gerar_jornadas_exemplo(diretorio)
             st.success("Dados de exemplo gravados. Os números abaixo já refletem isso.")
+
+    with st.expander("Simulador de dados (ETL) - testar gráficos com volume maior"):
+        st.caption(
+            "Gera muitas jornadas variadas (colaborador × dia, motivo/categoria "
+            "sorteado entre os ~19 códigos EE reais) para ver como os gráficos se "
+            "comportam com dado em escala - útil pra conferir se legenda "
+            "paginada, eixo rotacionado e sankey/scatter continuam legíveis "
+            "quando o volume cresce de verdade. Sempre respeitando as regras do "
+            "mesmo motor de domínio da interface de campo real - dado fabricado, "
+            "nunca confundir com apontamento verdadeiro."
+        )
+        col_sim_colab, col_sim_dias = st.columns(2)
+        with col_sim_colab:
+            sim_colaboradores = st.number_input(
+                "Colaboradores simulados", min_value=1, max_value=200, value=20, step=1,
+                key="painel_sim_colaboradores",
+            )
+        with col_sim_dias:
+            sim_dias = st.number_input(
+                "Dias simulados", min_value=1, max_value=180, value=30, step=1,
+                key="painel_sim_dias",
+            )
+        if st.button("Gerar dados simulados (volume maior)"):
+            criadas = gerar_jornadas_exemplo_volumoso(
+                diretorio, quantidade_colaboradores=int(sim_colaboradores), dias=int(sim_dias)
+            )
+            st.success(
+                f"{len(criadas)} jornadas simuladas gravadas em '{diretorio}'. "
+                "Os números e gráficos abaixo já refletem isso."
+            )
 
     jornadas, com_erro = carregar_jornadas(diretorio)
 

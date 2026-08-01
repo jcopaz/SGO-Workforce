@@ -31,7 +31,9 @@ from dados import (
     formatar_data_hora,
     formatar_horas,
     gerar_jornadas_exemplo,
+    gerar_jornadas_exemplo_volumoso,
     horas_produtiva_nao_rentavel_do_resumo,
+    montar_linhas_atendimento_falha,
     montar_linhas_eventos,
     montar_resumo,
     rotulo_categoria,
@@ -89,6 +91,35 @@ def test_gerar_e_carregar_jornadas_exemplo(tmp_path):
     assert len(jornadas) == 3
     assert com_erro == []
     assert all(j.estado.value == "ENCERRADA" for j in jornadas)
+
+
+def test_gerar_jornadas_exemplo_volumoso_produz_dado_variado(tmp_path):
+    """Simulador ETL (ADR-0033) - garante volume e variedade suficientes
+    pra estressar os graficos (muitos colaboradores/categorias/motivos),
+    e que toda jornada gerada respeita as regras do motor de dominio (nao
+    haveria com_erro/excecao se alguma sequencia fosse invalida)."""
+    criadas = gerar_jornadas_exemplo_volumoso(
+        tmp_path, quantidade_colaboradores=10, dias=20, semente=1
+    )
+    assert len(criadas) > 50
+
+    jornadas, com_erro = carregar_jornadas(tmp_path)
+    assert com_erro == []
+    assert len(jornadas) == len(criadas)
+    assert all(j.estado.value == "ENCERRADA" for j in jornadas)
+
+    linhas = montar_linhas_eventos(jornadas)
+    assert len({linha.colaborador_matricula for linha in linhas}) == 10
+    # So codigos EE reais (nunca os motivos legados de catalogo_padrao,
+    # tipo PAUSA_TESTE/REFEICAO/DDS, que duplicariam o mesmo motivo com
+    # um codigo diferente do EE02/EE20 oficial).
+    motivos = {linha.motivo for linha in linhas if linha.motivo}
+    assert len(motivos) > 10
+    assert all(motivo.startswith("EE") for motivo in motivos)
+
+    falhas = montar_linhas_atendimento_falha(jornadas)
+    assert len(falhas) > 0
+    assert all((falha.nota or "").startswith("SIM-FALHA-") for falha in falhas)
 
 
 def test_montar_resumo_com_dados_de_exemplo(tmp_path):

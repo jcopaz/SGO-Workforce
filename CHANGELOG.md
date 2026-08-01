@@ -1,6 +1,6 @@
 # Changelog
 
-## [2026-07-31] Reescrita dos gráficos (legenda inferior, sem título interno) e logo em vídeo na sidebar (ADR-0033)
+## [2026-07-31] Reescrita dos gráficos (legenda inferior, sem título interno), logo em vídeo na sidebar e simulador ETL (ADR-0033)
 
 Ver `docs/60_ADR_0033_REESCRITA_GRAFICOS_LEGENDA_INFERIOR_E_LOGO_SIDEBAR.md`
 para a decisão completa. Pedido explícito do responsável do produto:
@@ -41,13 +41,40 @@ sem título no option).
   arquivo de mídia servido pelo endpoint dedicado do Streamlit é
   cacheado pelo navegador - um vídeo embutido em base64 seria reenviado
   por inteiro (~3.8MB) a cada rerun.
+- **Simulador ETL de dados em volume** (`painel/dados.py:
+  gerar_jornadas_exemplo_volumoso`): gera muitas jornadas
+  colaborador×dia (motivo/categoria sorteado entre os ~19 códigos EE
+  reais, mesmo motor de domínio da interface de campo real, sem atalho)
+  pra ver como os gráficos se comportam com volume real, em vez dos 3
+  exemplos fixos de `gerar_jornadas_exemplo`. Novo expander "Simulador
+  de dados (ETL)" em `painel/telas/dashboard.py`, com número de
+  colaboradores/dias configurável.
+
+### Corrigido (durante a implementação do simulador ETL)
+- `gerar_jornadas_exemplo_volumoso` sorteava também motivos legados de
+  `catalogo_padrao()` (PAUSA_TESTE, REFEICAO, DDS etc., `tipo_registro`
+  "pausa" por padrão), duplicando visualmente o mesmo motivo com dois
+  códigos diferentes (ex.: "REFEICAO" e "EE02 - Refeição 1 hora" como
+  barras separadas) - filtro `codigo.startswith("EE")` adicionado antes
+  de expor a função.
+- Primeira versão tentava abrir o atendimento de falha simulado com a
+  atividade EE17 ainda ativa (`iniciar_atendimento_falha` abre sua
+  própria atividade, não aninha) - disparava `AtividadeJaAtivaError`;
+  corrigido encerrando a EE17 antes do bloco de falha.
 
 ### Validação
-- `python -m py_compile` nos 4 módulos tocados: OK.
+- `python -m py_compile` nos módulos tocados: OK.
 - 16 funções de gráfico renderizadas com dado realista e inspecionadas
   via `dump_options()`: título sempre oculto, legenda sempre visível
   embaixo (exceto gauge), grid com `containLabel=True` sem exceção.
-- `pytest` completo: 299 passed, sem regressão.
+- `gerar_jornadas_exemplo_volumoso` chamado direto (20 colaboradores, 30
+  dias): 500+ jornadas, 0 erro ao recarregar, 20 motivos EE distintos,
+  ~90 atendimentos de falha - novo teste
+  `test_gerar_jornadas_exemplo_volumoso_produz_dado_variado`.
+- `pytest` completo: 300 passed, sem regressão (rodado de novo após
+  cada correção).
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log (rodado de novo após o simulador ETL).
 - Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
   traceback no log - confirma que o launcher (incluindo o novo vídeo na
   sidebar) executa sem erro em runtime.
