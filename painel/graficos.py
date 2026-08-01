@@ -208,7 +208,7 @@ def grafico_hh_por_categoria(por_categoria: Dict[Optional[Categoria], timedelta]
             legend_opts=_legenda_inferior_opts(),
             xaxis_opts=_eixo_categoria_opts(rotate=35),
             yaxis_opts=_eixo_valor_opts("HH (horas)"),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
         )
         .set_series_opts(label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO))
     )
@@ -254,7 +254,7 @@ def grafico_evolucao_diaria(linhas: List[LinhaEvento]) -> Line:
             legend_opts=_legenda_inferior_opts(),
             xaxis_opts=_eixo_categoria_opts(rotate=30),
             yaxis_opts=_eixo_valor_opts("HH (horas)"),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
         )
     )
     return _aplicar_grid(grafico, bottom="26%")
@@ -280,7 +280,7 @@ def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:
         grafico.add_yaxis(rotulo, valores, stack="total")
     grafico.set_global_opts(
         title_opts=_SEM_TITULO,
-        tooltip_opts=opts.TooltipOpts(trigger="axis"),
+        tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
         legend_opts=_legenda_inferior_opts(),
         xaxis_opts=_eixo_categoria_opts(rotate=20),
         yaxis_opts=_eixo_valor_opts("HH (horas)"),
@@ -320,7 +320,7 @@ def grafico_hh_por_motivo(linhas: List[LinhaEvento]) -> Tuple[Bar, int]:
         .set_global_opts(
             title_opts=_SEM_TITULO,
             legend_opts=_legenda_inferior_opts(),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
             xaxis_opts=_eixo_valor_opts("HH (horas)"),
             yaxis_opts=_eixo_categoria_opts(),
         )
@@ -362,7 +362,7 @@ def grafico_utilizacao_por_colaborador(utilizacao_por_colaborador: Dict[str, Opt
                     is_show=True, linestyle_opts=opts.LineStyleOpts(type_="dashed", color=_COR_GRADE)
                 ),
             ),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
         )
         .set_series_opts(label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO))
     )
@@ -406,7 +406,7 @@ def grafico_scatter_duracao_frequencia(dados_por_motivo: Dict[str, Tuple[int, ti
             ),
         ),
         yaxis_opts=_eixo_valor_opts("Duração média (horas)"),
-        tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{a}<br/>Freq.: {c}"),
+        tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{a}<br/>Freq.: {c}", is_confine=True),
         legend_opts=_legenda_inferior_opts(),
     )
     return _aplicar_grid(grafico, bottom="16%", top="6%")
@@ -445,7 +445,7 @@ def grafico_sankey_colaborador_categoria(linhas: List[LinhaEvento]) -> Sankey:
     grafico.set_global_opts(
         title_opts=_SEM_TITULO,
         legend_opts=_legenda_inferior_opts(),
-        tooltip_opts=opts.TooltipOpts(trigger="item", trigger_on="mousemove"),
+        tooltip_opts=opts.TooltipOpts(trigger="item", trigger_on="mousemove", is_confine=True),
     )
     return grafico
 
@@ -483,7 +483,7 @@ def grafico_ranking_duracao_falhas(linhas: List[LinhaAtendimentoFalha], top_n: i
         .set_global_opts(
             title_opts=_SEM_TITULO,
             legend_opts=_legenda_inferior_opts(),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
             xaxis_opts=_eixo_valor_opts("Duração (horas)"),
             yaxis_opts=_eixo_categoria_opts(),
         )
@@ -570,7 +570,7 @@ def grafico_evolucao_diaria_falhas(linhas: List[LinhaAtendimentoFalha]) -> Line:
             legend_opts=_legenda_inferior_opts(),
             xaxis_opts=_eixo_categoria_opts(rotate=30),
             yaxis_opts=_eixo_valor_opts("Duração (horas)"),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
         )
     )
     return _aplicar_grid(grafico, bottom="26%")
@@ -597,7 +597,7 @@ def grafico_hh_falhas_por_colaborador(linhas: List[LinhaAtendimentoFalha]) -> Ba
             legend_opts=_legenda_inferior_opts(),
             xaxis_opts=_eixo_categoria_opts(rotate=20),
             yaxis_opts=_eixo_valor_opts("Duração (horas)"),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
         )
         .set_series_opts(label_opts=opts.LabelOpts(is_show=True, position="top", font_size=10, color=_COR_TEXTO_EIXO))
     )
@@ -626,7 +626,7 @@ def grafico_duracao_media_por_sintoma(duracao_media: Dict[str, timedelta]) -> Tu
         .set_global_opts(
             title_opts=_SEM_TITULO,
             legend_opts=_legenda_inferior_opts(),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
             xaxis_opts=_eixo_valor_opts("Duração média (horas)"),
             yaxis_opts=_eixo_categoria_opts(),
         )
@@ -657,7 +657,7 @@ def grafico_reincidencia_ativos(reincidentes: Dict[str, int]) -> Tuple[Bar, int]
         .set_global_opts(
             title_opts=_SEM_TITULO,
             legend_opts=_legenda_inferior_opts(),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),
             xaxis_opts=_eixo_valor_opts("Atendimentos"),
             yaxis_opts=_eixo_categoria_opts(),
         )
@@ -671,7 +671,21 @@ def grafico_sunburst_ativo_sintoma(agrupado: Dict[str, Dict[str, timedelta]]) ->
     """Hierarquia ativo > sintoma por duração (docs/12_DASHBOARDS_ECHARTS.md
     recomenda sunburst "sistema > ativo > sintoma" - o nível "sistema" não
     é capturado em `DadosFalha` hoje, então este sunburst cobre só os dois
-    níveis com dado real: ativo e sintoma. Ver ADR-0031."""
+    níveis com dado real: ativo e sintoma. Ver ADR-0031.
+
+    `minAngle` (bug real com dado em volume, ADR-0033): com o simulador
+    ETL gerando dezenas de ativos x sintomas (ex.: 10 x 8 = 80 fatias), a
+    fatia de cada combinação fica fina demais pra caber o texto do
+    rótulo, e todo mundo tentando mostrar o próprio rótulo ao mesmo tempo
+    vira sobreposição ilegível. `label.minAngle` esconde o rótulo de
+    fatias abaixo do ângulo mínimo, mantendo só os rótulos que cabem de
+    verdade - o resto continua acessível pelo tooltip ao passar o mouse.
+    `opts.LabelOpts` não expõe `minAngle` como parametro nomeado - por
+    isso o label_opts vira um dict puro (`.opts` + a chave extra) em vez
+    do objeto `LabelOpts`, que é imutável depois de criado (mesma ideia
+    de `_aplicar_grid`, mas aqui como dict de entrada, nao mutacao pos-
+    criacao, porque o pyecharts so serializa `label_opts` pra dict no
+    momento do `render`/`dump_options`, nao no `.add()`)."""
     dados = [
         {
             "name": ativo,
@@ -681,20 +695,24 @@ def grafico_sunburst_ativo_sintoma(agrupado: Dict[str, Dict[str, timedelta]]) ->
         }
         for ativo, por_sintoma in agrupado.items()
     ]
+    label_opts_com_min_angle = {
+        **opts.LabelOpts(font_size=10, color=_COR_TEXTO_EIXO).opts,
+        "minAngle": 8,
+    }
 
     return (
-        Sunburst(init_opts=opts.InitOpts(width="100%", height="600px"))
+        Sunburst(init_opts=opts.InitOpts(width="100%", height="640px"))
         .add(
             "Falhas",
             dados,
-            radius=[0, "68%"],
+            radius=[0, "70%"],
             center=["50%", "44%"],
-            label_opts=opts.LabelOpts(font_size=11, color=_COR_TEXTO_EIXO),
+            label_opts=label_opts_com_min_angle,
         )
         .set_global_opts(
             title_opts=_SEM_TITULO,
             legend_opts=_legenda_inferior_opts(),
-            tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}: {c}h"),
+            tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}: {c}h", is_confine=True),
         )
     )
 

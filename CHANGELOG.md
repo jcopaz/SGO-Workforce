@@ -62,6 +62,19 @@ sem título no option).
   própria atividade, não aninha) - disparava `AtividadeJaAtivaError`;
   corrigido encerrando a EE17 antes do bloco de falha.
 
+### Corrigido (dois bugs reais só visíveis com o simulador ETL em volume)
+- **Tooltip cortado na borda do iframe**: gráficos com muitas séries
+  (ex.: "HH por colaborador") mostram um tooltip alto o bastante pra
+  estourar o topo do iframe do Streamlit, cortando as primeiras linhas
+  em vez de reposicionar. `is_confine=True` adicionado nos **13**
+  `TooltipOpts` do módulo (não só no gráfico relatado - mesmo risco em
+  qualquer gráfico com tooltip de várias séries).
+- **Sunburst "Falhas por ativo e sintoma" ilegível com volume real**: 10
+  ativos x 8 sintomas simulados = 80 fatias finas demais pro texto do
+  rótulo, todas se sobrepondo. `label.minAngle=8` esconde rótulo de
+  fatia abaixo de 8° (resto continua no tooltip); radius e altura
+  também aumentados pra dar mais espaço aos rótulos visíveis.
+
 ### Validação
 - `python -m py_compile` nos módulos tocados: OK.
 - 16 funções de gráfico renderizadas com dado realista e inspecionadas

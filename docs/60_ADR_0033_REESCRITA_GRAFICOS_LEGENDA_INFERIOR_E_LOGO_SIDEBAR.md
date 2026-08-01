@@ -161,6 +161,36 @@ abrir o atendimento de falha com a atividade EE17 ainda ativa e
 disparava `AtividadeJaAtivaError` do motor. Corrigido encerrando a
 atividade EE17 antes do bloco de falha condicional.
 
+### 5. Dois bugs reais encontrados pelo próprio simulador ETL (mesmo dia)
+
+O simulador cumpriu o que se propôs: gerando dado em volume de verdade
+(10 ativos x 8 sintomas simulados), o responsável do produto reportou
+(com captura de tela real) dois problemas que nenhum dos testes
+anteriores (poucas categorias) tinha revelado:
+
+- **Tooltip cortado na borda do iframe**: gráficos com `trigger="axis"`
+  e muitas séries (ex.: "HH por colaborador", até ~19 categorias
+  empilhadas) mostram um tooltip que lista o valor de cada série ao
+  passar o mouse - com muitas séries esse tooltip fica alto o bastante
+  pra estourar o topo do iframe do Streamlit
+  (`components.html(..., scrolling=False)` não deixa o conteúdo
+  extravasar), cortando as primeiras linhas em vez de reposicionar.
+  Corrigido com `is_confine=True` em **todos os 13** `TooltipOpts` do
+  módulo (não só no gráfico relatado - o mesmo risco existe em qualquer
+  gráfico com tooltip de várias séries) - `confine` é a opção nativa do
+  ECharts pra manter o tooltip sempre dentro da área do próprio
+  gráfico, reposicionando em vez de cortar.
+- **Sunburst "Falhas por ativo e sintoma" ilegível com volume real**:
+  10 ativos x 8 sintomas = 80 fatias - cada uma fina demais pra caber o
+  texto do rótulo, todas tentando mostrar ao mesmo tempo. Corrigido com
+  `label.minAngle=8` (esconde rótulo de fatia com ângulo menor que 8°,
+  mantém só os que cabem de verdade - o resto continua no tooltip ao
+  passar o mouse) - opção nativa do ECharts não exposta como parâmetro
+  nomeado por `opts.LabelOpts` do pyecharts, passada como dict puro
+  (`.opts` + a chave extra) em vez do objeto `LabelOpts`. Radius e
+  altura também aumentados (`"68%"` → `"70%"`, `600px` → `640px`) pra
+  dar mais espaço aos rótulos que continuam visíveis.
+
 ## Validação de qualidade realizada
 
 - `python -m py_compile` em `painel/graficos.py`, `painel/telas/
