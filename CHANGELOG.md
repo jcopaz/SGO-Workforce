@@ -1,5 +1,32 @@
 # Changelog
 
+## [2026-08-03] Logo da sidebar continuava pequeno - seletor CSS corrigido (ADR-0038)
+
+Ver `docs/65_ADR_0038_LOGO_SIDEBAR_CSS_SELETOR_ERRADO.md` para a
+decisão completa. Pedido do responsável do produto: logo continuava
+pequeno mesmo depois do CSS do ADR-0037.
+
+### Corrigido
+- `painel/estilo.py`: a regra CSS que definia `height: 120px` buscava
+  um `<img>` **dentro** de `[data-testid="stLogo"]` - inspecionado o
+  bundle JS minificado instalado do Streamlit
+  (`streamlit/static/static/js/index.*.js`, componente
+  `LogoComponent`), confirmado que `data-testid="stLogo"` fica na
+  própria tag `<img>`, não num container - a regra nunca casava com
+  nada. Corrigida pra uma única regra direta no elemento; centralização
+  via `margin: auto` em vez de `display: flex` (que não tem efeito
+  visual num elemento `<img>` sem filhos).
+
+### Validação
+- Estrutura do componente confirmada lendo o bundle JS instalado
+  diretamente (não suposição).
+- `python -m py_compile` em `painel/estilo.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0038).
+
 ## [2026-08-03] Logo da sidebar - animação quebrada corrigida, volta pra st.logo + GIF (ADR-0037)
 
 Ver `docs/64_ADR_0037_LOGO_SIDEBAR_ANIMACAO_QUEBRADA_STLOGO.md` para a

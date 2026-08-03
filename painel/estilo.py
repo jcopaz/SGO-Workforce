@@ -34,25 +34,29 @@ _CSS_SGO = """
     color: #F8FAFC !important;
 }
 
-/* Logo do produto - GIF animado via st.logo (ADR-0037; ADR-0035 tinha
-   trocado por st.sidebar.image, mas esse widget so preserva animacao
-   em condicoes que nao se aplicam aqui - ver comentario em
-   painel/app.py). `st.logo` sozinho limita a altura renderizada a
-   32px mesmo com `size="large"` (limite documentado do proprio
-   Streamlit) - sobrescrito aqui pra dar presenca visual de verdade.
-   Escopado a `stSidebar` pra nao encolher/alterar o logo pequeno que o
-   Streamlit mostra no canto superior quando a sidebar esta recolhida
-   (mesmo componente, renderizado em outro lugar nesse estado). */
+/* Logo do produto - GIF animado via st.logo (ADR-0037/0038). `st.logo`
+   sozinho limita a altura renderizada a 32px mesmo com `size="large"`
+   (limite documentado do proprio Streamlit) - sobrescrito aqui pra dar
+   presenca visual de verdade. Escopado a `stSidebar` pra nao
+   encolher/alterar o logo pequeno que o Streamlit mostra no canto
+   superior quando a sidebar esta recolhida (mesmo componente,
+   renderizado em outro lugar nesse estado).
+
+   `data-testid="stLogo"` fica na propria tag <img> (confirmado lendo o
+   bundle JS instalado do Streamlit, `LogoComponent`) - nao um
+   container ao redor dela. A primeira versao deste CSS (ADR-0037)
+   tinha uma segunda regra `[data-testid="stLogo"] img` (buscando um
+   <img> descendente) que nunca casava com nada - causa real do logo
+   continuar pequeno mesmo depois do CSS "aplicado". Corrigido pra uma
+   unica regra direta no proprio elemento; centralizacao via
+   `margin: auto` (funciona em qualquer elemento de bloco com largura
+   definida, sem depender do layout do pai). */
 [data-testid="stSidebar"] [data-testid="stLogo"] {
-    display: flex !important;
-    justify-content: center !important;
-    width: 100% !important;
-    margin: 16px 0 8px 0 !important;
-}
-[data-testid="stSidebar"] [data-testid="stLogo"] img {
+    display: block !important;
     height: 120px !important;
     width: auto !important;
     max-width: 90% !important;
+    margin: 16px auto 8px auto !important;
     border-radius: 14px !important;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
 }
