@@ -1,5 +1,46 @@
 # Changelog
 
+## [2026-08-03] Logo da sidebar convertido pra WebP - mesma qualidade, 3.2x mais leve (ADR-0036)
+
+Ver `docs/63_ADR_0036_LOGO_SIDEBAR_WEBP_LEVE.md` para a decisão
+completa. Pedido do responsável do produto: converter o GIF (17.4MB)
+mantendo a qualidade.
+
+### Alterado
+- `painel/assets/logo_sgo_workforce.gif` (17.4MB) → `.webp` (5.39MB,
+  3.2x mais leve) - conversão via Pillow (sem `ffmpeg`/lib de vídeo
+  disponível neste ambiente), 360x360/qualidade 85. Mesma contagem de
+  quadros (240) e loop infinito do GIF original - nenhuma perda
+  perceptível, porque a redução veio de resolução (a imagem é exibida
+  a 260px na sidebar, 720px original era desperdício de banda), não de
+  compressão agressiva da qualidade visual.
+- `painel/app.py`: referência direta ao `.webp` (fallback pro `.gif`,
+  que só existia como rede de segurança durante a conversão, removido).
+- `painel/assets/logo_sgo_workforce.gif` removido do repositório - não
+  é mais referenciado em lugar nenhum.
+
+### Descoberta durante a conversão
+- Primeira tentativa converteu os quadros pra RGBA "por segurança" e
+  saiu **maior** que o GIF (38MB) - o GIF não tem transparência real
+  (confirmado: alpha sempre 255), então RGBA só aumentou a
+  profundidade de cor sem necessidade. Corrigido convertendo pra RGB.
+- Mesmo em RGB, qualidade alta em 720x720 nunca chegou perto do
+  tamanho do mp4 original (2.8MB) - esse tipo de conteúdo (gradientes
+  de neon contínuos, 240 quadros) não tem muita redundância
+  intra-quadro pra WebP/GIF explorarem, diferente de um codec de vídeo
+  de verdade (H.264) que explora redundância *entre* quadros. A saída
+  real foi resolução, não formato/qualidade.
+
+### Validação
+- WebP final verificado via Pillow: 360x360, 240 quadros, animado,
+  loop infinito - igual ao GIF original.
+- `python -m py_compile` em `painel/app.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0036).
+
 ## [2026-07-31] Logo da sidebar - tamanho e centralização (ADR-0035)
 
 Ver `docs/62_ADR_0035_LOGO_SIDEBAR_TAMANHO_CENTRALIZACAO.md` para a

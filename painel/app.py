@@ -32,10 +32,16 @@ aplicar_estilo_sgo()
 
 _CAMINHO_ASSETS = Path(__file__).resolve().parent / "assets"
 
-# Logo animado do produto na sidebar (ADR-0033/0034/0035): substitui o
-# logo estatico da MRS a pedido do responsavel do produto. GIF (nao
-# mp4) - anima nativamente dentro de uma tag <img> comum, sem a barra
-# de controles nativa do navegador que o `st.video` sempre mostra.
+# Logo animado do produto na sidebar (ADR-0033/0034/0035/0036): substitui
+# o logo estatico da MRS a pedido do responsavel do produto.
+#
+# WebP (nao GIF nem mp4) - anima nativamente numa tag <img> comum, sem a
+# barra de controles nativa do navegador que o `st.video` sempre mostra
+# (motivo da troca de mp4 pra GIF no ADR-0034). O GIF original (17.4MB,
+# 720x720) foi reconvertido pra WebP em 360x360/qualidade 85 (ADR-0036):
+# mais que o suficiente pra nitidez nos 260px de largura exibidos aqui
+# (inclusive em tela retina), 3.2x mais leve (5.4MB) sem perda
+# perceptivel - a resolucao de origem so desperdicava banda.
 #
 # `st.sidebar.image` em vez de `st.logo` (ADR-0035): `st.logo` reserva
 # um slot fixo pequeno no topo, ao lado do botao de recolher a sidebar
@@ -46,8 +52,6 @@ _CAMINHO_ASSETS = Path(__file__).resolve().parent / "assets"
 # sempre ancora no topo) - controla largura de verdade, e a centralizacao
 # vem do CSS em `painel/estilo.py` (`[data-testid="stImage"]`).
 _CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.webp"
-if not _CAMINHO_LOGO_WORKFORCE.exists():
-    _CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.gif"
 if _CAMINHO_LOGO_WORKFORCE.exists():
     st.sidebar.image(str(_CAMINHO_LOGO_WORKFORCE), width=260)
 
