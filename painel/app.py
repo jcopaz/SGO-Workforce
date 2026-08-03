@@ -65,8 +65,10 @@ _CAMINHO_ASSETS = Path(__file__).resolve().parent / "assets"
 # Tamanho/centralizacao: `st.logo` limita a altura renderizada a no
 # maximo 32px mesmo com `size="large"` (documentado no proprio
 # docstring do Streamlit) - CSS em `painel/estilo.py`
-# (`[data-testid="stLogo"]`) sobrescreve isso pra dar presenca visual de
-# verdade, e centraliza dentro do slot.
+# (`[data-testid="stSidebarLogo"]` - NAO `stLogo`, testid diferente
+# usado especificamente pro logo dentro da sidebar, ver ADR-0039)
+# sobrescreve isso pra dar presenca visual de verdade, e centraliza
+# dentro do slot.
 _CAMINHO_LOGO_WORKFORCE = _CAMINHO_ASSETS / "logo_sgo_workforce.gif"
 if _CAMINHO_LOGO_WORKFORCE.exists():
     st.logo(str(_CAMINHO_LOGO_WORKFORCE), size="large")

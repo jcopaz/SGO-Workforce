@@ -1,5 +1,31 @@
 # Changelog
 
+## [2026-08-03] Logo da sidebar continuava pequeno - testid errado corrigido (ADR-0039)
+
+Ver `docs/66_ADR_0039_LOGO_SIDEBAR_TESTID_ERRADO.md` para a decisão
+completa. Terceiro relato do responsável do produto: nenhuma mudança
+de tamanho mesmo depois do ADR-0038.
+
+### Corrigido
+- `painel/estilo.py`: o CSS testava `[data-testid="stLogo"]` - testid
+  que existe de verdade no DOM, mas é o do logo do **cabeçalho
+  principal** (mostrado quando a sidebar está recolhida), não o de
+  dentro da sidebar. Rastreado no bundle JS instalado do Streamlit até
+  o ponto exato de uso: o componente da sidebar chama o mesmo
+  `LogoComponent` passando `dataTestId="stSidebarLogo"` explicitamente,
+  sobrescrevendo o default `stLogo`. Seletor corrigido pra
+  `[data-testid="stSidebarLogo"]`.
+
+### Validação
+- Testid rastreado até o ponto exato de uso no bundle JS (não só
+  confirmado que existe em algum lugar do arquivo).
+- `python -m py_compile` em `painel/app.py`, `painel/estilo.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0039).
+
 ## [2026-08-03] Logo da sidebar continuava pequeno - seletor CSS corrigido (ADR-0038)
 
 Ver `docs/65_ADR_0038_LOGO_SIDEBAR_CSS_SELETOR_ERRADO.md` para a

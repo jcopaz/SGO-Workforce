@@ -34,24 +34,24 @@ _CSS_SGO = """
     color: #F8FAFC !important;
 }
 
-/* Logo do produto - GIF animado via st.logo (ADR-0037/0038). `st.logo`
-   sozinho limita a altura renderizada a 32px mesmo com `size="large"`
-   (limite documentado do proprio Streamlit) - sobrescrito aqui pra dar
-   presenca visual de verdade. Escopado a `stSidebar` pra nao
-   encolher/alterar o logo pequeno que o Streamlit mostra no canto
-   superior quando a sidebar esta recolhida (mesmo componente,
-   renderizado em outro lugar nesse estado).
+/* Logo do produto - GIF animado via st.logo (ADR-0037/0038/0039).
+   `st.logo` sozinho limita a altura renderizada a 32px mesmo com
+   `size="large"` (limite documentado do proprio Streamlit) -
+   sobrescrito aqui pra dar presenca visual de verdade.
 
-   `data-testid="stLogo"` fica na propria tag <img> (confirmado lendo o
-   bundle JS instalado do Streamlit, `LogoComponent`) - nao um
-   container ao redor dela. A primeira versao deste CSS (ADR-0037)
-   tinha uma segunda regra `[data-testid="stLogo"] img` (buscando um
-   <img> descendente) que nunca casava com nada - causa real do logo
-   continuar pequeno mesmo depois do CSS "aplicado". Corrigido pra uma
-   unica regra direta no proprio elemento; centralizacao via
-   `margin: auto` (funciona em qualquer elemento de bloco com largura
-   definida, sem depender do layout do pai). */
-[data-testid="stSidebar"] [data-testid="stLogo"] {
+   `data-testid` REAL do logo quando renderizado dentro da sidebar e
+   `stSidebarLogo`, NAO `stLogo` (confirmado lendo o bundle JS
+   instalado do Streamlit: o mesmo `LogoComponent` recebe
+   `dataTestId="stSidebarLogo"` quando chamado a partir do componente
+   da sidebar, sobrescrevendo o default `stLogo` do componente -
+   `stLogo` sem sobrescrita so e usado no logo do cabecalho principal,
+   mostrado quando a sidebar esta recolhida). O CSS do ADR-0038 corrigiu
+   o bug do seletor (`img` descendente que nao existia) mas continuou
+   testando o testid errado - por isso nao teve efeito nenhum, de novo.
+   `data-testid="stSidebarLogo"` fica na propria tag <img> (mesma
+   estrutura de `stLogo`), sem wrapper - uma unica regra, centralizacao
+   via `margin: auto`. */
+[data-testid="stSidebarLogo"] {
     display: block !important;
     height: 120px !important;
     width: auto !important;
