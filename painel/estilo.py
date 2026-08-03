@@ -34,19 +34,25 @@ _CSS_SGO = """
     color: #F8FAFC !important;
 }
 
-/* Logo do produto (ADR-0035, GIF/WebP animado via st.sidebar.image) -
-   `st.logo` (ADR-0034) foi trocado por `st.sidebar.image` porque o
-   slot fixo do `st.logo` nao aumenta o suficiente com `size="large"`
-   nem e centralizavel (relatado com captura de tela real: logo
-   minusculo, encostado no canto). Centralizado + moldura premium
-   (cantos arredondados, sombra) aqui - escopado a `stSidebar` pra nao
-   afetar nenhum outro `st.image` do restante do painel. */
-[data-testid="stSidebar"] [data-testid="stImage"] {
+/* Logo do produto - GIF animado via st.logo (ADR-0037; ADR-0035 tinha
+   trocado por st.sidebar.image, mas esse widget so preserva animacao
+   em condicoes que nao se aplicam aqui - ver comentario em
+   painel/app.py). `st.logo` sozinho limita a altura renderizada a
+   32px mesmo com `size="large"` (limite documentado do proprio
+   Streamlit) - sobrescrito aqui pra dar presenca visual de verdade.
+   Escopado a `stSidebar` pra nao encolher/alterar o logo pequeno que o
+   Streamlit mostra no canto superior quando a sidebar esta recolhida
+   (mesmo componente, renderizado em outro lugar nesse estado). */
+[data-testid="stSidebar"] [data-testid="stLogo"] {
     display: flex !important;
     justify-content: center !important;
-    margin: 12px 0 !important;
+    width: 100% !important;
+    margin: 16px 0 8px 0 !important;
 }
-[data-testid="stSidebar"] [data-testid="stImage"] img {
+[data-testid="stSidebar"] [data-testid="stLogo"] img {
+    height: 120px !important;
+    width: auto !important;
+    max-width: 90% !important;
     border-radius: 14px !important;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
 }

@@ -1,5 +1,57 @@
 # Changelog
 
+## [2026-08-03] Logo da sidebar - animação quebrada corrigida, volta pra st.logo + GIF (ADR-0037)
+
+Ver `docs/64_ADR_0037_LOGO_SIDEBAR_ANIMACAO_QUEBRADA_STLOGO.md` para a
+decisão completa. Pedido do responsável do produto: o WebP do ADR-0036
+apareceu estático; reposicionar acima do título "Análise de Dados",
+centralizado; mp4 como alternativa se necessário.
+
+### Corrigido - causa raiz real (lida no código-fonte do Streamlit)
+- `st.image`/`st.logo` **sempre** achatam imagem animada pra 1 quadro
+  quando o formato de saída não bate com o de entrada ou é preciso
+  redimensionar - e WebP nunca é reconhecido como formato de saída
+  (só JPEG/PNG/GIF existem em `ImageFormat`), então sempre vira JPEG
+  estático. Não foi erro na conversão do ADR-0036 - é uma limitação
+  real do Streamlit com esse formato, confirmada testando a lógica
+  real da lib instalada contra o arquivo deste projeto.
+- GIF é o único formato que o pipeline preserva intacto, e só quando
+  cabe no layout sem redimensionar - confirmado (bytes de saída
+  idênticos aos de entrada, 240 quadros) pro arquivo deste projeto.
+
+### Alterado
+- `painel/app.py`: `st.sidebar.image(webp)` → `st.logo(gif,
+  size="large")`. `st.navigation` sempre ancora o menu no topo da
+  sidebar independente da ordem do código (confirmado nesta sessão com
+  `st.sidebar.video` e `st.sidebar.image`) - só o slot do `st.logo`
+  fica genuinamente acima dele, por isso a volta pra essa API.
+- `painel/assets/logo_sgo_workforce.gif` restaurado (arquivo original,
+  sem reprocessar - uma tentativa de reduzir pra 320px quase não
+  mudou o tamanho do arquivo, esse tipo de gradiente contínuo comprime
+  mal em GIF em qualquer resolução). `.webp` removido.
+- `painel/estilo.py`: `st.logo` limita a altura a 32px mesmo com
+  `size="large"` (limite documentado do próprio Streamlit) - CSS
+  escopado a `[data-testid="stSidebar"] [data-testid="stLogo"]`
+  sobrescreve pra `height: 120px`, centraliza e mantém a moldura.
+  Escopo por `stSidebar` preserva o logo pequeno mostrado no canto
+  quando a sidebar está recolhida.
+
+### Por que não foi pro mp4
+`st.logo` só aceita imagem, não vídeo - como só esse slot fica acima
+do menu de navegação, mp4 exigiria abrir mão do posicionamento pedido.
+O GIF restaurado resolve os dois pedidos (animação + posição) ao mesmo
+tempo, sem essa troca.
+
+### Validação
+- Pipeline real do Streamlit testado diretamente: bytes idênticos,
+  240 quadros preservados.
+- `python -m py_compile` em `painel/app.py`, `painel/estilo.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0037).
+
 ## [2026-08-03] Logo da sidebar convertido pra WebP - mesma qualidade, 3.2x mais leve (ADR-0036)
 
 Ver `docs/63_ADR_0036_LOGO_SIDEBAR_WEBP_LEVE.md` para a decisão
