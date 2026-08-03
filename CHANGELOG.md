@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-08-03] Logo da sidebar - tamanho dobrado e quebra de linha (ADR-0040)
+
+Ver `docs/67_ADR_0040_LOGO_SIDEBAR_TAMANHO_DOBRADO_QUEBRA_LINHA.md`
+para a decisão completa. Com o testid certo (ADR-0039), o logo passou
+a aparecer - mas cortado/sobreposto pelo título "Análise de Dados"
+logo abaixo. Pedido: dobrar o tamanho e quebrar linha pra não sobrepor.
+
+### Corrigido - causa raiz da sobreposição
+- `stSidebarHeader` (container pai do logo e do botão de recolher a
+  sidebar) tem `height` **fixa** (token de tema pensado pra um logo de
+  ~24-32px) e `flex-wrap` desligado - confirmado no bundle JS
+  instalado. O logo maior estourava essa altura fixa sem empurrar o
+  conteúdo seguinte pra baixo, causando a sobreposição.
+
+### Alterado
+- `painel/estilo.py`: `[data-testid="stSidebarLogo"]` com
+  `height: 240px` (dobrado de 120px) e `flex: 1 1 100%` (ocupa a linha
+  inteira). `[data-testid="stSidebarHeader"]` com `height: auto` +
+  `flex-wrap: wrap` - o botão de recolher agora quebra pra linha de
+  baixo em vez de disputar espaço/sobrepor. Botão com
+  `margin-left: auto` pra continuar alinhado à direita na própria
+  linha.
+
+### Validação
+- Estrutura do container pai confirmada no bundle JS instalado.
+- `python -m py_compile` em `painel/estilo.py`: OK.
+- `pytest` completo: 300 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** - sandbox sem
+  Playwright/Chromium (ver ADR-0040).
+
 ## [2026-08-03] Logo da sidebar continuava pequeno - testid errado corrigido (ADR-0039)
 
 Ver `docs/66_ADR_0039_LOGO_SIDEBAR_TESTID_ERRADO.md` para a decisão

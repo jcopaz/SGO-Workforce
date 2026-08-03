@@ -53,12 +53,38 @@ _CSS_SGO = """
    via `margin: auto`. */
 [data-testid="stSidebarLogo"] {
     display: block !important;
-    height: 120px !important;
+    height: 240px !important;
     width: auto !important;
-    max-width: 90% !important;
-    margin: 16px auto 8px auto !important;
+    max-width: 100% !important;
+    margin: 8px auto !important;
     border-radius: 14px !important;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+    /* Forca o logo a ocupar a linha inteira (ver stSidebarHeader
+       abaixo) - com flex-basis 100%, o botao de recolher (irmao
+       seguinte no DOM) nao cabe mais na mesma linha e quebra pra
+       linha de baixo sozinho, em vez de disputar espaco/sobrepor. */
+    flex: 1 1 100% !important;
+    order: 1 !important;
+}
+
+/* Container pai do logo (ADR-0040): `stSidebarHeader` do Streamlit tem
+   `height` FIXA (um token pequeno de tema, pensado pra um logo de
+   ~24-32px) e `flex-wrap` desligado por padrao - por isso o logo maior
+   (240px) ficava cortado/sobreposto pelo conteudo seguinte em vez de
+   empurra-lo pra baixo. `height:auto` deixa a linha crescer de verdade
+   pro tamanho do logo; `flex-wrap:wrap` + o logo com `flex-basis:100%`
+   acima fazem o botao de recolher quebrar pra proxima linha em vez de
+   brigar por espaco horizontal na mesma linha. */
+[data-testid="stSidebarHeader"] {
+    height: auto !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    row-gap: 4px !important;
+    margin-bottom: 16px !important;
+}
+[data-testid="stSidebarCollapseButton"] {
+    order: 2 !important;
+    margin-left: auto !important;
 }
 
 /* Menu de navegacao (st.navigation/st.Page) - adaptacao do "pill menu"
