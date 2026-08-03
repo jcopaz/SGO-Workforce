@@ -26,13 +26,10 @@ import streamlit.components.v1 as components
 
 from dados import (
     agrupar_duracao_por_categoria,
-    carregar_jornadas,
     carregar_jornadas_via_api,
     contagem_e_duracao_media_por_motivo,
     formatar_data_hora,
     formatar_horas,
-    gerar_jornadas_exemplo,
-    gerar_jornadas_exemplo_volumoso,
     horas_produtiva_nao_rentavel_do_resumo,
     montar_linhas_eventos,
     montar_resumo,
@@ -82,131 +79,54 @@ st.warning(
     "não foi validado com a operação."
 )
 
-st.title("SGO Workforce | Visão geral (piloto)")
+col_titulo, col_sync = st.columns([5, 1])
+with col_titulo:
+    st.title("SGO Workforce | Visão geral (piloto)")
+with col_sync:
+    st.write("")  # alinhamento vertical com o titulo
+    if st.button("🔄 Sincronizar dados", width="stretch"):
+        st.toast("Sincronizando com o backend...", icon="🔄")
 
-if "painel_fonte_dados" not in st.session_state:
-    st.session_state.painel_fonte_dados = "Arquivo local"
+# Fonte de dados fixa em API (nuvem, ADR-0041) - pedido explicito do
+# responsavel do produto: os dados sempre vem do backend sincronizado
+# pela interface de campo, "Arquivo local" so existia pra
+# desenvolvimento/teste. Sem selecao visivel de fonte/URL/token - as
+# credenciais vem exclusivamente de st.secrets (nunca digitadas na
+# tela). O botao "Sincronizar dados" acima e so uma reafirmacao visual:
+# toda interacao (filtro, botao, o que for) ja dispara um rerun do
+# Streamlit, que ja busca os dados de novo no backend - nao ha cache
+# aqui ainda, entao os dados ja estao sempre atualizados sem esse
+# botao. Ver docs/*_ADR_0041_*.md.
+url_api = _obter_secret_seguro("SYNC_API_URL")
+token_api = _obter_secret_seguro("SYNC_TOKEN")
 
-fonte_dados = st.radio(
-    "Fonte de dados",
-    ["Arquivo local", "API (nuvem)"],
-    key="painel_fonte_dados",
-    horizontal=True,
-    help=(
-        "'Arquivo local' lê dados_locais/jornadas nesta máquina. "
-        "'API (nuvem)' busca as jornadas sincronizadas pela interface de "
-        "campo no backend real (docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md)."
-    ),
-)
+if not url_api or not token_api:
+    st.error(
+        "Backend não configurado. Defina os secrets `SYNC_API_URL` e "
+        "`SYNC_TOKEN` (Streamlit Cloud: Settings → Secrets) para o "
+        "painel funcionar."
+    )
+    st.stop()
 
-jornadas = []
-com_erro = []
+try:
+    jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar dados do backend: {exc}")
+    st.stop()
 
-if fonte_dados == "Arquivo local":
-    if "painel_diretorio_jornadas" not in st.session_state:
-        st.session_state.painel_diretorio_jornadas = str(
-            _RAIZ_PROJETO / "dados_locais" / "jornadas"
-        )
-
-    diretorio = st.text_input(
-        "Diretório de jornadas persistidas",
-        key="painel_diretorio_jornadas",
+if com_erro:
+    st.error(
+        f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura "
+        f"inválida, ignorada(s): {', '.join(com_erro)}"
     )
 
-    if not diretorio:
-        st.warning("Informe um diretório de jornadas para continuar.")
-        st.stop()
-
-    coluna_exemplo, _coluna_vazia = st.columns([1, 3])
-    with coluna_exemplo:
-        if st.button("Gerar dados de exemplo (teste)"):
-            gerar_jornadas_exemplo(diretorio)
-            st.success("Dados de exemplo gravados. Os números abaixo já refletem isso.")
-
-    with st.expander("Simulador de dados (ETL) - testar gráficos com volume maior"):
-        st.caption(
-            "Gera muitas jornadas variadas (colaborador × dia, motivo/categoria "
-            "sorteado entre os ~19 códigos EE reais) para ver como os gráficos se "
-            "comportam com dado em escala - útil pra conferir se legenda "
-            "paginada, eixo rotacionado e sankey/scatter continuam legíveis "
-            "quando o volume cresce de verdade. Sempre respeitando as regras do "
-            "mesmo motor de domínio da interface de campo real - dado fabricado, "
-            "nunca confundir com apontamento verdadeiro."
-        )
-        col_sim_colab, col_sim_dias = st.columns(2)
-        with col_sim_colab:
-            sim_colaboradores = st.number_input(
-                "Colaboradores simulados", min_value=1, max_value=200, value=20, step=1,
-                key="painel_sim_colaboradores",
-            )
-        with col_sim_dias:
-            sim_dias = st.number_input(
-                "Dias simulados", min_value=1, max_value=180, value=30, step=1,
-                key="painel_sim_dias",
-            )
-        if st.button("Gerar dados simulados (volume maior)"):
-            criadas = gerar_jornadas_exemplo_volumoso(
-                diretorio, quantidade_colaboradores=int(sim_colaboradores), dias=int(sim_dias)
-            )
-            st.success(
-                f"{len(criadas)} jornadas simuladas gravadas em '{diretorio}'. "
-                "Os números e gráficos abaixo já refletem isso."
-            )
-
-    jornadas, com_erro = carregar_jornadas(diretorio)
-
-    if com_erro:
-        st.error(
-            f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem "
-            f"serem apagados: {', '.join(com_erro)}"
-        )
-
-    if not jornadas:
-        st.info(
-            "Nenhuma jornada encerrada encontrada nesse diretório. Use o botão "
-            "acima para gerar dados de exemplo, ou aponte para um diretório "
-            "gravado pelo motor de domínio (workforce_storage.RepositorioJornadaArquivo)."
-        )
-        st.stop()
-else:
-    if "painel_api_url" not in st.session_state:
-        st.session_state.painel_api_url = _obter_secret_seguro("SYNC_API_URL")
-    if "painel_api_token" not in st.session_state:
-        st.session_state.painel_api_token = _obter_secret_seguro("SYNC_TOKEN")
-
-    url_api = st.text_input(
-        "URL do backend (ex.: https://sgo-workforce.onrender.com)",
-        key="painel_api_url",
+if not jornadas:
+    st.info(
+        "Nenhuma jornada encerrada no backend ainda. Registre e sincronize "
+        "uma jornada pela interface de campo, ou toque em 'Sincronizar "
+        "agora' lá se já tiver uma em andamento."
     )
-    token_api = st.text_input(
-        "Token de sincronização (SYNC_TOKEN)",
-        key="painel_api_token",
-        type="password",
-    )
-
-    if not url_api or not token_api:
-        st.warning("Informe a URL do backend e o token de sincronização para continuar.")
-        st.stop()
-
-    try:
-        jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
-    except requests.exceptions.RequestException as exc:
-        st.error(f"Não foi possível buscar dados do backend: {exc}")
-        st.stop()
-
-    if com_erro:
-        st.error(
-            f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura "
-            f"inválida, ignorada(s): {', '.join(com_erro)}"
-        )
-
-    if not jornadas:
-        st.info(
-            "Nenhuma jornada encerrada no backend ainda. Registre e sincronize "
-            "uma jornada pela interface de campo, ou toque em 'Sincronizar "
-            "agora' lá se já tiver uma em andamento."
-        )
-        st.stop()
+    st.stop()
 
 st.subheader("Filtros")
 

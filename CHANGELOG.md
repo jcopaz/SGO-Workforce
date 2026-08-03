@@ -1,5 +1,48 @@
 # Changelog
 
+## [2026-08-03] Fonte de dados fixa em API (nuvem) - sem seleção visível, botão de sincronizar (ADR-0041)
+
+Ver `docs/68_ADR_0041_FONTE_DE_DADOS_FIXA_EM_API.md` para a decisão
+completa. Pedido do responsável do produto: "os arquivos sempre virão
+da API (Nuvem)" - esconder o seletor Fonte de Dados/URL/token,
+substituir por um botão de sincronizar no canto superior direito.
+
+### Alterado
+- `painel/telas/dashboard.py`, `painel/telas/falhas.py`: removido o
+  seletor "Arquivo local"/"API (nuvem)" e os campos de URL/token -
+  credenciais agora vêm exclusivamente de `st.secrets`. Sem secrets
+  configurados, mostra `st.error` orientando a configurar (Streamlit
+  Cloud → Settings → Secrets) em vez de pedir pra digitar. Botão
+  "🔄 Sincronizar dados" adicionado ao lado do título - mais uma
+  reafirmação visual que uma necessidade técnica, já que
+  `carregar_jornadas_via_api` não tem cache e todo rerun do Streamlit
+  já busca os dados de novo automaticamente.
+- Efeito colateral: o botão "Gerar dados de exemplo" e o expander
+  "Simulador de dados (ETL)" (ADR-0033) só existiam no modo "Arquivo
+  local" - saíram da UI publicada junto com esse modo. As funções
+  continuam em `painel/dados.py`, testadas, disponíveis pra uso local
+  durante desenvolvimento.
+
+### Adicionado
+- `tests/test_dashboard_painel.py` (novo, `AppTest` end-to-end,
+  mesmo padrão de `test_falhas_painel.py`) - a "Visão geral" não tinha
+  essa camada de teste de ponta a ponta antes.
+
+### Corrigido
+- `tests/test_falhas_painel.py` dependia do fluxo "Arquivo local"
+  removido - reescrito pra simular a API via `AppTest.secrets` +
+  `monkeypatch` em `dados.carregar_jornadas_via_api`, com um teste novo
+  cobrindo secrets ausentes.
+
+### Validação
+- `python -m py_compile` nos módulos e testes tocados: OK.
+- `pytest` completo: 304 passed, sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Teste visual em navegador real **não realizado** (alinhamento do
+  botão, toast) - sandbox sem Playwright/Chromium; o comportamento
+  funcional, porém, foi validado de ponta a ponta via `AppTest`.
+
 ## [2026-08-03] Logo da sidebar - tamanho dobrado e quebra de linha (ADR-0040)
 
 Ver `docs/67_ADR_0040_LOGO_SIDEBAR_TAMANHO_DOBRADO_QUEBRA_LINHA.md`

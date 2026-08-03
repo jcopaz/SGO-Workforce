@@ -30,7 +30,6 @@ import streamlit.components.v1 as components
 from dados import (
     agrupar_atendimentos_ativo_sintoma,
     ativos_reincidentes_do_periodo,
-    carregar_jornadas,
     carregar_jornadas_via_api,
     contagem_atendimentos_por_ativo,
     contagem_atendimentos_por_objeto,
@@ -77,67 +76,37 @@ st.warning(
     "líquido do colaborador."
 )
 
-st.title("SGO Workforce | Falhas - tempo de atendimento (piloto)")
+col_titulo, col_sync = st.columns([5, 1])
+with col_titulo:
+    st.title("SGO Workforce | Falhas - tempo de atendimento (piloto)")
+with col_sync:
+    st.write("")  # alinhamento vertical com o titulo
+    if st.button("🔄 Sincronizar dados", width="stretch", key="falhas_sincronizar"):
+        st.toast("Sincronizando com o backend...", icon="🔄")
 
-# Mesmas chaves de session_state da Visão geral (painel/telas/dashboard.py)
-# - fonte de dados e credenciais da API são configuração global do painel,
-# não deveriam pedir para o gestor reconfigurar em cada aba.
-if "painel_fonte_dados" not in st.session_state:
-    st.session_state.painel_fonte_dados = "Arquivo local"
+# Fonte de dados fixa em API (nuvem, ADR-0041) - ver mesmo comentario em
+# painel/telas/dashboard.py.
+url_api = _obter_secret_seguro("SYNC_API_URL")
+token_api = _obter_secret_seguro("SYNC_TOKEN")
 
-fonte_dados = st.radio(
-    "Fonte de dados",
-    ["Arquivo local", "API (nuvem)"],
-    key="painel_fonte_dados",
-    horizontal=True,
-)
+if not url_api or not token_api:
+    st.error(
+        "Backend não configurado. Defina os secrets `SYNC_API_URL` e "
+        "`SYNC_TOKEN` (Streamlit Cloud: Settings → Secrets) para o "
+        "painel funcionar."
+    )
+    st.stop()
 
-jornadas = []
-com_erro = []
-
-if fonte_dados == "Arquivo local":
-    if "painel_diretorio_jornadas" not in st.session_state:
-        st.session_state.painel_diretorio_jornadas = str(_RAIZ_PROJETO / "dados_locais" / "jornadas")
-
-    diretorio = st.text_input("Diretório de jornadas persistidas", key="painel_diretorio_jornadas")
-    if not diretorio:
-        st.warning("Informe um diretório de jornadas para continuar.")
-        st.stop()
-
-    jornadas, com_erro = carregar_jornadas(diretorio)
-    if com_erro:
-        st.error(
-            f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem "
-            f"serem apagados: {', '.join(com_erro)}"
-        )
-    if not jornadas:
-        st.info(
-            "Nenhuma jornada encontrada nesse diretório. Gere dados de exemplo na "
-            "página 'Visão geral' primeiro."
-        )
-        st.stop()
-else:
-    if "painel_api_url" not in st.session_state:
-        st.session_state.painel_api_url = _obter_secret_seguro("SYNC_API_URL")
-    if "painel_api_token" not in st.session_state:
-        st.session_state.painel_api_token = _obter_secret_seguro("SYNC_TOKEN")
-
-    url_api = st.text_input("URL do backend", key="painel_api_url")
-    token_api = st.text_input("Token de sincronização (SYNC_TOKEN)", key="painel_api_token", type="password")
-    if not url_api or not token_api:
-        st.warning("Informe a URL do backend e o token de sincronização para continuar.")
-        st.stop()
-
-    try:
-        jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
-    except requests.exceptions.RequestException as exc:
-        st.error(f"Não foi possível buscar dados do backend: {exc}")
-        st.stop()
-    if com_erro:
-        st.error(f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura inválida, ignorada(s).")
-    if not jornadas:
-        st.info("Nenhuma jornada no backend ainda.")
-        st.stop()
+try:
+    jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar dados do backend: {exc}")
+    st.stop()
+if com_erro:
+    st.error(f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura inválida, ignorada(s).")
+if not jornadas:
+    st.info("Nenhuma jornada no backend ainda.")
+    st.stop()
 
 st.subheader("Filtros")
 
