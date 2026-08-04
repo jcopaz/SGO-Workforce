@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-08-04] Estilo visual do mapa operacional e camada da malha férrea da MRS (ADR-0046)
+
+Ver `docs/73_ADR_0046_ESTILO_MAPA_E_MALHA_FERREA_MRS.md` para a decisão
+completa. Pedido do responsável pelo produto após testar a captação real
+de GPS: mapa mais bonito, com a malha férrea da MRS sobreposta.
+
+### Adicionado
+- `painel/malha_ferrea.py` (novo): lê `malha_mrs.kml` (26 trechos,
+  ~15.700 pontos, agora versionado pela primeira vez - necessário em
+  runtime no Streamlit Cloud) via `defusedxml` (nova dependência,
+  protege contra XXE - nunca `xml.etree.ElementTree` puro), com cache em
+  memória por processo (mesmo padrão do JS do ECharts em
+  `painel/graficos.py`).
+- Nova camada "Malha ferrea MRS" no mapa operacional
+  (`painel/mapa.py::construir_mapa`, parâmetro `trilhos_ferrovia`),
+  sempre visível, inclusive sem nenhum pulso carregado.
+- 7 casos novos em `tests/test_malha_ferrea.py`.
+
+### Alterado
+- `painel/mapa.py`: pulsos brutos em amarelo fixo (cor por qualidade
+  removida - a qualidade continua no popup), trajetória simplificada em
+  vermelho tracejado-pontilhado, basemap trocado para `cartodbpositron`
+  (claro, prioriza legibilidade de ruas).
+- `tests/test_mapa.py`: teste de cor-por-qualidade substituído por
+  testes de cor fixa/trajetória/camada da malha férrea.
+
+### Validação NÃO realizada
+- Renderização visual real num navegador (mesma limitação de sempre -
+  sandbox sem Chromium/Playwright) - conferido só via preview HTML local
+  e testes automatizados; pedir ao responsável pelo produto para validar
+  no painel publicado.
+
 ## [2026-08-04] Captação periódica de pulso GPS na interface de campo - Fase 2 (ADR-0045)
 
 Ver `docs/72_ADR_0045_CAPTACAO_PERIODICA_PULSO_GPS_FASE_2.md` para a

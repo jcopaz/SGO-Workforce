@@ -6,6 +6,7 @@ folium>=0.17,<1
 streamlit-folium>=0.23,<1
 python-dotenv>=1.0,<2
 requests>=2.31,<3
+defusedxml>=0.7,<1
 
 # Dependencias do backend (FastAPI, uvicorn, psycopg2-binary) ficaram em
 # requirements-api.txt, nao aqui - o painel (Streamlit Cloud) so fala com

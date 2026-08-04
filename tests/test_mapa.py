@@ -11,8 +11,7 @@ import folium
 import pytest
 
 from dados import gerar_jornadas_exemplo, gerar_pulsos_exemplo
-from mapa import construir_mapa
-from workforce_core.enums import QualidadePulso
+from mapa import _COR_MALHA_FERREA, _COR_PULSO_BRUTO, _COR_TRAJETORIA, construir_mapa
 
 
 def test_gerar_pulsos_exemplo_cobre_o_periodo_da_jornada(tmp_path):
@@ -85,11 +84,13 @@ def test_popup_escapa_html_de_campos_controlados_pelo_usuario(tmp_path):
     assert "&lt;script&gt;" in html
 
 
-def test_construir_mapa_cores_por_qualidade(tmp_path):
+def test_construir_mapa_pulsos_brutos_em_amarelo(tmp_path):
+    # Pedido do responsavel pelo produto em 2026-08-04: pulso bruto sempre
+    # amarelo (a qualidade continua no popup, so deixou de ser codificada
+    # por cor do marcador).
     jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
     jornada = jornadas[0]
     pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
-    pulsos[0].qualidade = QualidadePulso.SALTO_IMPOSSIVEL
 
     mapa = construir_mapa(
         pulsos,
@@ -98,4 +99,54 @@ def test_construir_mapa_cores_por_qualidade(tmp_path):
         tempo_minimo_cluster=timedelta(minutes=5),
     )
     html = mapa.get_root().render()
-    assert '"red"' in html or "'red'" in html or "red" in html
+    assert _COR_PULSO_BRUTO in html
+
+
+def test_construir_mapa_trajetoria_vermelha_tracejada(tmp_path):
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=180)
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+    )
+    html = mapa.get_root().render()
+    assert _COR_TRAJETORIA in html
+    assert "dashArray" in html  # folium traduz dash_array para a opcao Leaflet dashArray
+
+
+def test_construir_mapa_camada_malha_ferrea_opcional(tmp_path):
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
+    trilho = [(-19.97, -44.01), (-19.98, -44.02), (-19.99, -44.03)]
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        trilhos_ferrovia=[trilho],
+    )
+    html = mapa.get_root().render()
+    assert "Malha ferrea MRS" in html
+    assert _COR_MALHA_FERREA in html
+
+
+def test_construir_mapa_sem_pulsos_ainda_mostra_malha_ferrea():
+    # A malha ferrea e uma camada de referencia estatica - nao deveria
+    # depender de existir alguma jornada/pulso pra aparecer.
+    trilho = [(-19.97, -44.01), (-19.98, -44.02)]
+
+    mapa = construir_mapa(
+        [],
+        distancia_simplificacao_metros=50,
+        raio_cluster_metros=20,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        trilhos_ferrovia=[trilho],
+    )
+    html = mapa.get_root().render()
+    assert "Malha ferrea MRS" in html

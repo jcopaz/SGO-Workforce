@@ -24,6 +24,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from dados import carregar_jornadas_via_api, carregar_pulsos_via_api, formatar_data_hora
+from malha_ferrea import carregar_trilhos_malha_mrs
 from mapa import construir_mapa
 
 
@@ -137,6 +138,7 @@ mapa = construir_mapa(
     distancia_simplificacao_metros=float(distancia_simplificacao),
     raio_cluster_metros=float(raio_cluster),
     tempo_minimo_cluster=timedelta(minutes=tempo_minimo_cluster_minutos),
+    trilhos_ferrovia=carregar_trilhos_malha_mrs(),
 )
 
 st_folium(mapa, width="100%", height=560, key="painel_mapa_folium")
