@@ -1,7 +1,7 @@
 // Entidades do Incremento 1, como objetos simples (facil de gravar no
 // IndexedDB via structured clone, sem serializacao manual).
 
-function gerarId() {
+export function gerarId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
@@ -94,5 +94,35 @@ export function novoEventoSecundario({ tipo, motivo, inicio = null }) {
     inicio,
     fim: null,
     estado: "CRIADA",
+  };
+}
+
+// Pulso de GPS (Fase 2 da captacao de geolocalizacao, ADR-0043/0045) -
+// mesmo contrato de workforce_core.entities.PulsoGps, em camelCase. Gravado
+// localmente por captura periodica ou pela trava de "GPS obrigatorio" antes
+// de iniciar/encerrar jornada/atividade (app.js). `sincronizado` e um
+// controle so local (nao existe no lado Python) para saber o que ainda
+// falta enviar no proximo gatilho de sincronizacao.
+export function novoPulsoGps({
+  jornadaId,
+  colaboradorMatricula,
+  latitude,
+  longitude,
+  precisaoMetros,
+  timestampDispositivo,
+  velocidadeMetrosSegundo = null,
+  direcaoGraus = null,
+}) {
+  return {
+    id: gerarId(),
+    jornadaId,
+    colaboradorMatricula,
+    latitude,
+    longitude,
+    precisaoMetros,
+    timestampDispositivo,
+    velocidadeMetrosSegundo,
+    direcaoGraus,
+    sincronizado: false,
   };
 }

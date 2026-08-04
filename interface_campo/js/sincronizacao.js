@@ -126,3 +126,56 @@ export async function sincronizar(jornada, opcoes = {}) {
   }
   return { ok: true, mensagem: "Sincronizado com o backend." };
 }
+
+// Mesmo contrato de workforce_storage.serializacao.pulso_gps_para_dict - e
+// o formato que workforce_api (POST /pulsos) espera receber, em lote.
+export function pulsoParaPayload(pulso) {
+  return {
+    id: pulso.id,
+    jornada_id: pulso.jornadaId,
+    colaborador_matricula: pulso.colaboradorMatricula,
+    latitude: pulso.latitude,
+    longitude: pulso.longitude,
+    precisao_metros: pulso.precisaoMetros,
+    timestamp_dispositivo: pulso.timestampDispositivo.toISOString(),
+    velocidade_metros_segundo: pulso.velocidadeMetrosSegundo,
+    direcao_graus: pulso.direcaoGraus,
+  };
+}
+
+// Mesmo espirito de sincronizar(): best-effort, nunca lanca, sempre
+// { ok, mensagem }. Lote vazio e sucesso trivial (nada pendente) - nunca
+// gera uma chamada de rede a toa.
+export async function sincronizarPulsos(pulsos, opcoes = {}) {
+  const {
+    fetchImpl = fetch,
+    urlBase = URL_BASE_API,
+    token = TOKEN_SINCRONIZACAO,
+    configurada = sincronizacaoConfigurada(),
+  } = opcoes;
+
+  if (pulsos.length === 0) {
+    return { ok: true, mensagem: "Nenhum pulso pendente." };
+  }
+  if (!configurada) {
+    return { ok: false, mensagem: "Sincronizacao nao configurada." };
+  }
+
+  let resposta;
+  try {
+    resposta = await fetchImpl(`${urlBase}/pulsos`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Sync-Token": token,
+      },
+      body: JSON.stringify(pulsos.map(pulsoParaPayload)),
+    });
+  } catch (erro) {
+    return { ok: false, mensagem: "Sem conexao com o backend (app continua funcionando offline)." };
+  }
+  if (!resposta.ok) {
+    return { ok: false, mensagem: `Backend recusou a sincronizacao de pulsos (HTTP ${resposta.status}).` };
+  }
+  return { ok: true, mensagem: "Pulsos sincronizados com o backend." };
+}

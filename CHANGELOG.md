@@ -1,5 +1,45 @@
 # Changelog
 
+## [2026-08-04] Captação periódica de pulso GPS na interface de campo - Fase 2 (ADR-0045)
+
+Ver `docs/72_ADR_0045_CAPTACAO_PERIODICA_PULSO_GPS_FASE_2.md` para a
+decisão completa. Fecha o ciclo iniciado no ADR-0042/0043/0044: a
+interface de campo agora captura pulsos de GPS de verdade.
+
+### Adicionado
+- Captura periódica de GPS (1 pulso/minuto) durante toda a jornada
+  `ABERTA`, 100% offline - `iniciarCapturaPeriodica`/`pararCapturaPeriodica`
+  em `interface_campo/js/geolocalizacao.js`.
+- Fila local de pulsos no IndexedDB (`interface_campo/js/armazenamento.js`,
+  `VERSAO_BANCO` v1 → v2, novo object store `pulsos`), sincronizada em
+  lote pro backend (`POST /pulsos`, Fase 1) no mesmo gatilho que a
+  jornada já usa hoje (`dispararSincronizacao()`).
+- Trava de "GPS obrigatório" (ADR-0043) para iniciar/encerrar jornada e
+  iniciar/encerrar atividade - a transição só é aplicada se uma leitura
+  de GPS local for obtida com sucesso; pulsos periódicos de fundo nunca
+  bloqueiam, só deixam uma lacuna visível.
+- `novoPulsoGps` em `interface_campo/js/entidades.js`,
+  `pulsoParaPayload`/`sincronizarPulsos` em
+  `interface_campo/js/sincronizacao.js`.
+- `capturarPosicaoAtual` passa a devolver `velocidadeMetrosSegundo`/
+  `direcaoGraus` (quando o navegador fornece) - habilita a avaliação de
+  qualidade por velocidade reportada pelo aparelho, já pronta do lado do
+  domínio desde o Incremento 7.
+- 24 casos novos em `tests/js/geolocalizacao.test.mjs` e
+  `tests/js/sincronizacao.test.mjs` (118 testes JS no total, sem
+  regressão).
+
+### Alterado
+- `interface_campo/service-worker.js`: `CACHE_VERSAO` v17 → v18.
+- `interface_campo/index.html`: aviso da tela atualizado, rodapé "Versão
+  v18".
+
+### Validação NÃO realizada
+- Teste em celular real (permissão de geolocalização, comportamento em
+  segundo plano com a tela bloqueada, consumo de bateria, upgrade do
+  IndexedDB num aparelho que já tinha o app instalado) - necessário antes
+  de considerar a Fase 2 pronta para operação real.
+
 ## [2026-08-04] Backend real de pulsos GPS - Fase 1 da captação de geolocalização (ADR-0044)
 
 Ver `docs/71_ADR_0044_BACKEND_REAL_PULSOS_GPS_FASE_1.md` para a decisão

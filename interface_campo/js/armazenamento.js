@@ -8,8 +8,12 @@
 // e docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
 
 const NOME_BANCO = "sgo_workforce";
-const VERSAO_BANCO = 1;
+// v2 (Fase 2 da captacao de geolocalizacao, ADR-0045): acrescenta o object
+// store `pulsos`. Upgrade e aditivo - quem ja tinha o banco na v1 mantem a
+// jornada gravada, so ganha o store novo.
+const VERSAO_BANCO = 2;
 const ARMAZENAMENTO_JORNADAS = "jornadas";
+const ARMAZENAMENTO_PULSOS = "pulsos";
 
 function abrirBanco() {
   return new Promise((resolve, reject) => {
@@ -18,6 +22,9 @@ function abrirBanco() {
       const db = requisicao.result;
       if (!db.objectStoreNames.contains(ARMAZENAMENTO_JORNADAS)) {
         db.createObjectStore(ARMAZENAMENTO_JORNADAS, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(ARMAZENAMENTO_PULSOS)) {
+        db.createObjectStore(ARMAZENAMENTO_PULSOS, { keyPath: "id" });
       }
     };
     requisicao.onsuccess = () => resolve(requisicao.result);
@@ -68,4 +75,58 @@ export async function listarJornadas() {
 export async function listarJornadasAbertas() {
   const todas = await listarJornadas();
   return todas.filter((jornada) => jornada.estado === "ABERTA");
+}
+
+// Fila local de pulsos de GPS (Fase 2 da captacao de geolocalizacao,
+// ADR-0045) - mesmo espirito de salvarJornada: um `put` atomico por pulso,
+// nunca perde um pulso ja capturado se o navegador fechar antes da proxima
+// sincronizacao.
+export async function salvarPulso(pulso) {
+  const db = await abrirBanco();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ARMAZENAMENTO_PULSOS, "readwrite");
+    tx.objectStore(ARMAZENAMENTO_PULSOS).put(pulso);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function listarPulsos() {
+  const db = await abrirBanco();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ARMAZENAMENTO_PULSOS, "readonly");
+    const requisicao = tx.objectStore(ARMAZENAMENTO_PULSOS).getAll();
+    requisicao.onsuccess = () => resolve(requisicao.result || []);
+    requisicao.onerror = () => reject(requisicao.error);
+  });
+}
+
+// Filtro em memoria (mesmo estilo de listarJornadasAbertas) - o volume por
+// jornada (no maximo alguns milhares de pulsos por turno, a 1/minuto) nao
+// justifica um indice novo no object store.
+export async function listarPulsosPendentes(jornadaId) {
+  const todos = await listarPulsos();
+  return todos.filter((pulso) => pulso.jornadaId === jornadaId && !pulso.sincronizado);
+}
+
+export async function marcarPulsosSincronizados(ids) {
+  const db = await abrirBanco();
+  const tx = db.transaction(ARMAZENAMENTO_PULSOS, "readwrite");
+  const armazenamento = tx.objectStore(ARMAZENAMENTO_PULSOS);
+  for (const id of ids) {
+    const pulso = await new Promise((resolve, reject) => {
+      const requisicao = armazenamento.get(id);
+      requisicao.onsuccess = () => resolve(requisicao.result);
+      requisicao.onerror = () => reject(requisicao.error);
+    });
+    if (pulso) {
+      armazenamento.put({ ...pulso, sincronizado: true });
+    }
+  }
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
 }

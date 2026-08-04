@@ -10,7 +10,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { MotorJornada } from "../../interface_campo/js/motorJornada.js";
-import { paraPayloadSincronizacao, sincronizar } from "../../interface_campo/js/sincronizacao.js";
+import { novoPulsoGps } from "../../interface_campo/js/entidades.js";
+import {
+  paraPayloadSincronizacao,
+  sincronizar,
+  pulsoParaPayload,
+  sincronizarPulsos,
+} from "../../interface_campo/js/sincronizacao.js";
 
 function dt(hora, minuto, dia = 1) {
   return new Date(2026, 0, dia, hora, minuto, 0, 0);
@@ -201,4 +207,115 @@ test("sincronizar() reporta sucesso quando o backend aceita", async () => {
   assert.equal(resultado.ok, true);
   assert.equal(cabecalhoToken, "token-de-teste");
   assert.equal(corpoEnviado.id, jornada.id);
+});
+
+// Fase 2 da captacao de geolocalizacao (ADR-0043/0045): pulsoParaPayload +
+// sincronizarPulsos, mesmo padrao de paraPayloadSincronizacao/sincronizar.
+
+function pulsoExemplo(jornadaId) {
+  return novoPulsoGps({
+    jornadaId,
+    colaboradorMatricula: "12345",
+    latitude: -22.9,
+    longitude: -43.2,
+    precisaoMetros: 15.5,
+    timestampDispositivo: dt(8, 30),
+    velocidadeMetrosSegundo: 2.1,
+    direcaoGraus: 180,
+  });
+}
+
+test("pulsoParaPayload converte campos para o contrato do backend", () => {
+  const pulso = pulsoExemplo("jornada-1");
+  const payload = pulsoParaPayload(pulso);
+
+  assert.equal(payload.id, pulso.id);
+  assert.equal(payload.jornada_id, "jornada-1");
+  assert.equal(payload.colaborador_matricula, "12345");
+  assert.equal(payload.latitude, -22.9);
+  assert.equal(payload.longitude, -43.2);
+  assert.equal(payload.precisao_metros, 15.5);
+  assert.equal(payload.timestamp_dispositivo, dt(8, 30).toISOString());
+  assert.equal(payload.velocidade_metros_segundo, 2.1);
+  assert.equal(payload.direcao_graus, 180);
+});
+
+test("sincronizarPulsos com lote vazio nao chama fetch e reporta sucesso", async () => {
+  let chamado = false;
+  const fetchFalso = async () => {
+    chamado = true;
+    return { ok: true };
+  };
+
+  const resultado = await sincronizarPulsos([], { fetchImpl: fetchFalso, configurada: true });
+
+  assert.equal(chamado, false);
+  assert.equal(resultado.ok, true);
+});
+
+test("sincronizarPulsos com configurada:false nao tenta chamar fetch", async () => {
+  let chamado = false;
+  const fetchFalso = async () => {
+    chamado = true;
+    return { ok: true };
+  };
+
+  const resultado = await sincronizarPulsos([pulsoExemplo("jornada-1")], {
+    fetchImpl: fetchFalso,
+    configurada: false,
+  });
+
+  assert.equal(chamado, false);
+  assert.equal(resultado.ok, false);
+  assert.match(resultado.mensagem, /nao configurada/i);
+});
+
+test("sincronizarPulsos nunca lanca quando o fetch falha (offline)", async () => {
+  const fetchQueFalha = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  const resultado = await sincronizarPulsos([pulsoExemplo("jornada-1")], {
+    fetchImpl: fetchQueFalha,
+    configurada: true,
+  });
+
+  assert.equal(resultado.ok, false);
+  assert.match(resultado.mensagem, /offline/i);
+});
+
+test("sincronizarPulsos reporta falha quando o backend responde erro HTTP", async () => {
+  const fetchComErro = async () => ({ ok: false, status: 401 });
+
+  const resultado = await sincronizarPulsos([pulsoExemplo("jornada-1")], {
+    fetchImpl: fetchComErro,
+    configurada: true,
+  });
+
+  assert.equal(resultado.ok, false);
+  assert.match(resultado.mensagem, /401/);
+});
+
+test("sincronizarPulsos reporta sucesso e envia o lote inteiro no corpo", async () => {
+  let corpoEnviado = null;
+  let cabecalhoToken = null;
+  const fetchOk = async (url, opcoesFetch) => {
+    corpoEnviado = JSON.parse(opcoesFetch.body);
+    cabecalhoToken = opcoesFetch.headers["X-Sync-Token"];
+    return { ok: true, status: 200 };
+  };
+
+  const pulsos = [pulsoExemplo("jornada-1"), pulsoExemplo("jornada-1")];
+  const resultado = await sincronizarPulsos(pulsos, {
+    fetchImpl: fetchOk,
+    configurada: true,
+    urlBase: "https://backend-de-teste.invalido",
+    token: "token-de-teste",
+  });
+
+  assert.equal(resultado.ok, true);
+  assert.equal(cabecalhoToken, "token-de-teste");
+  assert.equal(corpoEnviado.length, 2);
+  assert.equal(corpoEnviado[0].id, pulsos[0].id);
+  assert.equal(corpoEnviado[0].jornada_id, "jornada-1");
 });

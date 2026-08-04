@@ -1,7 +1,10 @@
 // Interface operacional simples para celular (Incremento 4).
 //
-// Piloto tecnico: apenas Jornada + Atividade + Pausa, sem autenticacao,
-// sem GPS, sem RASF. Sincronizacao com o backend real existe (ver
+// Piloto tecnico: apenas Jornada + Atividade + Pausa, sem autenticacao.
+// GPS obrigatorio para iniciar/encerrar jornada e atividade, com captura
+// periodica em segundo plano durante a jornada aberta (Fase 2 da captacao
+// de geolocalizacao, ADR-0043/0045 - ver geolocalizacao.js/armazenamento.js).
+// Sincronizacao com o backend real existe (ver
 // sincronizacao.js e docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md)
 // mas e best-effort: uma falha de rede nunca impede o registro local do
 // evento (offline-first). Catalogo de motivos de pausa buscado
@@ -11,7 +14,15 @@
 import { MotorJornada } from "./motorJornada.js";
 import * as calculo from "./calculo.js";
 import * as Erros from "./erros.js";
-import { carregarJornada, listarJornadasAbertas, salvarJornada } from "./armazenamento.js";
+import {
+  carregarJornada,
+  listarJornadasAbertas,
+  salvarJornada,
+  salvarPulso,
+  listarPulsosPendentes,
+  marcarPulsosSincronizados,
+} from "./armazenamento.js";
+import { novoPulsoGps } from "./entidades.js";
 import * as RelogioSimulado from "./relogioSimulado.js";
 import * as Sincronizacao from "./sincronizacao.js";
 import * as CatalogoMotivos from "./catalogoMotivos.js";
@@ -58,6 +69,12 @@ let catalogoRasf = { sintomas: [], componentes_causadores: [] };
 // os botoes "Iniciar atividade"/"Iniciar atendimento de falha"/"Iniciar
 // nova jornada" abaixo), para nunca vazar entre atendimentos diferentes.
 let mostrarTransferenciaFalha = false;
+// id do setInterval de captura periodica de GPS (Fase 2, ADR-0045), ou null
+// quando nao ha jornada aberta. Ligado/desligado em
+// sincronizarEstadoCapturaPeriodica(), chamada no inicio de render() - cobre
+// tanto "Iniciar jornada" quanto a recuperacao de jornada aberta em
+// iniciar(), sem duplicar a logica em cada botao.
+let idIntervaloCapturaPeriodica = null;
 
 function criarSeletorMotivoPausa() {
   const select = document.createElement("select");
@@ -482,6 +499,57 @@ function dispararSincronizacao() {
       renderStatusSincronizacao();
     }
   });
+  // Pulsos de GPS viajam no mesmo gatilho que a jornada (ADR-0043: "no
+  // mesmo momento em que a jornada ja sincroniza hoje") - fire-and-forget,
+  // paralelo ao sync de jornada acima, nunca mexe no status mostrado na
+  // tela (esse e reservado pra jornada).
+  sincronizarPulsosPendentes(jornadaNoMomento.id);
+}
+
+// Grava localmente uma leitura de GPS como pulso de auditoria - chamada
+// tanto pela captura periodica de fundo quanto pela trava de "GPS
+// obrigatorio" (executarComGpsObrigatorio), que reaproveita a leitura em
+// vez de descarta-la.
+async function registrarPulsoCapturado(posicao) {
+  if (!motor) return;
+  const pulso = novoPulsoGps({
+    jornadaId: motor.jornada.id,
+    colaboradorMatricula: motor.jornada.colaboradorMatricula,
+    latitude: posicao.latitude,
+    longitude: posicao.longitude,
+    precisaoMetros: posicao.precisaoMetros,
+    timestampDispositivo: posicao.capturadoEm,
+    velocidadeMetrosSegundo: posicao.velocidadeMetrosSegundo,
+    direcaoGraus: posicao.direcaoGraus,
+  });
+  await salvarPulso(pulso);
+}
+
+// Liga/desliga a captura periodica conforme o estado da jornada (1
+// pulso/minuto durante a jornada ABERTA, ADR-0043). Idempotente - pode ser
+// chamada a cada render() sem criar intervalos duplicados nem perder o
+// intervalo em andamento.
+function sincronizarEstadoCapturaPeriodica() {
+  const deveEstarAtiva = motor != null && motor.jornada.estado === "ABERTA";
+  const estaAtiva = idIntervaloCapturaPeriodica != null;
+  if (deveEstarAtiva && !estaAtiva) {
+    idIntervaloCapturaPeriodica = Geolocalizacao.iniciarCapturaPeriodica(registrarPulsoCapturado);
+  } else if (!deveEstarAtiva && estaAtiva) {
+    Geolocalizacao.pararCapturaPeriodica(idIntervaloCapturaPeriodica);
+    idIntervaloCapturaPeriodica = null;
+  }
+}
+
+// Envia os pulsos ainda nao sincronizados desta jornada - best-effort,
+// nunca lanca (sincronizacao.js garante isso). So marca como sincronizado
+// no IndexedDB depois de uma confirmacao real do backend.
+async function sincronizarPulsosPendentes(jornadaId) {
+  const pendentes = await listarPulsosPendentes(jornadaId);
+  if (pendentes.length === 0) return;
+  const resultado = await Sincronizacao.sincronizarPulsos(pendentes);
+  if (resultado.ok) {
+    await marcarPulsosSincronizados(pendentes.map((pulso) => pulso.id));
+  }
 }
 
 function renderStatusSincronizacao() {
@@ -590,6 +658,7 @@ function renderFaixaSimulacao() {
 }
 
 function render() {
+  sincronizarEstadoCapturaPeriodica();
   els.botoes.replaceChildren();
   els.resumo.replaceChildren();
   renderFaixaSimulacao();
@@ -606,17 +675,18 @@ function render() {
           const matricula = motor.jornada.colaboradorMatricula;
           const pendente = await ContinuacoesFalha.buscarPendente(matricula);
           if (pendente) {
-            await executar(() => {
+            const sucesso = await executarComGpsObrigatorio(() => {
               motor.iniciarJornada(RelogioSimulado.agora());
               motor.iniciarAtendimentoFalha(RelogioSimulado.agora());
               motor.registrarDadosFalha(pendente.dados);
             });
+            if (!sucesso) return;
             mostrarAviso(
               "Havia um atendimento de falha em aberto para você - retomado automaticamente com os dados já preenchidos."
             );
             ContinuacoesFalha.marcarConsumida(pendente.id);
           } else {
-            executar(() => motor.iniciarJornada(RelogioSimulado.agora()));
+            await executarComGpsObrigatorio(() => motor.iniciarJornada(RelogioSimulado.agora()));
           }
         },
         { destaque: true }
@@ -682,7 +752,7 @@ function render() {
       els.botoes.appendChild(
         botao(
           "Concluir atendimento",
-          () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())),
+          () => executarComGpsObrigatorio(() => motor.encerrarAtividade(RelogioSimulado.agora())),
           { destaque: true }
         )
       );
@@ -694,13 +764,13 @@ function render() {
       els.botoes.appendChild(
         botao(
           "Concluir atividade",
-          () => executar(() => motor.encerrarAtividade(RelogioSimulado.agora())),
+          () => executarComGpsObrigatorio(() => motor.encerrarAtividade(RelogioSimulado.agora())),
           { destaque: true }
         )
       );
       els.botoes.appendChild(
         botao("Atividade não concluída", () =>
-          executar(() => motor.encerrarAtividadeNaoConcluida(RelogioSimulado.agora()))
+          executarComGpsObrigatorio(() => motor.encerrarAtividadeNaoConcluida(RelogioSimulado.agora()))
         )
       );
     }
@@ -733,13 +803,13 @@ function render() {
     els.botoes.appendChild(
       botao(
         "Iniciar",
-        () => {
+        async () => {
           const valor = seletorAcao.value;
           mostrarTransferenciaFalha = false;
           if (valor === VALOR_INICIAR_ATIVIDADE) {
-            executar(() => motor.iniciarAtividade(RelogioSimulado.agora()));
+            await executarComGpsObrigatorio(() => motor.iniciarAtividade(RelogioSimulado.agora()));
           } else if (valor === VALOR_ATENDIMENTO_FALHA) {
-            executar(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
+            await executarComGpsObrigatorio(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
           } else {
             const tipo = tipoEventoSecundarioParaCodigo(valor);
             executar(() => motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, valor));
@@ -749,7 +819,9 @@ function render() {
       )
     );
     els.botoes.appendChild(
-      botao("Encerrar jornada", () => executar(() => motor.encerrarJornada(RelogioSimulado.agora())))
+      botao("Encerrar jornada", () =>
+        executarComGpsObrigatorio(() => motor.encerrarJornada(RelogioSimulado.agora()))
+      )
     );
   }
 
@@ -771,6 +843,32 @@ async function executar(transicao) {
     }
   }
   render();
+}
+
+// Trava de "GPS obrigatorio" (ADR-0043) para iniciar/encerrar jornada e
+// atividade: exige uma leitura de GPS local bem-sucedida antes de aplicar a
+// transicao - nao depende de rede (a leitura e local, so o pulso e que
+// sincroniza depois). Se a captura falhar, a transicao NAO roda (trava de
+// verdade, diferente da captura periodica de fundo, que nunca bloqueia).
+// A leitura obtida e reaproveitada como um pulso de auditoria de verdade,
+// nunca descartada. Devolve true/false (sucesso da transicao) para quem
+// chama decidir se continua com passos que so fazem sentido apos a
+// transicao ter sido de fato aplicada.
+async function executarComGpsObrigatorio(transicao) {
+  limparMensagem();
+  mostrarAviso("Obtendo localização...");
+  const posicao = await Geolocalizacao.capturarPosicaoAtual();
+  if (!posicao) {
+    mostrarErro(
+      new Error(
+        "Não foi possível obter o GPS agora (sinal fraco, permissão negada ou tempo esgotado). GPS é obrigatório para iniciar ou encerrar jornada/atividade - verifique e tente novamente."
+      )
+    );
+    return false;
+  }
+  await registrarPulsoCapturado(posicao);
+  await executar(transicao);
+  return true;
 }
 
 // Cria o motor a partir da matricula digitada, se ainda nao existir um

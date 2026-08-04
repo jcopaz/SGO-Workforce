@@ -29,10 +29,38 @@ export function capturarPosicaoAtual(opcoes = {}) {
           longitude: posicao.coords.longitude,
           precisaoMetros: posicao.coords.accuracy,
           capturadoEm: new Date(posicao.timestamp),
+          // Nem todo navegador/dispositivo fornece velocidade/direcao -
+          // ficam null quando ausentes, e habilitam do lado do dominio
+          // (qualidade_gps.avaliar_pulso) uma checagem de velocidade
+          // reportada pelo proprio aparelho, nunca calculada aqui.
+          velocidadeMetrosSegundo: posicao.coords.speed ?? null,
+          direcaoGraus: posicao.coords.heading ?? null,
         });
       },
       () => resolve(null),
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
     );
   });
+}
+
+// Captura periodica em segundo plano (Fase 2 da captacao de geolocalizacao,
+// ADR-0043: 1 pulso por minuto durante a jornada ativa). Best-effort igual a
+// capturarPosicaoAtual: uma falha isolada nunca interrompe o intervalo, so
+// deixa de chamar `aoCapturar` naquele ciclo (a lacuna fica visivel no
+// backend pela ausencia do pulso, nunca precisa travar nada aqui - regra de
+// ouro 8 do CLAUDE.md).
+export function iniciarCapturaPeriodica(aoCapturar, opcoes = {}) {
+  const { intervaloMs = 60000, ...opcoesCaptura } = opcoes;
+  return setInterval(async () => {
+    const posicao = await capturarPosicaoAtual(opcoesCaptura);
+    if (posicao) {
+      aoCapturar(posicao);
+    }
+  }, intervaloMs);
+}
+
+export function pararCapturaPeriodica(idIntervalo) {
+  if (idIntervalo != null) {
+    clearInterval(idIntervalo);
+  }
 }
