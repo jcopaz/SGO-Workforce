@@ -10,7 +10,7 @@ para poder ser testado com pytest normalmente.
 from __future__ import annotations
 
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -37,6 +37,7 @@ from workforce_core.consolidacao import (
     utilizacao_hh,
 )
 from workforce_core.entities import Jornada, PulsoGps
+from workforce_core.fuso_horario import para_horario_brasil
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
 from workforce_storage.serializacao import jornada_de_dict, pulso_gps_de_dict
@@ -288,10 +289,17 @@ def contagem_e_duracao_media_por_motivo(linhas: List[LinhaEvento]) -> Dict[str, 
 
 def formatar_data_hora(data: Optional[datetime]) -> str:
     """Formato dd/mm/aaaa hh:mm:ss para exibicao - nunca usado como fonte
-    de calculo, so apresentacao de um datetime ja persistido."""
+    de calculo, so apresentacao de um datetime ja persistido.
+
+    Converte para o horario de Brasilia antes de formatar
+    (`workforce_core.fuso_horario.para_horario_brasil`) - os timestamps
+    que chegam aqui vindo do backend sao "aware" em UTC (a interface de
+    campo serializa via `.toISOString()`); sem essa conversao, o painel
+    mostrava o horario UTC cru, 3h adiantado em relacao ao horario real
+    do colaborador."""
     if data is None:
         return "--"
-    return data.strftime("%d/%m/%Y %H:%M:%S")
+    return para_horario_brasil(data).strftime("%d/%m/%Y %H:%M:%S")
 
 
 def formatar_horas(duracao: timedelta) -> str:
@@ -495,6 +503,29 @@ def carregar_pulsos_via_api(url_base: str, token: str, jornada_id) -> Tuple[List
         except (KeyError, ValueError, TypeError):
             com_erro.append(str(item.get("id", "desconhecido")))
     return pulsos, com_erro
+
+
+def filtrar_pulsos_por_periodo(
+    pulsos: List[PulsoGps], data: date, hora_inicial: time, hora_final: time
+) -> List[PulsoGps]:
+    """Filtro de data + faixa de horario do mapa operacional (pedido do
+    responsavel pelo produto em 2026-08-04, ver ADR-0047).
+
+    Converte cada timestamp para o horario de Brasilia
+    (`workforce_core.fuso_horario.para_horario_brasil`) antes de comparar
+    - filtrar pela data/hora UTC crua faria um pulso das 23h de Brasilia
+    (ja virou o dia seguinte em UTC) sumir do filtro do dia certo.
+    Inclusivo nos dois limites de horario (`hora_inicial <= X <= hora_final`).
+    """
+    resultado = []
+    for pulso in pulsos:
+        momento_brasil = para_horario_brasil(pulso.timestamp_dispositivo)
+        if momento_brasil.date() != data:
+            continue
+        if not (hora_inicial <= momento_brasil.time() <= hora_final):
+            continue
+        resultado.append(pulso)
+    return resultado
 
 
 def gerar_pulsos_exemplo(

@@ -5,7 +5,7 @@ categoria, pulsos enviados x recebidos) e "Observabilidade" (jornadas
 abertas anormais, taxa de GPS valido).
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -116,6 +116,67 @@ def test_linhas_eventos_classificadas_uma_linha_por_evento_encerrado():
     categorias_atividade = {linha.categoria for linha in atividades}
     assert categorias_atividade == {Categoria.ATIVIDADE_PLANEJADA, Categoria.ATENDIMENTO_FALHA}
     assert all(linha.motivo is None for linha in atividades)
+
+
+def test_classificar_instante_dentro_de_evento_secundario():
+    jornada = _jornada_completa()  # evento DESLOCAMENTO_TESTE de 8:00 a 8:30
+    classificacao = consolidacao.classificar_instante(jornada, _dt(8, 15))
+    assert classificacao.tipo == "EVENTO_SECUNDARIO"
+    assert classificacao.motivo == "DESLOCAMENTO_TESTE"
+
+
+def test_classificar_instante_dentro_de_atividade_comum():
+    jornada = _jornada_completa()  # atividade de 8:30 a 11:30 (com pausa 9:00-9:10)
+    classificacao = consolidacao.classificar_instante(jornada, _dt(8, 45))
+    assert classificacao.tipo == "ATIVIDADE"
+    assert classificacao.motivo is None
+
+
+def test_classificar_instante_pausa_tem_precedencia_sobre_a_atividade():
+    jornada = _jornada_completa()  # pausa PAUSA_TESTE de 9:00 a 9:10, dentro da atividade
+    classificacao = consolidacao.classificar_instante(jornada, _dt(9, 5))
+    assert classificacao.tipo == "PAUSA"
+    assert classificacao.motivo == "PAUSA_TESTE"
+
+
+def test_classificar_instante_atendimento_de_falha():
+    jornada = _jornada_completa()  # atendimento de falha de 11:30 a 12:00
+    classificacao = consolidacao.classificar_instante(jornada, _dt(11, 45))
+    assert classificacao.tipo == "ATENDIMENTO_FALHA"
+    assert classificacao.motivo is None
+
+
+def test_classificar_instante_fora_de_qualquer_intervalo_e_sem_atividade():
+    jornada = _jornada_completa()
+    # antes da jornada comecar
+    assert consolidacao.classificar_instante(jornada, _dt(7, 0)).tipo == "SEM_ATIVIDADE"
+
+
+def test_classificar_instante_limite_inclusivo_no_fim_do_intervalo():
+    jornada = _jornada_completa()  # pausa termina exatamente as 9:10
+    classificacao = consolidacao.classificar_instante(jornada, _dt(9, 10))
+    assert classificacao.tipo == "PAUSA"
+
+
+def test_linhas_eventos_classificadas_agrupa_pelo_dia_de_brasilia_nao_utc():
+    # Bug real corrigido em 2026-08-04 (ADR-0047): uma atividade que
+    # comecou as 22h de Brasilia (01h UTC do dia seguinte, o formato que
+    # chega aqui vindo do backend real - a interface de campo serializa
+    # via .toISOString()) era contada no dia ERRADO em todos os
+    # agrupamentos por data do painel, sem essa conversao.
+    inicio_22h_brasilia = datetime(2026, 8, 5, 1, 0, tzinfo=timezone.utc)  # 04/08 22h em Brasilia
+    fim_22h30_brasilia = datetime(2026, 8, 5, 1, 30, tzinfo=timezone.utc)
+
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(inicio_22h_brasilia)
+    motor.iniciar_atividade(inicio_22h_brasilia)
+    motor.encerrar_atividade(fim_22h30_brasilia)
+    motor.encerrar_jornada(fim_22h30_brasilia)
+
+    linhas = consolidacao.linhas_eventos_classificadas([motor.jornada], catalogo_padrao())
+
+    assert len(linhas) == 1
+    assert linhas[0].data == date(2026, 8, 4)  # nao 05/08, que seria o dia UTC
 
 
 def test_linhas_eventos_classificadas_ignora_jornada_nao_encerrada():

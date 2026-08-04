@@ -107,3 +107,64 @@ def test_tela_mapa_sem_secrets_mostra_erro_sem_quebrar():
     assert not at.exception
     textos = " ".join(e.value for e in at.error)
     assert "Backend não configurado" in textos
+
+
+# ----------------------------------------------------------------------
+# Filtro de atividade/data/horario (ADR-0047, pedido do responsavel pelo
+# produto em 2026-08-04). Os 5 pulsos de _pulsos_exemplo (8:00-8:04) caem
+# dentro do evento secundario "DESLOCAMENTO_TESTE" (8:00-8:30) que
+# gerar_jornadas_exemplo sempre cria - por isso o rotulo esperado no
+# filtro e literalmente o codigo do motivo de teste (catalogo_completo()
+# nao conhece "DESLOCAMENTO_TESTE", cai no proprio codigo - ver
+# painel/dados.py::rotulo_motivo).
+# ----------------------------------------------------------------------
+def _preparar_tela_com_pulsos(tmp_path, monkeypatch):
+    jornadas_exemplo = gerar_jornadas_exemplo(tmp_path, quantidade=1)
+    jornada = jornadas_exemplo[0]
+    pulsos = _pulsos_exemplo(jornada.id)
+
+    monkeypatch.setattr(
+        dados_modulo, "carregar_jornadas_via_api", lambda url, token: (jornadas_exemplo, [])
+    )
+    monkeypatch.setattr(
+        dados_modulo,
+        "carregar_pulsos_via_api",
+        lambda url, token, jornada_id: (pulsos, []),
+    )
+
+    at = AppTest.from_file(_CAMINHO_MAPA)
+    _preparar_secrets_de_teste(at)
+    at.run(timeout=30)
+    return at
+
+
+def test_tela_mapa_filtro_atividade_lista_rotulos_presentes(tmp_path, monkeypatch):
+    at = _preparar_tela_com_pulsos(tmp_path, monkeypatch)
+
+    assert not at.exception
+    seletor_atividade = at.selectbox(key="painel_mapa_filtro_atividade")
+    assert "Todas as atividades" in seletor_atividade.options
+    assert any(opcao.startswith("DESLOCAMENTO_TESTE") for opcao in seletor_atividade.options)
+
+
+def test_tela_mapa_filtro_atividade_especifica_nao_quebra(tmp_path, monkeypatch):
+    # set_value(date(...)) do date_input nao propaga de forma confiavel
+    # neste AppTest/versao do Streamlit (reproduzido isolado, fora deste
+    # app - bug/limitacao da propria ferramenta de teste, nao do app) -
+    # o filtro de atividade (Selectbox.select) funciona normalmente, e a
+    # correcao do filtro de data/horario em si ja e coberta por
+    # tests/test_mapa.py::test_filtrar_pulsos_por_periodo_* (funcao pura).
+    at = _preparar_tela_com_pulsos(tmp_path, monkeypatch)
+    opcao_atividade = next(
+        opcao
+        for opcao in at.selectbox(key="painel_mapa_filtro_atividade").options
+        if opcao.startswith("DESLOCAMENTO_TESTE")
+    )
+
+    at.selectbox(key="painel_mapa_filtro_atividade").select(opcao_atividade).run(timeout=30)
+
+    assert not at.exception
+    # os 5 pulsos de teste caem todos dentro do mesmo evento secundario -
+    # filtrar por ele nao deveria excluir nenhum.
+    textos_caption = " ".join(c.value for c in at.caption)
+    assert "5 de 5 pulso(s)" in textos_caption

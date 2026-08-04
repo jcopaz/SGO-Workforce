@@ -12,13 +12,19 @@ parametros explicitos de quem chama.
 
 from __future__ import annotations
 
+import hashlib
 import html
 from datetime import timedelta
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+from uuid import UUID
 
 import folium
 
+from dados import rotulo_motivo
+from workforce_core.catalogo import CatalogoMotivos
+from workforce_core.consolidacao import ClassificacaoInstante
 from workforce_core.entities import PulsoGps
+from workforce_core.fuso_horario import para_horario_brasil
 from workforce_core.geo import ClusterPermanencia, agrupar_permanencia, simplificar_trajetoria
 
 # Estilo pedido pelo responsavel pelo produto em 2026-08-04: pulso bruto em
@@ -35,6 +41,56 @@ _TILES_BASEMAP = "cartodbpositron"
 
 _LOCAL_SEM_DADOS = (-15.7801, -47.9292)  # Brasilia - fallback visual quando nao ha nenhum pulso
 
+# Paleta qualitativa (cores bem distinguiveis entre si) para colorir pulsos
+# por atividade/pausa/evento (pedido do responsavel pelo produto em
+# 2026-08-04, ver ADR-0047). Atribuicao por hash estavel do rotulo (nao
+# por ordem de aparicao) - mesmo codigo (ex.: "EE02 - Refeicao") sempre
+# cai na mesma cor, em qualquer jornada, sem precisar manter um registro
+# global de codigo->cor.
+_PALETA_CATEGORIAS = [
+    "#1E88E5",  # azul
+    "#FB8C00",  # laranja
+    "#43A047",  # verde
+    "#8E24AA",  # roxo
+    "#00ACC1",  # ciano
+    "#F4511E",  # laranja avermelhado
+    "#3949AB",  # indigo
+    "#7CB342",  # verde-lima
+    "#D81B60",  # rosa
+    "#6D4C41",  # marrom
+    "#00897B",  # verde-azulado
+    "#C0CA33",  # amarelo-esverdeado
+]
+_COR_SEM_ATIVIDADE = "#9E9E9E"  # cinza - jornada aberta, nada especifico em andamento
+
+
+def rotulo_classificacao_pulso(
+    classificacao: ClassificacaoInstante, catalogo: Optional[CatalogoMotivos] = None
+) -> str:
+    """Rotulo legivel para filtro/legenda a partir de uma
+    `ClassificacaoInstante` (`workforce_core.consolidacao.classificar_instante`).
+    Reaproveita o mesmo formato "codigo - descricao" ja usado em
+    `painel/dados.py::rotulo_motivo` para pausa/evento secundario."""
+    if classificacao.tipo == "ATIVIDADE":
+        return "Atividade"
+    if classificacao.tipo == "ATENDIMENTO_FALHA":
+        return "Atendimento de falha"
+    if classificacao.tipo == "SEM_ATIVIDADE":
+        return "Sem atividade"
+    # PAUSA e EVENTO_SECUNDARIO sempre tem motivo.
+    return rotulo_motivo(classificacao.motivo, catalogo)
+
+
+def cor_por_rotulo(rotulo: str) -> str:
+    """Cor deterministica (mesmo rotulo -> mesma cor sempre, em qualquer
+    processo/jornada) via hash estavel - `hash()` nativo do Python varia
+    entre execucoes (PYTHONHASHSEED aleatorio por padrao), por isso usa
+    hashlib."""
+    if rotulo == "Sem atividade":
+        return _COR_SEM_ATIVIDADE
+    indice = int(hashlib.md5(rotulo.encode("utf-8")).hexdigest(), 16) % len(_PALETA_CATEGORIAS)
+    return _PALETA_CATEGORIAS[indice]
+
 
 def _centro(pulsos: List[PulsoGps]) -> Tuple[float, float]:
     if not pulsos:
@@ -45,10 +101,19 @@ def _centro(pulsos: List[PulsoGps]) -> Tuple[float, float]:
     )
 
 
+def _horario_legivel(momento) -> str:
+    """Horario de Brasilia, formato dd/mm/aaaa hh:mm:ss - mesma conversao
+    de painel/dados.py::formatar_data_hora (fonte unica de apresentacao
+    de horario), evita repetir isoformat() cru (UTC, tecnico demais pro
+    popup) em cada camada do mapa."""
+    convertido = para_horario_brasil(momento)
+    return convertido.strftime("%d/%m/%Y %H:%M:%S") if convertido is not None else "--"
+
+
 def _popup_pulso(pulso: PulsoGps) -> str:
     linhas = [
         f"Colaborador: {html.escape(pulso.colaborador_matricula)}",
-        f"Horario: {html.escape(pulso.timestamp_dispositivo.isoformat())}",
+        f"Horario: {html.escape(_horario_legivel(pulso.timestamp_dispositivo))}",
         f"Precisao: {pulso.precisao_metros:.0f} m",
         f"Qualidade: {html.escape(pulso.qualidade.value)}",
     ]
@@ -58,8 +123,8 @@ def _popup_pulso(pulso: PulsoGps) -> str:
 def _popup_cluster(cluster: ClusterPermanencia) -> str:
     linhas = [
         "Cluster de permanencia (inferencia, nao prova de presenca)",
-        f"Inicio: {html.escape(cluster.inicio.isoformat())}",
-        f"Fim: {html.escape(cluster.fim.isoformat())}",
+        f"Inicio: {html.escape(_horario_legivel(cluster.inicio))}",
+        f"Fim: {html.escape(_horario_legivel(cluster.fim))}",
         f"Duracao: {html.escape(str(cluster.duracao))}",
         f"Pulsos no cluster: {cluster.quantidade_pulsos}",
     ]
@@ -74,15 +139,28 @@ def construir_mapa(
     tempo_minimo_cluster: timedelta,
     mostrar_pulsos_brutos: bool = True,
     trilhos_ferrovia: Optional[List[List[Tuple[float, float]]]] = None,
+    cor_por_pulso: Optional[Dict[UUID, str]] = None,
+    marco_inicio: Optional[PulsoGps] = None,
+    marco_fim: Optional[PulsoGps] = None,
 ) -> folium.Map:
     """Monta o mapa com as camadas de docs/13_MAPA_OPERACIONAL.md que ja
-    sao possiveis com o que existe hoje: pulsos brutos, trajetoria
-    simplificada, clusters de permanencia e (opcional) a malha ferrea da
-    MRS como camada de referencia (`painel/malha_ferrea.py`).
+    sao possiveis com o que existe hoje: pulsos brutos (coloridos por
+    atividade quando `cor_por_pulso` e informado - ver
+    `rotulo_classificacao_pulso`/`cor_por_rotulo`), trajetoria
+    simplificada, clusters de permanencia, marcos de inicio/fim
+    (`marco_inicio`/`marco_fim` - pedido do responsavel pelo produto em
+    2026-08-04) e (opcional) a malha ferrea da MRS como camada de
+    referencia (`painel/malha_ferrea.py`).
 
-    Pinos de inicio/fim de evento, falhas por sintoma/impacto e heatmap de
-    HH ficam para quando houver mais volume de dados reais para validar a
-    utilidade de cada camada adicional (ver ADR-0010).
+    `marco_inicio`/`marco_fim` sao passados explicitamente por quem chama
+    (em vez de inferidos de `pulsos` aqui dentro) para continuarem
+    representando o inicio/fim REAL da jornada mesmo quando `pulsos` ja
+    vem filtrado por atividade/periodo - o marco nao deveria sumir so
+    porque o filtro atual nao inclui aquele pulso especifico.
+
+    Falhas por sintoma/impacto e heatmap de HH ficam para quando houver
+    mais volume de dados reais para validar a utilidade de cada camada
+    adicional (ver ADR-0010).
     """
     mapa = folium.Map(location=_centro(pulsos), zoom_start=14 if pulsos else 4, tiles=_TILES_BASEMAP)
 
@@ -98,21 +176,48 @@ def construir_mapa(
             ).add_to(camada_ferrovia)
         camada_ferrovia.add_to(mapa)
 
+    if marco_inicio is not None or marco_fim is not None:
+        camada_marcos = folium.FeatureGroup(name="Inicio e fim", show=True)
+        if marco_inicio is not None:
+            folium.Marker(
+                location=(marco_inicio.latitude, marco_inicio.longitude),
+                icon=folium.Icon(color="green", icon="play"),
+                tooltip="Inicio da jornada",
+                popup=folium.Popup(
+                    f"Inicio da jornada<br>Horario: {html.escape(_horario_legivel(marco_inicio.timestamp_dispositivo))}",
+                    max_width=300,
+                ),
+            ).add_to(camada_marcos)
+        if marco_fim is not None:
+            folium.Marker(
+                location=(marco_fim.latitude, marco_fim.longitude),
+                icon=folium.Icon(color="red", icon="stop"),
+                tooltip="Fim da jornada",
+                popup=folium.Popup(
+                    f"Fim da jornada<br>Horario: {html.escape(_horario_legivel(marco_fim.timestamp_dispositivo))}",
+                    max_width=300,
+                ),
+            ).add_to(camada_marcos)
+        camada_marcos.add_to(mapa)
+
     if not pulsos:
-        if trilhos_ferrovia:
+        if trilhos_ferrovia or marco_inicio is not None or marco_fim is not None:
             folium.LayerControl(collapsed=False).add_to(mapa)
         return mapa
 
     if mostrar_pulsos_brutos:
-        camada_brutos = folium.FeatureGroup(name="Pulsos brutos", show=False)
+        camada_brutos = folium.FeatureGroup(name="Pulsos brutos", show=True)
         for pulso in pulsos:
+            cor_categoria = cor_por_pulso.get(pulso.id) if cor_por_pulso else None
+            cor_marcador = cor_categoria or _COR_PULSO_BRUTO
+            cor_borda = _COR_BORDA_PULSO_BRUTO if cor_categoria is None else cor_marcador
             folium.CircleMarker(
                 location=(pulso.latitude, pulso.longitude),
                 radius=4,
-                color=_COR_BORDA_PULSO_BRUTO,
+                color=cor_borda,
                 weight=1,
                 fill=True,
-                fill_color=_COR_PULSO_BRUTO,
+                fill_color=cor_marcador,
                 fill_opacity=0.9,
                 popup=folium.Popup(_popup_pulso(pulso), max_width=300),
             ).add_to(camada_brutos)

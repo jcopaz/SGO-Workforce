@@ -1,7 +1,7 @@
-"""Mapa operacional - piloto tecnico (Incremento 10, backend real de
-pulsos na Fase 1 da captacao de geolocalizacao - ver
-docs/69_ADR_0042_LEVANTAMENTO_LACUNAS_GPS_PULSOS.md e
-docs/70_ADR_0043_DECISOES_CAPTACAO_PERIODICA_PULSO_GPS.md).
+"""Mapa operacional - piloto tecnico (Incremento 10; captacao real de GPS
+completa desde o ADR-0042 ao ADR-0045 - backend, captura periodica na
+interface de campo e GPS obrigatorio; estilo visual, malha ferrea da MRS
+e filtro por atividade/data/horario do ADR-0046/ADR-0047).
 
 Camadas, popup e filtros de docs/13_MAPA_OPERACIONAL.md. Filtros que
 dependem de conceitos ainda nao modelados (coordenacao, equipe, patio,
@@ -12,7 +12,7 @@ docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md.
 from __future__ import annotations
 
 import sys
-from datetime import timedelta
+from datetime import time, timedelta
 from pathlib import Path
 
 _RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
@@ -23,9 +23,17 @@ import requests
 import streamlit as st
 from streamlit_folium import st_folium
 
-from dados import carregar_jornadas_via_api, carregar_pulsos_via_api, formatar_data_hora
+from dados import (
+    carregar_jornadas_via_api,
+    carregar_pulsos_via_api,
+    filtrar_pulsos_por_periodo,
+    formatar_data_hora,
+)
 from malha_ferrea import carregar_trilhos_malha_mrs
-from mapa import construir_mapa
+from mapa import construir_mapa, cor_por_rotulo, rotulo_classificacao_pulso
+from workforce_core.catalogo import catalogo_completo
+from workforce_core.consolidacao import classificar_instante
+from workforce_core.fuso_horario import para_horario_brasil
 
 
 def _obter_secret_seguro(chave: str, default: str = "") -> str:
@@ -98,14 +106,60 @@ if pulsos_com_erro:
 
 if not pulsos:
     st.info(
-        "Nenhum pulso GPS encontrado para esta jornada no backend. A captação "
-        "periódica de GPS na interface de campo ainda não existe (ver "
-        "docs/69_ADR_0042_LEVANTAMENTO_LACUNAS_GPS_PULSOS.md) - isso é o "
-        "estado real do sistema hoje, não um erro desta tela."
+        "Nenhum pulso GPS encontrado para esta jornada no backend. Isso "
+        "acontece se a jornada foi registrada antes da captação periódica "
+        "de GPS (ADR-0045) ou se o colaborador ainda não sincronizou os "
+        "dados desta jornada."
     )
     st.stop()
 
-st.caption(f"{len(pulsos)} pulso(s) carregado(s) para esta jornada.")
+# Classificacao por atividade/pausa/evento (ADR-0047) - base do filtro de
+# atividade e da cor de cada pulso no mapa. catalogo_completo() tolera
+# ausencia de backend/rede (fallback offline, mesmo padrao ja usado nos
+# demais filtros do painel).
+catalogo = catalogo_completo()
+rotulos_por_pulso = {
+    pulso.id: rotulo_classificacao_pulso(
+        classificar_instante(jornada_selecionada, pulso.timestamp_dispositivo), catalogo
+    )
+    for pulso in pulsos
+}
+marco_inicio = min(pulsos, key=lambda p: p.timestamp_dispositivo)
+marco_fim = max(pulsos, key=lambda p: p.timestamp_dispositivo)
+
+col_atividade, col_data, col_hora_ini, col_hora_fim = st.columns(4)
+with col_atividade:
+    opcoes_atividade = ["Todas as atividades"] + sorted(set(rotulos_por_pulso.values()))
+    atividade_selecionada = st.selectbox(
+        "Atividade", options=opcoes_atividade, key="painel_mapa_filtro_atividade"
+    )
+with col_data:
+    data_filtro = st.date_input(
+        "Data dos pulsos",
+        value=para_horario_brasil(marco_inicio.timestamp_dispositivo).date(),
+        key="painel_mapa_filtro_data",
+    )
+with col_hora_ini:
+    hora_inicial = st.time_input(
+        "Horário inicial", value=time(0, 0), key="painel_mapa_filtro_hora_inicial"
+    )
+with col_hora_fim:
+    hora_final = st.time_input(
+        "Horário final", value=time(23, 59, 59), key="painel_mapa_filtro_hora_final"
+    )
+
+pulsos_filtrados = filtrar_pulsos_por_periodo(pulsos, data_filtro, hora_inicial, hora_final)
+if atividade_selecionada != "Todas as atividades":
+    pulsos_filtrados = [
+        pulso for pulso in pulsos_filtrados if rotulos_por_pulso[pulso.id] == atividade_selecionada
+    ]
+
+cor_por_pulso = {pulso.id: cor_por_rotulo(rotulos_por_pulso[pulso.id]) for pulso in pulsos_filtrados}
+
+if not pulsos_filtrados:
+    st.info("Nenhum pulso encontrado para o filtro atual (atividade/data/horário).")
+
+st.caption(f"{len(pulsos_filtrados)} de {len(pulsos)} pulso(s) exibido(s) para esta jornada.")
 
 col_a, col_b, col_c = st.columns(3)
 with col_a:
@@ -134,11 +188,14 @@ with col_c:
     )
 
 mapa = construir_mapa(
-    pulsos,
+    pulsos_filtrados,
     distancia_simplificacao_metros=float(distancia_simplificacao),
     raio_cluster_metros=float(raio_cluster),
     tempo_minimo_cluster=timedelta(minutes=tempo_minimo_cluster_minutos),
     trilhos_ferrovia=carregar_trilhos_malha_mrs(),
+    cor_por_pulso=cor_por_pulso,
+    marco_inicio=marco_inicio,
+    marco_fim=marco_fim,
 )
 
 st_folium(mapa, width="100%", height=560, key="painel_mapa_folium")

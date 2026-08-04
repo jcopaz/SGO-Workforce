@@ -23,6 +23,7 @@ from . import calculo
 from .catalogo import Categoria, CatalogoMotivos, ClassificacaoHH
 from .entities import Atividade, Jornada, PulsoGps
 from .enums import EstadoJornada, QualidadePulso, ResultadoAtividade
+from .fuso_horario import para_horario_brasil
 
 
 def _categoria_atividade(atividade: Atividade) -> Categoria:
@@ -44,6 +45,54 @@ def _categoria_atividade(atividade: Atividade) -> Categoria:
     if atividade.resultado == ResultadoAtividade.NAO_CONCLUIDA:
         return Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA
     return Categoria.ATIVIDADE_PLANEJADA
+
+
+# ----------------------------------------------------------------------
+# Classificacao pontual (o que estava em andamento em um instante) - base
+# para colorir/filtrar pulsos de GPS por atividade no mapa operacional
+# (pedido do responsavel pelo produto em 2026-08-04, ver ADR-0047).
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class ClassificacaoInstante:
+    tipo: str  # "ATIVIDADE" | "ATENDIMENTO_FALHA" | "PAUSA" | "EVENTO_SECUNDARIO" | "SEM_ATIVIDADE"
+    motivo: Optional[str]  # codigo (pausa/evento secundario) - None para os demais tipos
+
+
+def _contem_instante(inicio: Optional[datetime], fim: Optional[datetime], momento: datetime) -> bool:
+    """Um intervalo sem `fim` (evento ainda em andamento no momento em que
+    os dados foram lidos) e tratado como aberto - nunca deixa de "conter"
+    um momento so por falta de fim registrado."""
+    if inicio is None or momento < inicio:
+        return False
+    return fim is None or momento <= fim
+
+
+def classificar_instante(jornada: Jornada, momento: datetime) -> ClassificacaoInstante:
+    """Determina o que estava em andamento na jornada em `momento` (ex.:
+    o `timestamp_dispositivo` de um pulso de GPS) - qual atividade, pausa
+    ou evento secundario estava ativo.
+
+    Pausa tem precedencia sobre a atividade que a contem (esta "dentro"
+    dela); atividade e evento secundario sao mutuamente exclusivos por
+    construcao (`MotorJornada`/`motorJornada.js`), entao a ordem de
+    checagem entre eles nunca produz ambiguidade na pratica. Quando nada
+    cobre o instante (jornada aberta sem nada especifico em andamento),
+    devolve `SEM_ATIVIDADE`.
+    """
+    for atividade in jornada.atividades:
+        if not _contem_instante(atividade.inicio, atividade.fim, momento):
+            continue
+        for pausa in atividade.pausas:
+            if _contem_instante(pausa.inicio, pausa.fim, momento):
+                return ClassificacaoInstante(tipo="PAUSA", motivo=pausa.motivo)
+        tipo = "ATENDIMENTO_FALHA" if atividade.dados_falha is not None else "ATIVIDADE"
+        return ClassificacaoInstante(tipo=tipo, motivo=None)
+
+    for evento in jornada.eventos_secundarios:
+        if _contem_instante(evento.inicio, evento.fim, momento):
+            return ClassificacaoInstante(tipo="EVENTO_SECUNDARIO", motivo=evento.motivo)
+
+    return ClassificacaoInstante(tipo="SEM_ATIVIDADE", motivo=None)
 
 
 # ----------------------------------------------------------------------
@@ -180,7 +229,7 @@ def linhas_eventos_classificadas(
             linhas.append(
                 LinhaEvento(
                     colaborador_matricula=jornada.colaborador_matricula,
-                    data=atividade.inicio.date(),
+                    data=para_horario_brasil(atividade.inicio).date(),
                     categoria=_categoria_atividade(atividade),
                     motivo=None,
                     duracao=calculo.duracao_atividade_liquida(atividade),
@@ -194,7 +243,7 @@ def linhas_eventos_classificadas(
                 linhas.append(
                     LinhaEvento(
                         colaborador_matricula=jornada.colaborador_matricula,
-                        data=pausa.inicio.date(),
+                        data=para_horario_brasil(pausa.inicio).date(),
                         categoria=entrada.categoria if entrada is not None else None,
                         motivo=pausa.motivo,
                         duracao=calculo.duracao_pausa(pausa),
@@ -209,7 +258,7 @@ def linhas_eventos_classificadas(
             linhas.append(
                 LinhaEvento(
                     colaborador_matricula=jornada.colaborador_matricula,
-                    data=evento.inicio.date(),
+                    data=para_horario_brasil(evento.inicio).date(),
                     categoria=entrada.categoria if entrada is not None else None,
                     motivo=evento.motivo,
                     duracao=calculo.duracao_evento_secundario(evento),
@@ -269,7 +318,7 @@ def linhas_atendimento_falha(jornadas: List[Jornada]) -> List[LinhaAtendimentoFa
             linhas.append(
                 LinhaAtendimentoFalha(
                     colaborador_matricula=jornada.colaborador_matricula,
-                    data=atividade.inicio.date(),
+                    data=para_horario_brasil(atividade.inicio).date(),
                     inicio=atividade.inicio,
                     fim=atividade.fim,
                     duracao=calculo.duracao_atividade_bruta(atividade),

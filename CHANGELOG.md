@@ -1,5 +1,52 @@
 # Changelog
 
+## [2026-08-04] Calibração para horário de Brasília e filtros/marcos do mapa operacional (ADR-0047)
+
+Ver `docs/74_ADR_0047_TIMEZONE_BRASIL_E_FILTROS_MAPA_OPERACIONAL.md` para
+a decisão completa.
+
+### Corrigido - dois bugs reais de timezone encontrados investigando o pedido "calibre pro horário do Brasil"
+- `painel/dados.py::formatar_data_hora` mostrava a hora em UTC crua - todo
+  horário exibido no painel aparecia 3h adiantado em relação ao horário
+  real do colaborador.
+- `workforce_core/consolidacao.py` agrupava eventos por `inicio.date()`
+  também em UTC - um evento às 22h de Brasília (01h UTC do dia seguinte)
+  contava para o dia ERRADO em todos os agrupamentos por data do painel
+  (evolução diária, contagem por dia). Este era o bug mais sério dos
+  dois - reclassificação de HH para a data errada, não só exibição.
+- Captura/armazenamento (interface de campo, backend, Postgres) já
+  estavam corretos (UTC) - a correção é só na conversão pro horário de
+  Brasília no limite de apresentação/agrupamento, nunca antes.
+
+### Adicionado
+- `src/workforce_core/fuso_horario.py` (novo): `para_horario_brasil`
+  (stdlib `zoneinfo`, `tzdata` adicionado a `requirements.txt` para
+  portabilidade em containers).
+- Pinos de início (verde) e fim (vermelho) da jornada no mapa operacional
+  - sempre representam o primeiro/último pulso real, mesmo com filtros
+    ativos.
+- Cor por atividade/pausa/evento nos pulsos brutos
+  (`workforce_core.consolidacao.classificar_instante` + `painel/mapa.py`
+  `rotulo_classificacao_pulso`/`cor_por_rotulo`, cor determinística por
+  hash estável do rótulo).
+- Filtros de Atividade, Data e faixa de Horário na tela do mapa
+  operacional (`painel/dados.py::filtrar_pulsos_por_periodo`, nova
+  função pura).
+- 24 casos de teste novos (`tests/test_fuso_horario.py` novo +
+  casos em `test_consolidacao.py`/`test_painel.py`/`test_mapa.py`/
+  `test_mapa_operacional_painel.py`) - 352 testes no total, sem
+  regressão.
+
+### Validação NÃO realizada
+- Renderização visual real num navegador (sandbox sem Chromium/
+  Playwright) - pedir ao responsável pelo produto para conferir no
+  painel publicado.
+- `streamlit.testing.v1.DateInput.set_value()` não propaga corretamente
+  neste ambiente/versão do Streamlit (limitação da ferramenta de teste,
+  confirmada isolada fora deste app) - o filtro de data em si está
+  coberto por teste de função pura, só a interação via widget não é
+  testável automaticamente hoje.
+
 ## [2026-08-04] Estilo visual do mapa operacional e camada da malha férrea da MRS (ADR-0046)
 
 Ver `docs/73_ADR_0046_ESTILO_MAPA_E_MALHA_FERREA_MRS.md` para a decisão

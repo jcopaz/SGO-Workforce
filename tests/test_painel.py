@@ -8,7 +8,7 @@ docs/36_ADR_0009_DASHBOARD_ECHARTS_PYECHARTS.md.
 """
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -75,6 +75,15 @@ def test_formatar_horas():
 def test_formatar_data_hora():
     assert formatar_data_hora(datetime(2026, 7, 27, 8, 5, 9)) == "27/07/2026 08:05:09"
     assert formatar_data_hora(None) == "--"
+
+
+def test_formatar_data_hora_converte_utc_aware_para_horario_brasil():
+    # Bug real corrigido em 2026-08-04 (ADR-0047): um instante vindo do
+    # backend em UTC (a interface de campo serializa via .toISOString())
+    # aparecia no painel com a hora UTC crua, 3h adiantada em relacao ao
+    # horario real de Brasilia.
+    momento_utc = datetime(2026, 7, 27, 11, 5, 9, tzinfo=timezone.utc)
+    assert formatar_data_hora(momento_utc) == "27/07/2026 08:05:09"
 
 
 def test_carregar_jornadas_diretorio_vazio(tmp_path):

@@ -41,6 +41,7 @@ from . import calculo
 from . import catalogo
 from . import consolidacao
 from . import exceptions
+from . import fuso_horario
 from . import geo
 from . import integracao_sgo
 from . import pcm
@@ -76,6 +77,7 @@ __all__ = [
     "catalogo",
     "consolidacao",
     "exceptions",
+    "fuso_horario",
     "geo",
     "integracao_sgo",
     "pcm",
