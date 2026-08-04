@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import List, Union
+from typing import Dict, List, Union
 from uuid import UUID
 
 from workforce_core.entities import PulsoGps
@@ -49,8 +49,25 @@ class RepositorioPulsosGpsArquivo:
             arquivo.flush()
             os.fsync(arquivo.fileno())
 
+    def gravar_lote(self, pulsos: List[PulsoGps]) -> None:
+        """Grava varios pulsos de uma vez, um `gravar_pulso` por item.
+
+        Existe pra este repositorio ter a mesma forma publica de
+        `workforce_api.repositorio_pulsos_postgres.RepositorioPulsosGpsPostgres`
+        (mesmo espirito de `RepositorioJornadaArquivo`/`RepositorioJornadaPostgres`
+        - `salvar`/`carregar`/`listar_ids` identicos nos dois) - o endpoint
+        `POST /pulsos` chama `gravar_lote` sem saber (nem precisar saber)
+        qual das duas implementacoes esta por tras do Depends."""
+        for pulso in pulsos:
+            self.gravar_pulso(pulso)
+
     def ler_pulsos(self, jornada_id: UUID) -> List[PulsoGps]:
-        """Le todos os pulsos gravados para a jornada, em ordem de gravacao.
+        """Le todos os pulsos gravados para a jornada, em ordem cronologica
+        pelo timestamp do proprio dispositivo (nao pela ordem em que foram
+        gravados no arquivo) - mesma garantia de
+        `workforce_api.repositorio_pulsos_postgres.RepositorioPulsosGpsPostgres.ler_pulsos`,
+        necessaria pra um lote reenviado fora de ordem (ou um id repetido,
+        ver abaixo) nao embaralhar a trajetoria.
 
         Uma linha corrompida (JSON invalido ou estrutura invalida) e
         ignorada silenciosamente na leitura - nunca apaga nem reescreve o
@@ -65,7 +82,15 @@ class RepositorioPulsosGpsArquivo:
         caminho = self._caminho(jornada_id)
         if not caminho.exists():
             return [], []
-        pulsos: List[PulsoGps] = []
+        # Dict por id (nao lista) - `gravar_pulso`/`gravar_lote` sao so
+        # append, sem checar duplicata na escrita (E de proposito, ver
+        # docstring da classe: checar antes de cada gravacao reintroduziria
+        # o custo de leitura que o append-only existe pra evitar). Reenviar
+        # o mesmo pulso (ack perdido na sincronizacao) grava uma segunda
+        # linha com o mesmo id - a leitura e que resolve o upsert, ultima
+        # ocorrencia vence, mesma semantica do `ON CONFLICT ... DO UPDATE`
+        # do lado Postgres.
+        por_id: Dict[UUID, PulsoGps] = {}
         linhas_com_erro: List[int] = []
         with open(caminho, encoding="utf-8") as arquivo:
             for numero_linha, linha in enumerate(arquivo, start=1):
@@ -74,9 +99,11 @@ class RepositorioPulsosGpsArquivo:
                     continue
                 try:
                     dados = json.loads(linha)
-                    pulsos.append(pulso_gps_de_dict(dados))
+                    pulso = pulso_gps_de_dict(dados)
+                    por_id[pulso.id] = pulso
                 except (json.JSONDecodeError, KeyError, ValueError, TypeError):
                     linhas_com_erro.append(numero_linha)
+        pulsos = sorted(por_id.values(), key=lambda pulso: pulso.timestamp_dispositivo)
         return pulsos, linhas_com_erro
 
     def contar_pulsos(self, jornada_id: UUID) -> int:

@@ -1,5 +1,56 @@
 # Changelog
 
+## [2026-08-04] Backend real de pulsos GPS - Fase 1 da captação de geolocalização (ADR-0044)
+
+Ver `docs/71_ADR_0044_BACKEND_REAL_PULSOS_GPS_FASE_1.md` para a decisão
+completa. Sequência de ADR-0042 (levantamento) e ADR-0043 (decisões de
+negócio) - primeira fatia validável rumo à captação real de GPS: backend
++ painel, sem depender de celular real.
+
+### Adicionado
+- `src/workforce_api/repositorio_pulsos_postgres.py` (novo): tabela
+  `pulsos_gps` (JSONB, mesmo padrão de `jornadas`), upsert em lote numa
+  transação só.
+- `POST /pulsos` (recebe lote, não pulso único - reflete a decisão de
+  sincronizar tudo de uma vez ao encerrar a jornada) e `GET /pulsos`
+  (`jornada_id` obrigatório) em `src/workforce_api/app.py`.
+- `carregar_pulsos_via_api` em `painel/dados.py`.
+- `tests/test_mapa_operacional_painel.py` (novo, `AppTest` end-to-end) -
+  confirma que `st_folium` funciona sob teste automatizado, incluindo o
+  caminho feliz com pulsos reais.
+- 9 casos novos em `tests/test_workforce_api.py`, 1 novo em
+  `tests/test_gps.py`.
+
+### Corrigido - dois bugs reais encontrados escrevendo os testes desta ADR
+- `RepositorioPulsosGpsArquivo.ler_pulsos` não ordenava por
+  `timestamp_dispositivo` (devolvia na ordem de gravação) nem
+  deduplicava por `id` (reenvio do mesmo pulso aparecia duplicado) -
+  existiam desde o Incremento 7, nunca exercitados por um cenário de
+  lote/reenvio até agora. Corrigido na leitura (escrita continua um
+  append puro, de propósito).
+
+### Alterado
+- `painel/telas/mapa_operacional.py`: fonte de dados fixa em API (mesmo
+  padrão do ADR-0041), botão "Sincronizar dados". Botão "Gerar pulsos de
+  exemplo" removido (escrevia num diretório que a tela não lê mais) - a
+  tela agora mostra "nenhum pulso encontrado" pra toda jornada real até
+  a Fase 2 (captação na interface de campo) existir - estado real do
+  sistema, não regressão.
+
+### Validação
+- `python -m py_compile` em todos os módulos tocados: OK.
+- `pytest` completo: 318 passed (304 + 14 novos), sem regressão.
+- Smoke test real do `streamlit run painel/app.py`: HTTP 200, sem
+  traceback no log.
+- Conexão real com Postgres **não realizada** (sem servidor disponível
+  neste ambiente, mesma ressalva do ADR-0017). Teste visual em navegador
+  real **não realizado** - sandbox sem Playwright/Chromium.
+
+### Fora de escopo (Fase 2, sessão futura)
+Captação periódica na interface de campo, fila offline (IndexedDB), "GPS
+obrigatório" pra iniciar/encerrar jornada/atividade - precisa de teste em
+celular real.
+
 ## [2026-08-03] Fonte de dados fixa em API (nuvem) - sem seleção visível, botão de sincronizar (ADR-0041)
 
 Ver `docs/68_ADR_0041_FONTE_DE_DADOS_FIXA_EM_API.md` para a decisão

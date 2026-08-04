@@ -1,4 +1,7 @@
-"""Mapa operacional - piloto tecnico (Incremento 10).
+"""Mapa operacional - piloto tecnico (Incremento 10, backend real de
+pulsos na Fase 1 da captacao de geolocalizacao - ver
+docs/69_ADR_0042_LEVANTAMENTO_LACUNAS_GPS_PULSOS.md e
+docs/70_ADR_0043_DECISOES_CAPTACAO_PERIODICA_PULSO_GPS.md).
 
 Camadas, popup e filtros de docs/13_MAPA_OPERACIONAL.md. Filtros que
 dependem de conceitos ainda nao modelados (coordenacao, equipe, patio,
@@ -16,11 +19,20 @@ _RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_RAIZ_PROJETO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import requests
 import streamlit as st
 from streamlit_folium import st_folium
 
-from dados import carregar_jornadas, carregar_pulsos, formatar_data_hora, gerar_pulsos_exemplo
+from dados import carregar_jornadas_via_api, carregar_pulsos_via_api, formatar_data_hora
 from mapa import construir_mapa
+
+
+def _obter_secret_seguro(chave: str, default: str = "") -> str:
+    try:
+        return st.secrets.get(chave, default)
+    except Exception:
+        return default
+
 
 st.warning(
     "Piloto tecnico. Filtros de coordenacao, equipe, patio, sintoma e "
@@ -29,36 +41,41 @@ st.warning(
     "Clusters de permanencia sao inferencia, nunca prova de presenca."
 )
 
-st.title("SGO Workforce | Mapa operacional (piloto)")
+col_titulo, col_sync = st.columns([5, 1])
+with col_titulo:
+    st.title("SGO Workforce | Mapa operacional (piloto)")
+with col_sync:
+    st.write("")  # alinhamento vertical com o titulo
+    if st.button("🔄 Sincronizar dados", width="stretch", key="mapa_sincronizar"):
+        st.toast("Sincronizando com o backend...", icon="🔄")
 
-if "painel_diretorio_jornadas" not in st.session_state:
-    st.session_state.painel_diretorio_jornadas = str(_RAIZ_PROJETO / "dados_locais" / "jornadas")
-if "painel_diretorio_pulsos" not in st.session_state:
-    st.session_state.painel_diretorio_pulsos = str(_RAIZ_PROJETO / "dados_locais" / "pulsos")
+# Fonte de dados fixa em API (nuvem, ADR-0041) - ver mesmo comentario em
+# painel/telas/dashboard.py. Pulsos vem do backend real desde a Fase 1 do
+# ADR seguinte a este (backend /pulsos) - ate a Fase 2 (captacao na
+# interface de campo) existir, toda jornada real vai aparecer sem pulso
+# nenhum, o que e o estado real do sistema, nao um bug desta tela.
+url_api = _obter_secret_seguro("SYNC_API_URL")
+token_api = _obter_secret_seguro("SYNC_TOKEN")
 
-col_dir1, col_dir2 = st.columns(2)
-with col_dir1:
-    diretorio_jornadas = st.text_input(
-        "Diretorio de jornadas persistidas", key="painel_diretorio_jornadas"
+if not url_api or not token_api:
+    st.error(
+        "Backend não configurado. Defina os secrets `SYNC_API_URL` e "
+        "`SYNC_TOKEN` (Streamlit Cloud: Settings → Secrets) para o "
+        "painel funcionar."
     )
-with col_dir2:
-    diretorio_pulsos = st.text_input(
-        "Diretorio de pulsos GPS persistidos", key="painel_diretorio_pulsos"
-    )
-
-if not diretorio_jornadas or not diretorio_pulsos:
-    st.warning("Informe os dois diretorios (jornadas e pulsos) para continuar.")
     st.stop()
 
-jornadas, com_erro = carregar_jornadas(diretorio_jornadas)
+try:
+    jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar dados do backend: {exc}")
+    st.stop()
+
 if com_erro:
-    st.error(f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem apagar.")
+    st.error(f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura inválida, ignorada(s).")
 
 if not jornadas:
-    st.info(
-        "Nenhuma jornada encontrada. Gere dados de exemplo na pagina "
-        "principal do painel primeiro."
-    )
+    st.info("Nenhuma jornada encerrada no backend ainda.")
     st.stop()
 
 opcoes_jornada = {
@@ -69,16 +86,21 @@ rotulo_selecionado = st.selectbox(
 )
 jornada_selecionada = opcoes_jornada[rotulo_selecionado]
 
-if st.button("Gerar pulsos de exemplo para esta jornada (teste)"):
-    gerar_pulsos_exemplo(diretorio_pulsos, jornada_selecionada)
-    st.success("Pulsos de exemplo gravados.")
+try:
+    pulsos, pulsos_com_erro = carregar_pulsos_via_api(url_api, token_api, jornada_selecionada.id)
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar pulsos GPS do backend: {exc}")
+    st.stop()
 
-pulsos = carregar_pulsos(diretorio_pulsos, jornada_selecionada.id)
+if pulsos_com_erro:
+    st.error(f"{len(pulsos_com_erro)} pulso(s) recebido(s) com estrutura inválida, ignorado(s).")
 
 if not pulsos:
     st.info(
-        "Nenhum pulso GPS encontrado para esta jornada nesse diretorio. "
-        "Use o botao acima para gerar pulsos de exemplo."
+        "Nenhum pulso GPS encontrado para esta jornada no backend. A captação "
+        "periódica de GPS na interface de campo ainda não existe (ver "
+        "docs/69_ADR_0042_LEVANTAMENTO_LACUNAS_GPS_PULSOS.md) - isso é o "
+        "estado real do sistema hoje, não um erro desta tela."
     )
     st.stop()
 

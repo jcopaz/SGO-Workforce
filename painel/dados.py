@@ -39,7 +39,7 @@ from workforce_core.consolidacao import (
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
-from workforce_storage.serializacao import jornada_de_dict
+from workforce_storage.serializacao import jornada_de_dict, pulso_gps_de_dict
 
 # Rotulos legiveis para o gestor (pedido em 2026-07-31: "o gestor nao tem
 # de cabeca os motivos, precisa ser descritivo") - o gestor via as
@@ -465,6 +465,36 @@ def gerar_jornadas_exemplo_volumoso(
 
 def carregar_pulsos(diretorio: Union[str, Path], jornada_id) -> List[PulsoGps]:
     return RepositorioPulsosGpsArquivo(diretorio).ler_pulsos(jornada_id)
+
+
+def carregar_pulsos_via_api(url_base: str, token: str, jornada_id) -> Tuple[List[PulsoGps], List[str]]:
+    """Busca os pulsos GPS de uma jornada do backend real (workforce_api)
+    em vez de ler arquivo local - mesmo papel de carregar_jornadas_via_api
+    (ver docs/70_ADR_0043_DECISOES_CAPTACAO_PERIODICA_PULSO_GPS.md e o ADR
+    seguinte, da Fase 1 do backend de pulsos).
+
+    `jornada_id` e obrigatorio - GET /pulsos nunca devolve os pulsos de
+    todo mundo de uma vez so. Mesma assinatura de retorno de
+    carregar_jornadas_via_api (itens validos, ids com erro de estrutura) -
+    nunca esconde erro silenciosamente."""
+    resposta = requests.get(
+        f"{url_base.rstrip('/')}/pulsos",
+        params={"jornada_id": str(jornada_id)},
+        headers={"X-Sync-Token": token},
+        # Mesmo motivo do timeout generoso de carregar_jornadas_via_api:
+        # o Render free tier "dorme" o backend apos ~15 min sem uso.
+        timeout=60,
+    )
+    resposta.raise_for_status()
+
+    pulsos: List[PulsoGps] = []
+    com_erro: List[str] = []
+    for item in resposta.json():
+        try:
+            pulsos.append(pulso_gps_de_dict(item))
+        except (KeyError, ValueError, TypeError):
+            com_erro.append(str(item.get("id", "desconhecido")))
+    return pulsos, com_erro
 
 
 def gerar_pulsos_exemplo(

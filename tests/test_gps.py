@@ -141,6 +141,21 @@ def test_gravar_e_ler_pulsos_em_ordem(tmp_path):
     assert repo.contar_pulsos(jornada_id) == 5
 
 
+def test_gravar_lote_grava_todos_os_pulsos(tmp_path):
+    # ADR-0042/0043 (Fase 1): gravar_lote existe pra ter a mesma forma
+    # publica de RepositorioPulsosGpsPostgres.gravar_lote - o endpoint
+    # POST /pulsos usa isso, injetando esse repositorio de arquivo nos
+    # testes (ver tests/test_workforce_api.py).
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    jornada_id = uuid4()
+    pulsos = [_pulso(jornada_id, i * 60) for i in range(3)]
+
+    repo.gravar_lote(pulsos)
+
+    lidos = repo.ler_pulsos(jornada_id)
+    assert [p.id for p in lidos] == [p.id for p in pulsos]
+
+
 def test_ler_pulsos_de_jornada_sem_arquivo_retorna_vazio(tmp_path):
     repo = RepositorioPulsosGpsArquivo(tmp_path)
     assert repo.ler_pulsos(uuid4()) == []

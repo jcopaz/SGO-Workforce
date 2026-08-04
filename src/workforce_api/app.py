@@ -37,12 +37,15 @@ from workforce_storage.serializacao import (
     entrada_catalogo_para_dict,
     jornada_de_dict,
     jornada_para_dict,
+    pulso_gps_de_dict,
+    pulso_gps_para_dict,
 )
 
 from . import supabase_storage
 from .repositorio_catalogo_postgres import RepositorioCatalogoPostgres
 from .repositorio_continuacoes_postgres import RepositorioContinuacoesFalhaPostgres
 from .repositorio_postgres import RepositorioJornadaPostgres
+from .repositorio_pulsos_postgres import RepositorioPulsosGpsPostgres
 
 app = FastAPI(title="SGO Workforce - API de sincronizacao (piloto)")
 
@@ -80,6 +83,24 @@ def obter_repositorio() -> RepositorioJornadaPostgres:
             )
         _repositorio_cache = RepositorioJornadaPostgres(dsn)
     return _repositorio_cache
+
+
+_repositorio_pulsos_cache: RepositorioPulsosGpsPostgres | None = None
+
+
+def obter_repositorio_pulsos() -> RepositorioPulsosGpsPostgres:
+    """Mesmo padrao de obter_repositorio() - construido na primeira
+    chamada, sobrescrito em testes via app.dependency_overrides."""
+    global _repositorio_pulsos_cache
+    if _repositorio_pulsos_cache is None:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise HTTPException(
+                status_code=503,
+                detail="Backend sem DATABASE_URL configurada - nao pode persistir.",
+            )
+        _repositorio_pulsos_cache = RepositorioPulsosGpsPostgres(dsn)
+    return _repositorio_pulsos_cache
 
 
 _repositorio_catalogo_cache: RepositorioCatalogoPostgres | None = None
@@ -162,6 +183,39 @@ def listar_jornadas(
             continue
         resultado.append(jornada_para_dict(jornada))
     return resultado
+
+
+@app.post("/pulsos", dependencies=[Depends(exigir_token)])
+def receber_pulsos(
+    dados: List[Dict[str, Any]],
+    repositorio: RepositorioPulsosGpsPostgres = Depends(obter_repositorio_pulsos),
+) -> Dict[str, Any]:
+    """Recebe um lote de pulsos GPS (nao um pulso so - a interface de campo
+    captura offline e so sincroniza tudo de uma vez ao encerrar a jornada,
+    ver docs/70_ADR_0043_DECISOES_CAPTACAO_PERIODICA_PULSO_GPS.md). Upsert
+    idempotente por id de cada pulso - reenviar o mesmo lote (ack perdido)
+    nunca duplica."""
+    try:
+        pulsos = [pulso_gps_de_dict(item) for item in dados]
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Pulso malformado: {exc}") from exc
+    repositorio.gravar_lote(pulsos)
+    return {"status": "recebido", "quantidade": len(pulsos)}
+
+
+@app.get("/pulsos", dependencies=[Depends(exigir_token)])
+def listar_pulsos(
+    jornada_id: str,
+    repositorio: RepositorioPulsosGpsPostgres = Depends(obter_repositorio_pulsos),
+) -> List[Dict[str, Any]]:
+    """`jornada_id` e obrigatorio (nunca devolve pulsos de todo mundo de
+    uma vez so) - mesmo padrao de GET /continuacoes-falha?matricula=..."""
+    try:
+        id_uuid = UUID(jornada_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="jornada_id invalido.") from exc
+    pulsos = repositorio.ler_pulsos(id_uuid)
+    return [pulso_gps_para_dict(pulso) for pulso in pulsos]
 
 
 @app.get("/catalogo", dependencies=[Depends(exigir_token)])

@@ -10,12 +10,18 @@ verdade. A conexao real com Postgres continua como validacao pendente.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 
 from workforce_core.catalogo import Categoria, ClassificacaoHH, EntradaCatalogo
 from workforce_core.engine import MotorJornada
+from workforce_core.entities import PulsoGps
 from workforce_storage.repositorio_jornada import RepositorioJornadaArquivo
+from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
+from workforce_storage.serializacao import pulso_gps_para_dict
 
 from workforce_api import supabase_storage as _supabase_storage_modulo
 from workforce_api.app import (
@@ -24,9 +30,38 @@ from workforce_api.app import (
     obter_repositorio,
     obter_repositorio_catalogo,
     obter_repositorio_continuacoes,
+    obter_repositorio_pulsos,
 )
 
 TOKEN_TESTE = "token-de-teste-nao-usar-em-producao"
+
+
+@pytest.fixture
+def cliente_pulsos(tmp_path, monkeypatch):
+    # Mesmo espirito da fixture `cliente` (jornadas): sem Postgres real
+    # disponivel, injeta RepositorioPulsosGpsArquivo (ja testado em
+    # tests/test_gps.py) apontando pra um diretorio temporario no lugar de
+    # RepositorioPulsosGpsPostgres - a mesma forma publica (gravar_lote/
+    # ler_pulsos) faz a API nao notar diferenca.
+    monkeypatch.setenv("SYNC_TOKEN", TOKEN_TESTE)
+    repositorio = RepositorioPulsosGpsArquivo(tmp_path)
+    app.dependency_overrides[obter_repositorio_pulsos] = lambda: repositorio
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(obter_repositorio_pulsos, None)
+
+
+def _pulso_dict(jornada_id, segundos, **kwargs):
+    pulso = PulsoGps(
+        jornada_id=jornada_id,
+        colaborador_matricula="12345",
+        latitude=kwargs.get("lat", 0.0),
+        longitude=kwargs.get("lon", 0.0),
+        precisao_metros=kwargs.get("precisao", 10.0),
+        timestamp_dispositivo=datetime(2026, 1, 1, 8, 0, 0) + timedelta(seconds=segundos),
+    )
+    return pulso_gps_para_dict(pulso)
 
 
 @pytest.fixture
@@ -147,6 +182,109 @@ def test_post_malformado_e_400(cliente):
         "/jornadas",
         json={"id": "nao-e-uuid-valido"},
         headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 400
+
+
+# ----------------------------------------------------------------------
+# /pulsos (ADR-0042/0043 - Fase 1 da captacao real de geolocalizacao) -
+# mesmos casos de /jornadas, adaptados pra lote (POST recebe uma lista, nao
+# um objeto so) e pra GET exigir jornada_id como query param obrigatorio.
+# ----------------------------------------------------------------------
+def test_pulsos_post_sem_token_e_401(cliente_pulsos):
+    resposta = cliente_pulsos.post("/pulsos", json=[_pulso_dict(uuid4(), 0)])
+    assert resposta.status_code == 401
+
+
+def test_pulsos_post_com_token_errado_e_401(cliente_pulsos):
+    resposta = cliente_pulsos.post(
+        "/pulsos",
+        json=[_pulso_dict(uuid4(), 0)],
+        headers={"X-Sync-Token": "token-errado"},
+    )
+    assert resposta.status_code == 401
+
+
+def test_pulsos_get_sem_sync_token_configurado_e_503(tmp_path, monkeypatch):
+    monkeypatch.delenv("SYNC_TOKEN", raising=False)
+    repositorio = RepositorioPulsosGpsArquivo(tmp_path)
+    app.dependency_overrides[obter_repositorio_pulsos] = lambda: repositorio
+    try:
+        cliente = TestClient(app)
+        resposta = cliente.get(
+            "/pulsos", params={"jornada_id": str(uuid4())}, headers={"X-Sync-Token": "qualquer"}
+        )
+        assert resposta.status_code == 503
+    finally:
+        app.dependency_overrides.pop(obter_repositorio_pulsos, None)
+
+
+def test_pulsos_lote_valido_aparece_no_get_seguinte_em_ordem(cliente_pulsos):
+    jornada_id = uuid4()
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    # Fora de ordem de proposito (120s depois vem antes de 0s) - o GET
+    # precisa devolver em ordem cronologica pelo timestamp do dispositivo,
+    # nao pela ordem de chegada no lote.
+    lote = [_pulso_dict(jornada_id, 120), _pulso_dict(jornada_id, 0), _pulso_dict(jornada_id, 60)]
+
+    resposta_post = cliente_pulsos.post("/pulsos", json=lote, headers=headers)
+    assert resposta_post.status_code == 200
+    assert resposta_post.json() == {"status": "recebido", "quantidade": 3}
+
+    resposta_get = cliente_pulsos.get(
+        "/pulsos", params={"jornada_id": str(jornada_id)}, headers=headers
+    )
+    assert resposta_get.status_code == 200
+    timestamps = [p["timestamp_dispositivo"] for p in resposta_get.json()]
+    assert timestamps == sorted(timestamps)
+
+
+def test_pulsos_lote_repetido_faz_upsert_sem_duplicar(cliente_pulsos):
+    jornada_id = uuid4()
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    lote = [_pulso_dict(jornada_id, 0), _pulso_dict(jornada_id, 60)]
+
+    cliente_pulsos.post("/pulsos", json=lote, headers=headers)
+    cliente_pulsos.post("/pulsos", json=lote, headers=headers)  # reenvio (ack perdido)
+
+    resposta_get = cliente_pulsos.get(
+        "/pulsos", params={"jornada_id": str(jornada_id)}, headers=headers
+    )
+    assert len(resposta_get.json()) == 2
+
+
+def test_pulsos_get_so_devolve_da_jornada_pedida(cliente_pulsos):
+    jornada_a, jornada_b = uuid4(), uuid4()
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    cliente_pulsos.post("/pulsos", json=[_pulso_dict(jornada_a, 0)], headers=headers)
+    cliente_pulsos.post("/pulsos", json=[_pulso_dict(jornada_b, 0)], headers=headers)
+
+    resposta = cliente_pulsos.get(
+        "/pulsos", params={"jornada_id": str(jornada_a)}, headers=headers
+    )
+    ids_jornada = {p["jornada_id"] for p in resposta.json()}
+    assert ids_jornada == {str(jornada_a)}
+
+
+def test_pulsos_post_malformado_e_400(cliente_pulsos):
+    resposta = cliente_pulsos.post(
+        "/pulsos",
+        json=[{"id": "nao-e-uuid-valido"}],
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 400
+
+
+def test_pulsos_get_sem_jornada_id_e_422(cliente_pulsos):
+    # jornada_id e query param obrigatorio - FastAPI valida isso sozinho
+    # antes mesmo do endpoint rodar.
+    resposta = cliente_pulsos.get("/pulsos", headers={"X-Sync-Token": TOKEN_TESTE})
+    assert resposta.status_code == 422
+
+
+def test_pulsos_get_com_jornada_id_invalido_e_400(cliente_pulsos):
+    resposta = cliente_pulsos.get(
+        "/pulsos", params={"jornada_id": "nao-e-uuid"}, headers={"X-Sync-Token": TOKEN_TESTE}
     )
     assert resposta.status_code == 400
 
