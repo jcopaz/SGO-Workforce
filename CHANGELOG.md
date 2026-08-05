@@ -1,5 +1,30 @@
 # Changelog
 
+## [2026-08-05] Qualidade de GPS wireada, foto de falha no painel, expurgo de pulsos antigos (ADR-0054)
+
+Ver `docs/81_ADR_0054_QUALIDADE_GPS_FOTO_FALHA_E_EXPURGO_PULSOS.md` para a
+decisão completa. Levantamento no código (não só nos docs) encontrou
+quatro lacunas técnicas reais; uma delas (limiares de GPS) foi confirmada
+com o responsável do produto antes de codificar.
+
+### Adicionado
+- Avaliação de qualidade de GPS (`workforce_core.qualidade_gps.avaliar_pulso`)
+  finalmente wireada, com limiares aprovados (precisão ≤100m, velocidade
+  implícita ≤50 m/s): pulso suspeito ganha marcador distinto no mapa e
+  sai da trajetória/clusters de permanência - relacionado a um bug real
+  relatado (pulso final de jornada aparecendo longe da posição real).
+- Foto de atendimento de falha (upload já existia desde o ADR-0022) agora
+  aparece no painel: coluna "Foto" na tabela de atendimentos + seção
+  dedicada com carregamento sob demanda via URL assinada.
+- Expurgo de pulsos GPS com mais de 90 dias (retenção decidida no
+  ADR-0043, nunca implementada): novo endpoint `POST /pulsos/expurgar` +
+  botão manual com confirmação obrigatória em "Configurações".
+
+### Corrigido
+- `CLAUDE.md` (regra de ouro 6 e premissa de atendimento de falha)
+  desatualizado desde o ADR-0021 (2026-07-27) - ainda listava causa/ação
+  como obrigatórios; a decisão real já era nota/ativo/sintoma/objeto/observação.
+
 ## [2026-08-05] Lote de decisões pendentes (EE21, RASF, Performance, GPS 2º plano) + calendário do mapa removido (ADR-0053)
 
 Ver `docs/80_ADR_0053_LOTE_DECISOES_PENDENTES_08_05.md` para a decisão

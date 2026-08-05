@@ -5,6 +5,9 @@
    Impacto real em bateria/consumo continua **não validado** — só teste em
    celular real ao longo de um turno inteiro resolve isso, nenhum ADR
    decidiu nada sobre limitar/ajustar o intervalo por enquanto.
+   ~~Limiares de qualidade (precisão/velocidade plausível)~~ resolvidos em
+   2026-08-05 (ADR-0054): precisão máxima 100m, velocidade máxima 50 m/s —
+   ver `docs/81_ADR_0054_QUALIDADE_GPS_FOTO_FALHA_E_EXPURGO_PULSOS.md`.
 2. ~~Política legal/corporativa de captura e retenção.~~ Resolvido em
    2026-07-27: os aparelhos são da empresa, e a MRS já rastreia o veículo
    hoje e já captava a localização do colaborador no sistema anterior —
@@ -43,7 +46,8 @@
    atendimento de falha.
 8. ~~Evidência fotográfica em falhas.~~ Resolvido em 2026-07-27: upload
    opcional (best-effort) para Supabase Storage, mesmo ADR-0022. Exibição
-   da foto no painel ainda não existe (só o endpoint).
+   no painel implementada em 2026-08-05 (ADR-0054) — aba Falhas, coluna
+   "Foto" + seção com carregamento sob demanda via URL assinada.
 9. Nível de detalhe do mapa por perfil. Bloqueado pelo item 13
    (login/autenticação) — sem usuário autenticado não existe "perfil" pra
    diferenciar o que cada um vê. Deliberadamente adiado junto com o item 13.

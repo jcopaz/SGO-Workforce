@@ -6,7 +6,7 @@ marcados (nao sobrescritos), e a garantia de nao perder pulsos ja
 gravados mesmo com uma linha corrompida no meio do arquivo.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -176,6 +176,52 @@ def test_linha_corrompida_nao_apaga_as_demais(tmp_path):
     pulsos, linhas_com_erro = repo.ler_pulsos_com_erros(jornada_id)
     assert len(pulsos) == 3
     assert linhas_com_erro == [3]
+
+
+# ----------------------------------------------------------------------
+# Expurgo por retencao (ADR-0043 decidiu 90 dias, ADR-0054 implementa)
+# ----------------------------------------------------------------------
+def test_apagar_pulsos_anteriores_a_remove_so_os_antigos(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    jornada_id = uuid4()
+    antigo = _pulso(jornada_id, 0)  # 08:00:00
+    novo = _pulso(jornada_id, 600)  # 08:10:00
+    repo.gravar_lote([antigo, novo])
+
+    apagados = repo.apagar_pulsos_anteriores_a(datetime(2026, 1, 1, 8, 5, tzinfo=timezone.utc))
+
+    assert apagados == 1
+    restantes = repo.ler_pulsos(jornada_id)
+    assert [p.id for p in restantes] == [novo.id]
+
+
+def test_apagar_pulsos_anteriores_a_remove_arquivo_quando_fica_vazio(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    jornada_id = uuid4()
+    repo.gravar_pulso(_pulso(jornada_id, 0))
+
+    apagados = repo.apagar_pulsos_anteriores_a(datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc))
+
+    assert apagados == 1
+    assert not repo._caminho(jornada_id).exists()
+    assert repo.ler_pulsos(jornada_id) == []
+
+
+def test_apagar_pulsos_anteriores_a_nao_mexe_em_pulsos_recentes(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    jornada_id = uuid4()
+    pulso = _pulso(jornada_id, 0)
+    repo.gravar_pulso(pulso)
+
+    apagados = repo.apagar_pulsos_anteriores_a(datetime(2020, 1, 1, tzinfo=timezone.utc))
+
+    assert apagados == 0
+    assert repo.ler_pulsos(jornada_id) == [pulso]
+
+
+def test_apagar_pulsos_anteriores_a_sem_jornada_nenhuma_devolve_zero(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    assert repo.apagar_pulsos_anteriores_a(datetime(2030, 1, 1, tzinfo=timezone.utc)) == 0
 
 
 # ----------------------------------------------------------------------

@@ -22,6 +22,7 @@ injetado no lugar deste repositorio.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List
 from uuid import UUID
 
@@ -108,3 +109,22 @@ class RepositorioPulsosGpsPostgres:
                 )
                 linhas = cursor.fetchall()
         return [pulso_gps_de_dict(linha[0]) for linha in linhas]
+
+    def apagar_pulsos_anteriores_a(self, data_limite: datetime) -> int:
+        """Apaga permanentemente pulsos recebidos pelo servidor antes de
+        `data_limite` - mecanismo de retencao de 90 dias decidido no
+        ADR-0043 ("nao ha politica de retencao alem da citada"), nunca
+        implementado ate o ADR-0054. Retorna quantos pulsos foram apagados.
+
+        Usa `criado_em` (quando o SERVIDOR recebeu o pulso, coluna com
+        `DEFAULT now()` desde sempre - nunca precisou de backfill) em vez
+        do `timestamp_dispositivo` dentro do JSONB - relogio de servidor e
+        confiavel por construcao, relogio de celular de colaborador nao
+        (mesmo espirito da regra de ouro 3 do CLAUDE.md, aplicada aqui a
+        retencao em vez de calculo de HH)."""
+        with self._conectar() as conexao:
+            with conexao.cursor() as cursor:
+                cursor.execute("DELETE FROM pulsos_gps WHERE criado_em < %s", [data_limite])
+                apagados = cursor.rowcount
+            conexao.commit()
+        return apagados

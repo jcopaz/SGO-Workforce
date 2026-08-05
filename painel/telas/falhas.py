@@ -38,6 +38,7 @@ from dados import (
     formatar_data_hora,
     formatar_horas,
     montar_linhas_atendimento_falha,
+    obter_url_foto_falha,
     resumo_atendimentos_falha_do_periodo,
 )
 from graficos import (
@@ -324,8 +325,34 @@ st.dataframe(
             "Início": formatar_data_hora(linha.inicio),
             "Fim": formatar_data_hora(linha.fim),
             "Duração": formatar_horas(linha.duracao),
+            "Foto": "📷" if linha.foto_caminho else "--",
         }
         for linha in sorted(linhas, key=lambda linha: linha.duracao, reverse=True)
     ],
     width="stretch",
 )
+
+linhas_com_foto = [linha for linha in linhas if linha.foto_caminho]
+if linhas_com_foto:
+    # Upload existe desde o ADR-0022, mas nunca teve exibicao no painel
+    # (ADR-0054) - a foto e best-effort e nao aparece em toda linha, por
+    # isso a secao so existe quando ha pelo menos um atendimento com
+    # foto. URL assinada buscada sob demanda (botao), nunca automatico -
+    # o script inteiro reexecuta a cada widget mexido na pagina, e a URL
+    # expira, entao nao faz sentido buscar de novo a cada rerun que nao
+    # tem nada a ver com foto.
+    with st.expander(f"Fotos de atendimentos ({len(linhas_com_foto)})", expanded=False):
+        opcoes_foto = {
+            f"Nota {linha.nota or '--'} - {linha.ativo or '--'} ({formatar_data_hora(linha.inicio)})": linha
+            for linha in linhas_com_foto
+        }
+        rotulo_foto_selecionada = st.selectbox(
+            "Atendimento", options=list(opcoes_foto.keys()), key="painel_falhas_foto_selecionada"
+        )
+        if st.button("🖼️ Carregar foto", key="painel_falhas_carregar_foto"):
+            linha_selecionada = opcoes_foto[rotulo_foto_selecionada]
+            try:
+                url_foto = obter_url_foto_falha(url_api, token_api, linha_selecionada.foto_caminho)
+                st.image(url_foto, width="stretch")
+            except requests.exceptions.RequestException as exc:
+                st.error(f"Não foi possível carregar a foto: {exc}")

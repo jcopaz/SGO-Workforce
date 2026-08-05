@@ -139,3 +139,40 @@ if enviado:
         else:
             st.success(f"Motivo '{payload['codigo']}' salvo.")
             st.rerun()
+
+st.divider()
+st.subheader("Manutenção de dados")
+with st.expander("Expurgo de pulsos GPS antigos", expanded=False):
+    st.warning(
+        "Ação permanente e irreversível - apaga pulsos GPS do backend, não "
+        "só do painel. Retenção decidida em 2026-07-31 (ADR-0043): 90 dias "
+        "por padrão. Nunca apaga jornadas, atividades ou atendimentos de "
+        "falha - só o traço de GPS bruto (`docs/08_GPS_PULSOS_E_PRIVACIDADE.md`)."
+    )
+    dias_retencao = st.number_input(
+        "Apagar pulsos com mais de quantos dias?",
+        min_value=1,
+        value=90,
+        step=1,
+        key="painel_expurgo_dias",
+    )
+    confirmar_expurgo = st.checkbox(
+        f"Confirmo que quero apagar permanentemente pulsos com mais de {int(dias_retencao)} dias.",
+        key="painel_expurgo_confirmado",
+    )
+    if st.button(
+        "🗑️ Expurgar pulsos antigos", disabled=not confirmar_expurgo, key="painel_expurgo_botao"
+    ):
+        try:
+            resposta_expurgo = requests.post(
+                f"{url_base}/pulsos/expurgar",
+                params={"dias": int(dias_retencao)},
+                headers=headers,
+                timeout=60,
+            )
+            resposta_expurgo.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            st.error(f"Não foi possível expurgar os pulsos: {exc}")
+        else:
+            quantidade_apagada = resposta_expurgo.json().get("apagados", 0)
+            st.success(f"{quantidade_apagada} pulso(s) apagado(s) permanentemente.")

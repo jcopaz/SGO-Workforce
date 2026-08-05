@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Union
 from uuid import UUID
@@ -108,3 +109,40 @@ class RepositorioPulsosGpsArquivo:
 
     def contar_pulsos(self, jornada_id: UUID) -> int:
         return len(self.ler_pulsos(jornada_id))
+
+    def apagar_pulsos_anteriores_a(self, data_limite: datetime) -> int:
+        """Mesmo papel de
+        `workforce_api.repositorio_pulsos_postgres.RepositorioPulsosGpsPostgres.apagar_pulsos_anteriores_a`
+        - existe para o endpoint `POST /pulsos/expurgar` funcionar igual
+        nos testes (que injetam este repositorio, nao o Postgres) e em uso
+        local sem backend hospedado.
+
+        Sem coluna "recebido pelo servidor" aqui (armazenamento e so um
+        `.jsonl` por jornada, sem metadado por linha) - usa
+        `timestamp_dispositivo` como aproximacao. Suficiente para um
+        mecanismo de limpeza local; a fonte de verdade de producao e
+        sempre o Postgres, que usa o momento real de recebimento.
+        """
+        apagados = 0
+        for caminho in sorted(self.diretorio.glob("*.jsonl")):
+            jornada_id = UUID(caminho.stem)
+            pulsos, _ = self.ler_pulsos_com_erros(jornada_id)
+            mantidos = [p for p in pulsos if _tz_aware(p.timestamp_dispositivo) >= data_limite]
+            apagados += len(pulsos) - len(mantidos)
+            if len(mantidos) == len(pulsos):
+                continue
+            if not mantidos:
+                caminho.unlink()
+            else:
+                linhas = "\n".join(
+                    json.dumps(pulso_gps_para_dict(p), ensure_ascii=False) for p in mantidos
+                )
+                caminho.write_text(linhas + "\n", encoding="utf-8")
+        return apagados
+
+
+def _tz_aware(momento: datetime) -> datetime:
+    """`data_limite` sempre chega com timezone (UTC, ver o endpoint) -
+    normaliza um `timestamp_dispositivo` sem timezone (dado antigo/de
+    teste) como UTC so para a comparacao, sem alterar o pulso armazenado."""
+    return momento if momento.tzinfo is not None else momento.replace(tzinfo=timezone.utc)

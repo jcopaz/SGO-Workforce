@@ -10,7 +10,7 @@ para poder ser testado com pytest normalmente.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -41,6 +41,7 @@ from workforce_core.consolidacao import (
 )
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_core.fuso_horario import para_horario_brasil
+from workforce_core.qualidade_gps import avaliar_pulso
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
 from workforce_storage.serializacao import jornada_de_dict, pulso_gps_de_dict
@@ -519,6 +520,29 @@ def carregar_pulsos_via_api(url_base: str, token: str, jornada_id) -> Tuple[List
     return pulsos, com_erro
 
 
+def obter_url_foto_falha(url_base: str, token: str, caminho: str) -> str:
+    """Busca uma URL assinada (valida por tempo limitado) para exibir a
+    foto de um atendimento de falha (ADR-0054 - a foto ja era enviada
+    desde o ADR-0022, mas nunca tinha tela de exibicao no painel).
+
+    `caminho` e a referencia permanente devolvida por `POST /fotos`
+    (`DadosFalha.foto_caminho`), nunca uma URL - o painel nunca fala
+    direto com o Supabase Storage nem guarda a service_role key; sempre
+    passa por `GET /fotos/url` do backend (mesmo token de sincronizacao
+    dos demais endpoints). Deliberadamente sem `st.cache_data`: a URL
+    expira (`expira_em_segundos` no backend, 1h por padrao) - cachear por
+    mais tempo que isso devolveria um link morto.
+    """
+    resposta = requests.get(
+        f"{url_base.rstrip('/')}/fotos/url",
+        params={"caminho": caminho},
+        headers={"X-Sync-Token": token},
+        timeout=60,
+    )
+    resposta.raise_for_status()
+    return resposta.json()["url"]
+
+
 def filtrar_pulsos_por_periodo(
     pulsos: List[PulsoGps], data: date, hora_inicial: time, hora_final: time
 ) -> List[PulsoGps]:
@@ -539,6 +563,46 @@ def filtrar_pulsos_por_periodo(
         if not (hora_inicial <= momento_brasil.time() <= hora_final):
             continue
         resultado.append(pulso)
+    return resultado
+
+
+# Limiares de qualidade de GPS aprovados pelo responsavel do produto em
+# 2026-08-05 (ADR-0054), respondendo a decisao de negocio que
+# workforce_core.qualidade_gps deixa deliberadamente em aberto
+# ("engenharia propoe, produto aprova", ver docs/70_ADR_0043... e o
+# proprio modulo). Ficam aqui (fronteira de apresentacao), nao dentro de
+# qualidade_gps.py - mesmo padrao ja usado para fuso_horario (dominio
+# nunca embute constante de negocio, quem chama decide).
+PRECISAO_MAXIMA_ACEITAVEL_METROS = 100.0
+VELOCIDADE_MAXIMA_PLAUSIVEL_METROS_SEGUNDO = 50.0  # ~180 km/h, folga para deslocamento rodoviario
+
+
+def reclassificar_qualidade_pulsos(pulsos: List[PulsoGps]) -> List[PulsoGps]:
+    """Recalcula `PulsoGps.qualidade` de toda a sequencia usando
+    `workforce_core.qualidade_gps.avaliar_pulso` e os limiares aprovados
+    acima (ADR-0054).
+
+    Nunca sobrescreve o pulso original recebido do backend - devolve uma
+    lista nova (`dataclasses.replace`), mesmo espirito de "marcar, nao
+    apagar" de docs/08_GPS_PULSOS_E_PRIVACIDADE.md. Recalcula a cada
+    carregamento (nao existe migracao/backfill no Postgres) - por isso
+    precisa rodar sobre a sequencia INTEIRA da jornada, ordenada por
+    horario, antes de qualquer filtro de periodo recortar pontos e
+    quebrar a nocao de "pulso anterior" usada no calculo de velocidade
+    implicita entre dois pontos consecutivos.
+    """
+    ordenados = sorted(pulsos, key=lambda p: p.timestamp_dispositivo)
+    resultado: List[PulsoGps] = []
+    anterior: Optional[PulsoGps] = None
+    for pulso in ordenados:
+        qualidade = avaliar_pulso(
+            pulso,
+            anterior,
+            precisao_maxima_aceitavel_metros=PRECISAO_MAXIMA_ACEITAVEL_METROS,
+            velocidade_maxima_plausivel_metros_segundo=VELOCIDADE_MAXIMA_PLAUSIVEL_METROS_SEGUNDO,
+        )
+        resultado.append(replace(pulso, qualidade=qualidade))
+        anterior = pulso
     return resultado
 
 

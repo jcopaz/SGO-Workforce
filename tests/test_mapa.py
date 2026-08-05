@@ -6,16 +6,23 @@ depender do runtime do Streamlit) - o smoke test real do servidor
 """
 
 import json
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 
 import folium
 import pytest
 
-from dados import filtrar_pulsos_por_periodo, gerar_jornadas_exemplo, gerar_pulsos_exemplo
+from dados import (
+    filtrar_pulsos_por_periodo,
+    gerar_jornadas_exemplo,
+    gerar_pulsos_exemplo,
+    reclassificar_qualidade_pulsos,
+)
 from mapa import (
     _COR_MALHA_FERREA,
     _COR_PULSO_BRUTO,
+    _COR_QUALIDADE_SUSPEITA,
     _COR_SEM_ATIVIDADE,
     _COR_TRAJETORIA,
     construir_mapa,
@@ -24,6 +31,7 @@ from mapa import (
 )
 from workforce_core.consolidacao import ClassificacaoInstante
 from workforce_core.entities import PulsoGps
+from workforce_core.enums import QualidadePulso
 
 
 def _contido(rotulo: str, html: str) -> bool:
@@ -306,3 +314,104 @@ def test_filtrar_pulsos_por_periodo_converte_utc_para_horario_de_brasilia():
         [pulso_23h_brasilia], date(2026, 8, 4), time(22, 0), time(23, 59, 59)
     )
     assert filtrados == [pulso_23h_brasilia]
+
+
+# ----------------------------------------------------------------------
+# Qualidade de GPS (ADR-0054): limiares aprovados pelo responsavel do
+# produto em 2026-08-05 (precisao <= 100m, velocidade implicita <= 50 m/s),
+# wireados em painel/dados.py::reclassificar_qualidade_pulsos e refletidos
+# no mapa (painel/mapa.py) - motivado por um pulso final real de jornada
+# aparecendo longe do local certo, nunca filtrado por nada.
+# ----------------------------------------------------------------------
+def _pulso(
+    *, latitude=-23.5505, longitude=-46.6333, precisao_metros=10.0, minutos_apos_epoca=0
+):
+    return PulsoGps(
+        jornada_id=uuid4(),
+        colaborador_matricula="12345",
+        latitude=latitude,
+        longitude=longitude,
+        precisao_metros=precisao_metros,
+        timestamp_dispositivo=datetime(2026, 8, 5, 8, 0, tzinfo=timezone.utc)
+        + timedelta(minutes=minutos_apos_epoca),
+    )
+
+
+def test_reclassificar_qualidade_pulsos_marca_ok_dentro_dos_limiares():
+    pulsos = [_pulso(precisao_metros=10.0, minutos_apos_epoca=0)]
+    resultado = reclassificar_qualidade_pulsos(pulsos)
+    assert resultado[0].qualidade == QualidadePulso.OK
+
+
+def test_reclassificar_qualidade_pulsos_marca_precisao_ruim_acima_de_100m():
+    pulsos = [_pulso(precisao_metros=150.0, minutos_apos_epoca=0)]
+    resultado = reclassificar_qualidade_pulsos(pulsos)
+    assert resultado[0].qualidade == QualidadePulso.PRECISAO_RUIM
+
+
+def test_reclassificar_qualidade_pulsos_marca_salto_impossivel():
+    # ~111km de distancia (1 grau de latitude) em 60s = ~1850 m/s, muito
+    # acima do limiar de 50 m/s aprovado - exatamente o tipo de "pulso
+    # final longe do local certo" relatado em producao.
+    pulsos = [
+        _pulso(latitude=-23.5505, longitude=-46.6333, minutos_apos_epoca=0),
+        _pulso(latitude=-22.5505, longitude=-46.6333, minutos_apos_epoca=1),
+    ]
+    resultado = reclassificar_qualidade_pulsos(pulsos)
+    assert resultado[0].qualidade == QualidadePulso.OK
+    assert resultado[1].qualidade == QualidadePulso.SALTO_IMPOSSIVEL
+
+
+def test_reclassificar_qualidade_pulsos_nao_muta_a_lista_original():
+    original = [_pulso(precisao_metros=150.0)]
+    reclassificar_qualidade_pulsos(original)
+    assert original[0].qualidade == QualidadePulso.NAO_AVALIADO
+
+
+def test_reclassificar_qualidade_pulsos_avalia_em_ordem_cronologica():
+    # Entrada fora de ordem (pulso mais novo primeiro na lista) nao
+    # deveria inverter quem e "anterior" no calculo de velocidade.
+    mais_novo = _pulso(latitude=-22.5505, longitude=-46.6333, minutos_apos_epoca=1)
+    mais_antigo = _pulso(latitude=-23.5505, longitude=-46.6333, minutos_apos_epoca=0)
+
+    resultado = reclassificar_qualidade_pulsos([mais_novo, mais_antigo])
+
+    assert resultado[0].timestamp_dispositivo == mais_antigo.timestamp_dispositivo
+    assert resultado[0].qualidade == QualidadePulso.OK
+    assert resultado[1].qualidade == QualidadePulso.SALTO_IMPOSSIVEL
+
+
+def test_construir_mapa_pulso_suspeito_ganha_marcador_distinto(tmp_path):
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
+    pulsos[-1] = replace(pulsos[-1], qualidade=QualidadePulso.PRECISAO_RUIM)
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+    )
+    html = mapa.get_root().render()
+    assert _COR_QUALIDADE_SUSPEITA in html
+
+
+def test_construir_mapa_pulso_suspeito_fica_fora_da_trajetoria(tmp_path):
+    # So 2 pulsos, um deles suspeito -> so sobra 1 pulso confiavel depois
+    # do filtro, e simplificar_trajetoria nunca desenha uma linha com um
+    # unico ponto - a camada "Tracar trajetoria" nao deveria aparecer.
+    pulso_ok = _pulso(latitude=-23.5505, longitude=-46.6333, minutos_apos_epoca=0)
+    pulso_suspeito = replace(
+        _pulso(latitude=-22.0, longitude=-46.6333, minutos_apos_epoca=1),
+        qualidade=QualidadePulso.SALTO_IMPOSSIVEL,
+    )
+
+    mapa = construir_mapa(
+        [pulso_ok, pulso_suspeito],
+        distancia_simplificacao_metros=0,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+    )
+    html = mapa.get_root().render()
+    assert not _contido("Traçar trajetória", html)

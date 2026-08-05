@@ -19,14 +19,39 @@ backend real disponivel no teste).
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
 import dados as dados_modulo
 from dados import gerar_jornadas_exemplo
+from workforce_core import MotorJornada
 
 _CAMINHO_FALHAS = str(Path(__file__).resolve().parent.parent / "painel" / "telas" / "falhas.py")
+
+
+def _jornada_com_foto_de_falha():
+    # ADR-0054: exibicao de foto no painel - upload existia desde o
+    # ADR-0022, mas gerar_jornadas_exemplo nunca preenche foto_caminho
+    # (nao e o foco dela), entao a jornada de exemplo padrao nunca
+    # exercita esse caminho - jornada minima construida direto pelo motor
+    # so pra este teste.
+    motor = MotorJornada("MATRICULA-FOTO-001")
+    inicio = datetime(2026, 8, 1, 8, 0)
+    motor.iniciar_jornada(inicio)
+    motor.iniciar_atendimento_falha(inicio)
+    motor.registrar_dados_falha(
+        nota="NOTA-FOTO-1",
+        ativo="ATIVO-FOTO",
+        sintoma="Sintoma com foto",
+        objeto="Componente com foto",
+        observacao="Teste com foto.",
+        foto_caminho="falhas/2026/08/foto-teste.jpg",
+    )
+    motor.encerrar_atividade(inicio + timedelta(minutes=30))
+    motor.encerrar_jornada(inicio + timedelta(minutes=30))
+    return motor.jornada
 
 
 def _preparar_secrets_de_teste(at: AppTest) -> None:
@@ -70,6 +95,51 @@ def test_tela_falhas_sem_jornada_mostra_info_sem_quebrar(monkeypatch):
     assert not at.exception
     textos = " ".join(m.value for m in at.markdown) + " ".join(i.value for i in at.info)
     assert "Nenhuma jornada no backend ainda" in textos
+
+
+def test_tela_falhas_sem_foto_nao_mostra_secao_de_fotos(tmp_path, monkeypatch):
+    # gerar_jornadas_exemplo nunca preenche foto_caminho - a secao "Fotos
+    # de atendimentos" so deveria existir quando ha pelo menos um
+    # atendimento com foto (ver docstring de falhas.py).
+    jornadas_exemplo = gerar_jornadas_exemplo(tmp_path, quantidade=2)
+    monkeypatch.setattr(
+        dados_modulo, "carregar_jornadas_via_api", lambda url, token: (jornadas_exemplo, [])
+    )
+
+    at = AppTest.from_file(_CAMINHO_FALHAS)
+    _preparar_secrets_de_teste(at)
+    at.run(timeout=30)
+
+    assert not at.exception
+    assert not any("Fotos de atendimentos" in exp.label for exp in at.expander)
+
+
+def test_tela_falhas_com_foto_permite_carregar_via_botao(monkeypatch):
+    jornada = _jornada_com_foto_de_falha()
+    monkeypatch.setattr(dados_modulo, "carregar_jornadas_via_api", lambda url, token: ([jornada], []))
+
+    chamadas = []
+
+    def _url_foto_falsa(url, token, caminho):
+        chamadas.append((url, token, caminho))
+        return "https://exemplo.invalido/foto-assinada.jpg"
+
+    monkeypatch.setattr(dados_modulo, "obter_url_foto_falha", _url_foto_falsa)
+
+    at = AppTest.from_file(_CAMINHO_FALHAS)
+    _preparar_secrets_de_teste(at)
+    at.run(timeout=30)
+    assert not at.exception
+    assert any("Fotos de atendimentos" in exp.label for exp in at.expander)
+    assert chamadas == []  # nao busca a URL antes de clicar no botao
+
+    botao_carregar = next(b for b in at.button if b.label == "🖼️ Carregar foto")
+    botao_carregar.click().run(timeout=30)
+
+    assert not at.exception
+    assert chamadas == [
+        ("https://backend-de-teste.invalido", "token-de-teste", "falhas/2026/08/foto-teste.jpg")
+    ]
 
 
 def test_tela_falhas_sem_secrets_mostra_erro_sem_quebrar():

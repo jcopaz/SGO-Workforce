@@ -32,6 +32,7 @@ from dados import (
     filtrar_pulsos_por_periodo,
     formatar_data,
     formatar_data_hora,
+    reclassificar_qualidade_pulsos,
 )
 from graficos import grafico_linha_do_tempo, renderizar_embutido
 from malha_ferrea import carregar_trilhos_malha_mrs
@@ -76,7 +77,12 @@ def _carregar_jornadas_cache(url: str, token: str):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _carregar_pulsos_cache(url: str, token: str, jornada_id):
-    return carregar_pulsos_via_api(url, token, jornada_id)
+    # Reclassifica a qualidade de toda a sequencia (ADR-0054) aqui dentro
+    # do cache, nao a cada rerun - a jornada inteira, antes de qualquer
+    # filtro de periodo recortar pontos e quebrar a nocao de "pulso
+    # anterior" que o calculo de velocidade implicita precisa.
+    pulsos, com_erro = carregar_pulsos_via_api(url, token, jornada_id)
+    return reclassificar_qualidade_pulsos(pulsos), com_erro
 
 
 st.warning(

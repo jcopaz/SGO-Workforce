@@ -10,7 +10,7 @@ verdade. A conexao real com Postgres continua como validacao pendente.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -287,6 +287,85 @@ def test_pulsos_get_com_jornada_id_invalido_e_400(cliente_pulsos):
         "/pulsos", params={"jornada_id": "nao-e-uuid"}, headers={"X-Sync-Token": TOKEN_TESTE}
     )
     assert resposta.status_code == 400
+
+
+# ----------------------------------------------------------------------
+# /pulsos/expurgar (retencao - ADR-0043 decidiu 90 dias, ADR-0054 implementa)
+# ----------------------------------------------------------------------
+def test_pulsos_expurgar_sem_token_e_401(cliente_pulsos):
+    resposta = cliente_pulsos.post("/pulsos/expurgar")
+    assert resposta.status_code == 401
+
+
+def test_pulsos_expurgar_com_token_errado_e_401(cliente_pulsos):
+    resposta = cliente_pulsos.post("/pulsos/expurgar", headers={"X-Sync-Token": "errado"})
+    assert resposta.status_code == 401
+
+
+def test_pulsos_expurgar_dias_menor_que_1_e_400(cliente_pulsos):
+    resposta = cliente_pulsos.post(
+        "/pulsos/expurgar", params={"dias": 0}, headers={"X-Sync-Token": TOKEN_TESTE}
+    )
+    assert resposta.status_code == 400
+
+
+def test_pulsos_expurgar_apaga_apenas_os_antigos(cliente_pulsos):
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    jornada_id = uuid4()
+    antigo = pulso_gps_para_dict(
+        PulsoGps(
+            jornada_id=jornada_id,
+            colaborador_matricula="12345",
+            latitude=0.0,
+            longitude=0.0,
+            precisao_metros=10.0,
+            timestamp_dispositivo=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    recente = pulso_gps_para_dict(
+        PulsoGps(
+            jornada_id=jornada_id,
+            colaborador_matricula="12345",
+            latitude=0.0,
+            longitude=0.0,
+            precisao_metros=10.0,
+            timestamp_dispositivo=datetime.now(timezone.utc),
+        )
+    )
+    cliente_pulsos.post("/pulsos", json=[antigo, recente], headers=headers)
+
+    resposta = cliente_pulsos.post("/pulsos/expurgar", headers=headers)
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"apagados": 1}
+    restantes = cliente_pulsos.get(
+        "/pulsos", params={"jornada_id": str(jornada_id)}, headers=headers
+    ).json()
+    assert len(restantes) == 1
+    assert restantes[0]["id"] == recente["id"]
+
+
+def test_pulsos_expurgar_aceita_dias_customizado(cliente_pulsos):
+    # dias=1 - pulso de ontem tambem deveria ser apagado, nao so os com
+    # mais de 90 dias (padrao).
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    jornada_id = uuid4()
+    ontem = pulso_gps_para_dict(
+        PulsoGps(
+            jornada_id=jornada_id,
+            colaborador_matricula="12345",
+            latitude=0.0,
+            longitude=0.0,
+            precisao_metros=10.0,
+            timestamp_dispositivo=datetime.now(timezone.utc) - timedelta(days=2),
+        )
+    )
+    cliente_pulsos.post("/pulsos", json=[ontem], headers=headers)
+
+    resposta = cliente_pulsos.post("/pulsos/expurgar", params={"dias": 1}, headers=headers)
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"apagados": 1}
 
 
 # ----------------------------------------------------------------------

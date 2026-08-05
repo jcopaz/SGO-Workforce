@@ -24,6 +24,7 @@ from dados import rotulo_motivo
 from workforce_core.catalogo import CatalogoMotivos
 from workforce_core.consolidacao import ClassificacaoInstante
 from workforce_core.entities import PulsoGps
+from workforce_core.enums import QualidadePulso
 from workforce_core.fuso_horario import para_horario_brasil
 from workforce_core.geo import ClusterPermanencia, agrupar_permanencia, simplificar_trajetoria
 
@@ -38,6 +39,15 @@ _COR_BORDA_PULSO_BRUTO = "#B8860B"
 _COR_TRAJETORIA = "#E53935"
 _COR_MALHA_FERREA = "#212121"
 _TILES_BASEMAP = "cartodbpositron"
+
+# Pulso marcado como suspeito por workforce_core.qualidade_gps (ADR-0054,
+# limiares aprovados em painel/dados.py) ganha borda vermelha grossa
+# tracejada - continua desenhado (docs/08: "marcados, nao apagados"), so
+# fica visualmente distinguivel do resto. NAO_AVALIADO (pulso antigo,
+# capturado antes do ADR-0054, ou de fonte que nunca reclassifica) conta
+# como confiavel aqui de proposito - "sem avaliacao" nao e "reprovado".
+_COR_QUALIDADE_SUSPEITA = "#D50000"
+_QUALIDADES_CONFIAVEIS = frozenset({QualidadePulso.OK, QualidadePulso.NAO_AVALIADO})
 
 _LOCAL_SEM_DADOS = (-15.7801, -47.9292)  # Brasilia - fallback visual quando nao ha nenhum pulso
 
@@ -212,22 +222,33 @@ def construir_mapa(
 
     if mostrar_pulsos_brutos:
         for pulso in pulsos:
+            suspeito = pulso.qualidade not in _QUALIDADES_CONFIAVEIS
             cor_categoria = cor_por_pulso.get(pulso.id) if cor_por_pulso else None
             cor_marcador = cor_categoria or _COR_PULSO_BRUTO
             cor_borda = _COR_BORDA_PULSO_BRUTO if cor_categoria is None else cor_marcador
             folium.CircleMarker(
                 location=(pulso.latitude, pulso.longitude),
-                radius=4,
-                color=cor_borda,
-                weight=1,
+                radius=6 if suspeito else 4,
+                color=_COR_QUALIDADE_SUSPEITA if suspeito else cor_borda,
+                weight=3 if suspeito else 1,
+                dash_array="4,3" if suspeito else None,
                 fill=True,
                 fill_color=cor_marcador,
                 fill_opacity=0.9,
                 popup=folium.Popup(_popup_pulso(pulso), max_width=300),
             ).add_to(mapa)
 
+    # Trajetoria/clusters sao camadas de INFERENCIA (docs/13: "nunca prova
+    # de presenca"), diferente do pulso bruto acima (registro operacional
+    # que nunca some do mapa, so marcado). Pulso suspeito (precisao ruim,
+    # salto impossivel, velocidade incompativel) fica de fora dessas duas
+    # camadas derivadas - e exatamente o caso que motivou o ADR-0054
+    # (pulso final de uma jornada real aparecendo longe do local certo,
+    # puxando a trajetoria/linha reta ate ele).
+    pulsos_confiaveis = [p for p in pulsos if p.qualidade in _QUALIDADES_CONFIAVEIS]
+
     trajetoria = simplificar_trajetoria(
-        pulsos, distancia_minima_metros=distancia_simplificacao_metros
+        pulsos_confiaveis, distancia_minima_metros=distancia_simplificacao_metros
     )
     if len(trajetoria) > 1:
         camada_trajetoria = folium.FeatureGroup(name="Traçar trajetória", show=True)
@@ -242,7 +263,7 @@ def construir_mapa(
         folium.LayerControl(collapsed=False).add_to(mapa)
 
     clusters = agrupar_permanencia(
-        pulsos, raio_metros=raio_cluster_metros, tempo_minimo=tempo_minimo_cluster
+        pulsos_confiaveis, raio_metros=raio_cluster_metros, tempo_minimo=tempo_minimo_cluster
     )
     if clusters:
         for cluster in clusters:

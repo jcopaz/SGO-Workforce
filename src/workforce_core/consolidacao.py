@@ -360,6 +360,7 @@ class LinhaAtendimentoFalha:
     ativo: Optional[str]
     sintoma: Optional[str]
     objeto: Optional[str]
+    foto_caminho: Optional[str] = None
 
 
 def linhas_atendimento_falha(jornadas: List[Jornada]) -> List[LinhaAtendimentoFalha]:
@@ -401,6 +402,7 @@ def linhas_atendimento_falha(jornadas: List[Jornada]) -> List[LinhaAtendimentoFa
                     ativo=dados.ativo,
                     sintoma=dados.sintoma,
                     objeto=dados.objeto,
+                    foto_caminho=dados.foto_caminho,
                 )
             )
     return linhas

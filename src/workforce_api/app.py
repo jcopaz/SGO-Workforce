@@ -23,6 +23,7 @@ docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md):
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -216,6 +217,27 @@ def listar_pulsos(
         raise HTTPException(status_code=400, detail="jornada_id invalido.") from exc
     pulsos = repositorio.ler_pulsos(id_uuid)
     return [pulso_gps_para_dict(pulso) for pulso in pulsos]
+
+
+@app.post("/pulsos/expurgar", dependencies=[Depends(exigir_token)])
+def expurgar_pulsos_antigos(
+    dias: int = 90,
+    repositorio: RepositorioPulsosGpsPostgres = Depends(obter_repositorio_pulsos),
+) -> Dict[str, int]:
+    """Apaga permanentemente pulsos com mais de `dias` dias - mecanismo de
+    retencao decidido no ADR-0043 (90 dias, o padrao aqui), implementado
+    no ADR-0054. Acao manual (o painel expõe um botao em
+    "Configuracoes" com confirmacao explicita) - nao ha agendamento
+    automatico neste incremento (sem infraestrutura de cron no piloto).
+
+    `dias < 1` e recusado (400) - protege contra um erro de digitacao
+    (0 ou negativo) apagando o historico inteiro por engano. Mesmo token
+    fixo dos demais endpoints (fail closed, regra de ouro 9)."""
+    if dias < 1:
+        raise HTTPException(status_code=400, detail="dias precisa ser pelo menos 1.")
+    data_limite = datetime.now(timezone.utc) - timedelta(days=dias)
+    apagados = repositorio.apagar_pulsos_anteriores_a(data_limite)
+    return {"apagados": apagados}
 
 
 @app.get("/catalogo", dependencies=[Depends(exigir_token)])
