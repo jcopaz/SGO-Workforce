@@ -31,6 +31,7 @@ import * as CatalogoRasf from "./catalogoRasf.js";
 import * as Geolocalizacao from "./geolocalizacao.js";
 import * as FotoFalha from "./fotoFalha.js";
 import * as ContinuacoesFalha from "./continuacoesFalha.js";
+import * as EstruturaCodigos from "./estruturaCodigos.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
@@ -76,69 +77,104 @@ let mostrarTransferenciaFalha = false;
 // tanto "Iniciar jornada" quanto a recuperacao de jornada aberta em
 // iniciar(), sem duplicar a logica em cada botao.
 let idIntervaloCapturaPeriodica = null;
-
-function criarSeletorMotivoPausa() {
-  const select = document.createElement("select");
-  select.id = "motivoPausa";
-  select.className = "seletor-motivo";
-  for (const motivo of motivosPausa) {
-    const opcao = document.createElement("option");
-    opcao.value = motivo.codigo;
-    opcao.textContent = `${motivo.codigo} - ${motivo.descricao}`;
-    select.appendChild(opcao);
-  }
-  return select;
-}
+// Estado da navegacao em blocos (ADR-0050, pedido do responsavel pelo
+// produto em 2026-08-04): null = mostrando so os 3 blocos operacionais
+// (Apoio e Preparacao / Execucao / Interrupcoes); um id de bloco = esse
+// bloco expandido, mostrando seus codigos. Compartilhado entre a selecao
+// de acao principal (jornada aberta, sem nada em andamento) e a selecao
+// de pausa aninhada (dentro de uma atividade) porque as duas telas nunca
+// aparecem ao mesmo tempo. Resetado a cada tela renderizada de novo do
+// zero (ver renderSelecaoHierarquica) - se uma transicao falhar (GPS
+// obrigatorio sem sinal), o colaborador so precisa re-expandir o bloco,
+// nao perde nada alem de um toque.
+let blocoExpandido = null;
 
 // Valores sentinela (nunca colidem com um codigo EE real, que e sempre
-// "EE" + 2 digitos) para as duas opcoes especiais da lista unica de
-// acoes abaixo.
+// "EE" + 2 digitos) para os dois pontos de entrada especiais do bloco
+// Execucao - nao sao codigos soltos no motor de dominio, sao o que
+// inicia uma Atividade (EE17) ou um Atendimento de Falha (EE21); qual
+// codigo fica registrado depende de como a atividade e encerrada, nunca
+// de uma escolha direta aqui (ver reconciliacao no topo de
+// estruturaCodigos.js e docs/77_ADR_0050_...md).
 const VALOR_INICIAR_ATIVIDADE = "__ATIVIDADE__";
 const VALOR_ATENDIMENTO_FALHA = "__FALHA__";
 
-// Lista unica de acoes da tela "jornada aberta, sem nada em andamento"
-// (ADR-0030, pedido do responsavel do produto): antes eram 2 botoes
-// separados (Iniciar atividade / Iniciar atendimento de falha) mais um
-// terceiro seletor+botao so para deslocamento/espera/apoio - agora e uma
-// lista so, com um unico botao "Iniciar" embaixo dela (ver render()).
-// Combina motivosPausa (os 5 codigos que ADR-0030 tornou tambem
-// iniciaveis soltos, sem atividade ativa - EE02/EE07/EE11/EE20/EE22) com
-// eventosSecundarios (os 15 codigos de deslocamento/espera/apoio,
-// ADR-0005/0024), ordenados por codigo (mesma ordem do formulario em
-// papel). "Iniciar atividade" e "Atendimento de falha" ficam num grupo
-// separado, sempre no topo, porque abrem um formulario proprio em vez de
-// simplesmente comecar a contar tempo (ver o tratamento do valor
-// sentinela em render()).
-function criarSeletorAcaoPrincipal() {
-  const select = document.createElement("select");
-  select.id = "acaoPrincipal";
-  select.className = "seletor-motivo";
+// Navegacao em blocos (ADR-0050): substitui os antigos <select> planos
+// de motivo/acao por 3 blocos operacionais, cada um expandindo pra
+// mostrar so os codigos daquele bloco - reduz a carga cognitiva de
+// escolher entre ate 23 codigos numa lista so. `motivosDisponiveis` e a
+// mesma lista que os seletores antigos usavam (cada contexto - jornada
+// solta vs pausa aninhada numa atividade - naturalmente so oferece um
+// subconjunto, decidido pelo motor de dominio, nunca por este
+// componente). Tocar num codigo folha dispara `aoEscolherCodigo`
+// diretamente (sem precisar de um botao "Iniciar" separado depois).
+function renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEscolherCodigo) {
+  const blocos = EstruturaCodigos.agruparCodigosDisponiveis(motivosDisponiveis, itensExtrasPorBloco);
+  const container = document.createElement("div");
+  container.className = "selecao-hierarquica";
 
-  const grupoPrincipal = document.createElement("optgroup");
-  grupoPrincipal.label = "Ação principal";
-  const opcaoAtividade = document.createElement("option");
-  opcaoAtividade.value = VALOR_INICIAR_ATIVIDADE;
-  opcaoAtividade.textContent = "Iniciar atividade";
-  const opcaoFalha = document.createElement("option");
-  opcaoFalha.value = VALOR_ATENDIMENTO_FALHA;
-  opcaoFalha.textContent = "Atendimento de falha";
-  grupoPrincipal.append(opcaoAtividade, opcaoFalha);
-  select.appendChild(grupoPrincipal);
-
-  const grupoPausaApoio = document.createElement("optgroup");
-  grupoPausaApoio.label = "Pausa, deslocamento e apoio";
-  const opcoesPausaApoio = [...motivosPausa, ...eventosSecundarios].sort((a, b) =>
-    a.codigo.localeCompare(b.codigo)
-  );
-  for (const motivo of opcoesPausaApoio) {
-    const opcao = document.createElement("option");
-    opcao.value = motivo.codigo;
-    opcao.textContent = `${motivo.codigo} - ${motivo.descricao}`;
-    grupoPausaApoio.appendChild(opcao);
+  if (blocoExpandido == null) {
+    for (const bloco of blocos) {
+      const quantidade = bloco.itens
+        ? bloco.itens.length
+        : bloco.subgrupos.reduce((soma, subgrupo) => soma + subgrupo.itens.length, 0);
+      const botaoBloco = botao(`${bloco.emoji} ${bloco.titulo} (${quantidade})`, () => {
+        blocoExpandido = bloco.id;
+        render();
+      });
+      botaoBloco.classList.add("bloco-operacional", `bloco-operacional-${bloco.id}`);
+      container.appendChild(botaoBloco);
+    }
+    return container;
   }
-  select.appendChild(grupoPausaApoio);
 
-  return select;
+  const bloco = blocos.find((b) => b.id === blocoExpandido);
+  if (!bloco) {
+    // O bloco expandido nao tem nenhum codigo disponivel neste contexto
+    // (ex.: "Execucao" nao existe na selecao de pausa aninhada) - volta
+    // pra lista de blocos em vez de mostrar uma tela vazia.
+    blocoExpandido = null;
+    return renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEscolherCodigo);
+  }
+
+  const titulo = document.createElement("p");
+  titulo.className = "selecao-hierarquica-titulo";
+  const forteTitulo = document.createElement("strong");
+  forteTitulo.textContent = `${bloco.emoji} ${bloco.titulo}`;
+  titulo.appendChild(forteTitulo);
+  container.appendChild(titulo);
+
+  const renderizarItens = (itens) => {
+    for (const item of itens) {
+      container.appendChild(
+        botao(item.rotulo ?? `${item.codigo} - ${item.descricao}`, () => {
+          blocoExpandido = null;
+          aoEscolherCodigo(item.codigo);
+        })
+      );
+    }
+  };
+
+  if (bloco.subgrupos) {
+    for (const subgrupo of bloco.subgrupos) {
+      const tituloSubgrupo = document.createElement("p");
+      tituloSubgrupo.className = "selecao-hierarquica-subgrupo";
+      tituloSubgrupo.textContent = subgrupo.titulo;
+      container.appendChild(tituloSubgrupo);
+      renderizarItens(subgrupo.itens);
+    }
+  } else {
+    renderizarItens(bloco.itens);
+  }
+
+  container.appendChild(
+    botao("← Voltar", () => {
+      blocoExpandido = null;
+      render();
+    })
+  );
+
+  return container;
 }
 
 // Busca o tipo em ambas as listas (ADR-0030 fez motivosPausa tambem ter
@@ -763,11 +799,13 @@ function render() {
       els.status.textContent = "Atividade em andamento.";
       els.botoes.appendChild(criarBlocoOrdensServico(atividade));
     }
-    const seletorMotivo = criarSeletorMotivoPausa();
-    els.botoes.appendChild(seletorMotivo);
+    const rotuloPausa = document.createElement("p");
+    rotuloPausa.className = "selecao-hierarquica-contexto";
+    rotuloPausa.textContent = "Iniciar pausa:";
+    els.botoes.appendChild(rotuloPausa);
     els.botoes.appendChild(
-      botao("Iniciar pausa", () =>
-        executarComGpsObrigatorio(() => motor.iniciarPausa(RelogioSimulado.agora(), seletorMotivo.value))
+      renderSelecaoHierarquica(motivosPausa, {}, (codigo) =>
+        executarComGpsObrigatorio(() => motor.iniciarPausa(RelogioSimulado.agora(), codigo))
       )
     );
     if (atividade.dadosFalha) {
@@ -820,13 +858,18 @@ function render() {
     );
   } else {
     els.status.textContent = "Jornada aberta, sem atividade em andamento.";
-    const seletorAcao = criarSeletorAcaoPrincipal();
-    els.botoes.appendChild(seletorAcao);
+    // EE17/EE21 nao vem do catalogo dinamico (nao sao motivo de
+    // pausa/evento secundario) - injetados aqui como itens especiais do
+    // bloco Execucao (ver estruturaCodigos.js).
+    const itensExtrasExecucao = [
+      { codigo: VALOR_INICIAR_ATIVIDADE, rotulo: "Iniciar atividade (EE17)" },
+      { codigo: VALOR_ATENDIMENTO_FALHA, rotulo: "Atendimento de falha (EE21)" },
+    ];
     els.botoes.appendChild(
-      botao(
-        "Iniciar",
-        async () => {
-          const valor = seletorAcao.value;
+      renderSelecaoHierarquica(
+        [...motivosPausa, ...eventosSecundarios],
+        { [EstruturaCodigos.BLOCO_EXECUCAO]: itensExtrasExecucao },
+        async (valor) => {
           mostrarTransferenciaFalha = false;
           if (valor === VALOR_INICIAR_ATIVIDADE) {
             await executarComGpsObrigatorio(() => motor.iniciarAtividade(RelogioSimulado.agora()));
@@ -838,8 +881,7 @@ function render() {
               motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, valor)
             );
           }
-        },
-        { destaque: true }
+        }
       )
     );
     els.botoes.appendChild(

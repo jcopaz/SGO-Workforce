@@ -1,5 +1,30 @@
 # Changelog
 
+## [2026-08-04] Navegação hierárquica (drill-down) dos códigos EE na interface de campo (ADR-0050)
+
+Ver `docs/77_ADR_0050_NAVEGACAO_HIERARQUICA_CODIGOS_EE.md` para a decisão
+completa. Pedido do responsável pelo produto: substituir a lista linear
+de 23 códigos EE por 3 blocos operacionais (Apoio e Preparação /
+Execução / Interrupções), reduzindo a carga cognitiva de escolha em
+campo.
+
+### Adicionado
+- `interface_campo/js/estruturaCodigos.js` (novo): agrupamento visual
+  (não é catálogo) dos códigos EE em 3 blocos, com "Interrupções"
+  dividido em Esperas/Pausas. Blocos/subgrupos vazios não aparecem;
+  código desconhecido cai num bloco "Outros", nunca some.
+- `renderSelecaoHierarquica` em `app.js`: navegação em blocos que
+  substitui os antigos `<select>` planos de motivo/ação - tocar num
+  código dispara a ação direto, sem precisar de um botão de confirmação
+  separado depois.
+- 8 casos novos em `tests/js/estruturaCodigos.test.mjs`, incluindo um
+  teste que garante que todos os códigos aparecem exatamente uma vez na
+  estrutura (a especificação original recebida tinha esquecido o EE22).
+
+### Corrigido
+- EE22 (Treinamento) ausente da especificação original de blocos -
+  adicionado em Interrupções → Pausas (mesma família de EE02/EE11).
+
 ## [2026-08-04] Mapa operacional: camadas sempre visíveis e fluidez (ADR-0049)
 
 Ver `docs/76_ADR_0049_MAPA_CAMADAS_SEMPRE_VISIVEIS_E_FLUIDEZ.md` para a

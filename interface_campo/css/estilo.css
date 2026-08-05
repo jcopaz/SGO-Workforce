@@ -255,6 +255,58 @@ body {
   color: var(--cor-texto);
 }
 
+/* Navegacao em blocos dos codigos EE (ADR-0050): 3 blocos operacionais
+   que expandem pra mostrar seus codigos, no lugar dos antigos <select>
+   planos - ver interface_campo/js/estruturaCodigos.js. */
+.selecao-hierarquica {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+.selecao-hierarquica-contexto {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--cor-texto);
+  margin: 0.75rem 0 0.25rem;
+}
+
+.selecao-hierarquica-titulo {
+  margin: 0 0 0.1rem;
+  font-size: 1rem;
+}
+
+.selecao-hierarquica-subgrupo {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4a5a68;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Cores dos 3 blocos (🔵🟢🔴 pedido do responsavel pelo produto em
+   2026-08-04) como um filete lateral - mantem o botao legivel/consistente
+   com o resto do app em vez de preencher o fundo inteiro de cor. */
+.bloco-operacional {
+  border-left-width: 6px;
+  border-left-style: solid;
+  text-align: left;
+}
+
+.bloco-operacional-apoio_preparacao {
+  border-left-color: #1e88e5;
+}
+
+.bloco-operacional-execucao {
+  border-left-color: #2e7d32;
+}
+
+.bloco-operacional-interrupcoes {
+  border-left-color: #c62828;
+}
+
 .bloco-localizacao,
 .bloco-foto {
   margin: 0.5rem 0;
