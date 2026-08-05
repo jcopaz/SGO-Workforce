@@ -10,6 +10,7 @@ para poder ser testado com pytest normalmente.
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -19,6 +20,7 @@ import requests
 from workforce_core import MotorJornada, TipoEventoSecundario
 from workforce_core.catalogo import Categoria, CatalogoMotivos, ClassificacaoHH, catalogo_completo
 from workforce_core.consolidacao import (
+    IntervaloClassificado,
     LinhaAtendimentoFalha,
     LinhaEvento,
     ResumoAtendimentosFalha,
@@ -29,6 +31,7 @@ from workforce_core.consolidacao import (
     contagem_por_objeto,
     contagem_por_sintoma,
     duracao_media_por_sintoma,
+    linha_do_tempo,
     linhas_atendimento_falha,
     linhas_eventos_classificadas,
     resumo_atendimentos_falha,
@@ -526,6 +529,62 @@ def filtrar_pulsos_por_periodo(
             continue
         resultado.append(pulso)
     return resultado
+
+
+@dataclass(frozen=True)
+class SegmentoLinhaDoTempo:
+    """Um pedaco da linha do tempo ja recortado dentro de um unico dia
+    calendario de Brasilia - base do grafico "o que foi feito durante a
+    jornada" (ADR-0051). `minuto_inicio`/`minuto_fim` sao minutos desde
+    00:00 daquele dia (0 a 1440), com fracao de minuto preservada (nao
+    arredondada) para o grafico posicionar com precisao."""
+
+    data: date
+    minuto_inicio: float
+    minuto_fim: float
+    tipo: str
+    motivo: Optional[str]
+
+
+def _minuto_do_dia(momento: datetime) -> float:
+    return momento.hour * 60 + momento.minute + momento.second / 60
+
+
+def fatiar_linha_do_tempo_por_dia(
+    intervalos: List[IntervaloClassificado],
+) -> Dict[date, List[SegmentoLinhaDoTempo]]:
+    """Converte a linha do tempo de uma jornada (`workforce_core.consolidacao.linha_do_tempo`,
+    instantes UTC-aware vindos do backend) para o horario de Brasilia e
+    fatia por dia calendario - um intervalo que atravessa a meia-noite de
+    Brasilia vira 2 (ou mais) segmentos, um por dia, cada um clicado nos
+    limites do proprio dia (0 a 1440 minutos).
+
+    Devolve um dict ordenavel por data (`sorted(resultado)`) - cada valor
+    e a lista de segmentos daquele dia, na ordem cronologica em que
+    aconteceram (a mesma ordem de `linha_do_tempo`, preservada aqui).
+    """
+    por_dia: Dict[date, List[SegmentoLinhaDoTempo]] = {}
+    for intervalo in intervalos:
+        cursor = para_horario_brasil(intervalo.inicio)
+        fim = para_horario_brasil(intervalo.fim)
+        while cursor < fim:
+            proximo_dia = cursor.date() + timedelta(days=1)
+            inicio_proximo_dia = datetime(
+                proximo_dia.year, proximo_dia.month, proximo_dia.day, tzinfo=cursor.tzinfo
+            )
+            fim_do_pedaco = min(fim, inicio_proximo_dia)
+            minuto_fim = 1440.0 if fim_do_pedaco.date() != cursor.date() else _minuto_do_dia(fim_do_pedaco)
+            por_dia.setdefault(cursor.date(), []).append(
+                SegmentoLinhaDoTempo(
+                    data=cursor.date(),
+                    minuto_inicio=_minuto_do_dia(cursor),
+                    minuto_fim=minuto_fim,
+                    tipo=intervalo.tipo,
+                    motivo=intervalo.motivo,
+                )
+            )
+            cursor = fim_do_pedaco
+    return por_dia
 
 
 def gerar_pulsos_exemplo(

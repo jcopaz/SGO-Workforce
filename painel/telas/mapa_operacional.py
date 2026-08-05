@@ -21,18 +21,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_folium import st_folium
 
 from dados import (
     carregar_jornadas_via_api,
     carregar_pulsos_via_api,
+    fatiar_linha_do_tempo_por_dia,
     filtrar_pulsos_por_periodo,
     formatar_data_hora,
 )
+from graficos import grafico_linha_do_tempo, renderizar_embutido
 from malha_ferrea import carregar_trilhos_malha_mrs
 from mapa import construir_mapa, cor_por_rotulo, rotulo_classificacao_pulso
 from workforce_core.catalogo import catalogo_completo
-from workforce_core.consolidacao import classificar_instante
+from workforce_core.consolidacao import classificar_instante, linha_do_tempo
 from workforce_core.fuso_horario import para_horario_brasil
 
 
@@ -222,11 +225,30 @@ mapa = construir_mapa(
     marco_fim=marco_fim,
 )
 
-st_folium(
-    mapa,
-    width="100%",
-    height=560,
-    key="painel_mapa_folium",
-    returned_objects=[],  # nada do retorno e usado - pan/zoom/clique no
-    # mapa nunca deveria reexecutar o script inteiro (ADR-0049, fluidez).
-)
+# Linha do tempo do dia selecionado (ADR-0051, pedido do responsavel pelo
+# produto em 2026-08-04) - ao lado do mapa, sempre a mesma data escolhida
+# no filtro "Data dos pulsos" acima (nunca a faixa de horario, que so
+# afeta os pulsos/trajetoria do mapa - a linha do tempo mostra o dia
+# inteiro pra manter o contexto de antes/depois).
+segmentos_do_dia = fatiar_linha_do_tempo_por_dia(linha_do_tempo(jornada_selecionada)).get(data_filtro, [])
+
+col_mapa, col_linha_tempo = st.columns([2, 1])
+with col_mapa:
+    st_folium(
+        mapa,
+        width="100%",
+        height=560,
+        key="painel_mapa_folium",
+        returned_objects=[],  # nada do retorno e usado - pan/zoom/clique no
+        # mapa nunca deveria reexecutar o script inteiro (ADR-0049, fluidez).
+    )
+with col_linha_tempo:
+    st.caption(f"Linha do tempo - {data_filtro.strftime('%d/%m/%Y')}")
+    if segmentos_do_dia:
+        components.html(
+            renderizar_embutido(grafico_linha_do_tempo({data_filtro: segmentos_do_dia})),
+            height=560,
+            scrolling=False,
+        )
+    else:
+        st.info("Nenhum apontamento registrado nesta jornada no dia selecionado.")

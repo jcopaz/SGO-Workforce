@@ -96,6 +96,81 @@ def classificar_instante(jornada: Jornada, momento: datetime) -> ClassificacaoIn
 
 
 # ----------------------------------------------------------------------
+# Linha do tempo sequencial (a jornada inteira decomposta em intervalos,
+# nao so um instante) - base do grafico de "o que foi feito durante a
+# jornada" no mapa operacional e na Visao Geral (pedido do responsavel
+# pelo produto em 2026-08-04, ver ADR-0051).
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class IntervaloClassificado:
+    inicio: datetime
+    fim: datetime
+    tipo: str  # mesmos valores de ClassificacaoInstante.tipo
+    motivo: Optional[str]
+
+
+def linha_do_tempo(jornada: Jornada) -> List[IntervaloClassificado]:
+    """Decompoe a jornada inteira numa sequencia de intervalos
+    consecutivos e sem sobreposicao, do inicio ao fim da jornada (uma
+    jornada ainda aberta so cobre ate o ultimo evento encerrado - nunca
+    extrapola ate "agora", que nao e um instante confiavel/auditavel).
+
+    Cada intervalo e uma Atividade, Atendimento de Falha, Pausa (dentro
+    de uma atividade - tem precedencia, corta o intervalo da atividade
+    que a contem em pedacos, mesma regra de `classificar_instante`),
+    Evento Secundario, ou "SEM_ATIVIDADE" (lacuna entre dois intervalos
+    reconhecidos, ou antes do primeiro/depois do ultimo).
+
+    So considera intervalos com inicio E fim gravados (um evento ainda em
+    andamento no meio da jornada nao pode acontecer por regra de dominio -
+    so o ultimo evento da jornada pode estar em aberto, e nesse caso a
+    linha do tempo simplesmente para no que ja foi encerrado).
+    """
+    if jornada.inicio is None:
+        return []
+
+    brutos: List[IntervaloClassificado] = []
+
+    for atividade in jornada.atividades:
+        if atividade.inicio is None or atividade.fim is None:
+            continue
+        tipo_atividade = "ATENDIMENTO_FALHA" if atividade.dados_falha is not None else "ATIVIDADE"
+        pausas_validas = sorted(
+            (p for p in atividade.pausas if p.inicio is not None and p.fim is not None),
+            key=lambda p: p.inicio,
+        )
+        cursor = atividade.inicio
+        for pausa in pausas_validas:
+            if pausa.inicio > cursor:
+                brutos.append(IntervaloClassificado(cursor, pausa.inicio, tipo_atividade, None))
+            brutos.append(IntervaloClassificado(pausa.inicio, pausa.fim, "PAUSA", pausa.motivo))
+            cursor = pausa.fim
+        if atividade.fim > cursor:
+            brutos.append(IntervaloClassificado(cursor, atividade.fim, tipo_atividade, None))
+
+    for evento in jornada.eventos_secundarios:
+        if evento.inicio is None or evento.fim is None:
+            continue
+        brutos.append(IntervaloClassificado(evento.inicio, evento.fim, "EVENTO_SECUNDARIO", evento.motivo))
+
+    brutos.sort(key=lambda intervalo: intervalo.inicio)
+
+    resultado: List[IntervaloClassificado] = []
+    cursor = jornada.inicio
+    for intervalo in brutos:
+        if intervalo.inicio > cursor:
+            resultado.append(IntervaloClassificado(cursor, intervalo.inicio, "SEM_ATIVIDADE", None))
+        resultado.append(intervalo)
+        if intervalo.fim > cursor:
+            cursor = intervalo.fim
+
+    if jornada.fim is not None and jornada.fim > cursor:
+        resultado.append(IntervaloClassificado(cursor, jornada.fim, "SEM_ATIVIDADE", None))
+
+    return resultado
+
+
+# ----------------------------------------------------------------------
 # Soma por categoria (uma jornada)
 # ----------------------------------------------------------------------
 def resumo_por_categoria(

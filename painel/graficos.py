@@ -63,9 +63,10 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Funnel, Gauge, Line, Pie, Sankey, Scatter
 
 from workforce_core.catalogo import Categoria
-from workforce_core.consolidacao import LinhaAtendimentoFalha, LinhaEvento
+from workforce_core.consolidacao import ClassificacaoInstante, LinhaAtendimentoFalha, LinhaEvento
 
-from dados import rotulo_categoria, rotulo_motivo
+from dados import SegmentoLinhaDoTempo, rotulo_categoria, rotulo_motivo
+from mapa import cor_por_rotulo, rotulo_classificacao_pulso
 
 _DIRETORIO_MODULO = Path(__file__).resolve().parent
 CAMINHO_ECHARTS_JS_LOCAL = _DIRETORIO_MODULO / "assets" / "echarts.min.js"
@@ -274,6 +275,112 @@ def grafico_evolucao_diaria(linhas: List[LinhaEvento]) -> Line:
         )
     )
     return _aplicar_grid(grafico, bottom="26%")
+
+
+def _minutos_para_hora_texto(minutos: float) -> str:
+    """Formata minutos-do-dia (0 a 1440) como "HH:MM" - so texto pronto
+    pro tooltip, calculado em Python (nunca JS/JsCode, ver
+    grafico_linha_do_tempo)."""
+    minutos_inteiros = round(minutos)
+    horas, resto = divmod(minutos_inteiros, 60)
+    return f"{horas:02d}:{resto:02d}"
+
+
+def grafico_linha_do_tempo(por_dia: Dict[date, List[SegmentoLinhaDoTempo]]) -> Bar:
+    """Barra empilhada mostrando a sequencia de apontamentos de cada dia,
+    posicionados no horario real em que aconteceram (eixo Y = hora do
+    dia, 00:00 a 24:00, grade de hora em hora) - pedido do responsavel
+    pelo produto em 2026-08-04 (ADR-0051). `por_dia` vem de
+    `dados.fatiar_linha_do_tempo_por_dia`.
+
+    Tecnica de series genericas por posicao (nao por codigo): cada dia
+    pode ter uma quantidade diferente de apontamentos sequenciais, entao
+    nao da pra ter uma serie fixa por codigo - a serie de posicao N
+    contribui, pra cada dia, o N-esimo apontamento cronologico daquele
+    dia (ou um valor zero/transparente se aquele dia tiver menos
+    apontamentos que outros). Uma serie "base" invisivel (o tempo antes
+    do primeiro apontamento do dia) garante que a pilha visivel comece na
+    altura certa, ja que uma barra empilhada sempre comeca do zero.
+
+    Cor por rotulo reaproveitada de `mapa.py` (mesmo codigo = mesma cor
+    do mapa operacional, `cor_por_rotulo`) - nunca inventa uma paleta
+    nova para este grafico. Eixo Y em horas (nao minutos) com formatter
+    de template nativo do ECharts (`"{value}:00"`, sem JsCode - este
+    projeto nunca usa JsCode, ver docs/77_ADR_0050_...md) - o tooltip
+    (minutos exatos) e calculado em Python e embutido no nome de cada
+    ponto (`{b}` no formatter), nao depende de nenhuma logica em JS.
+    """
+    dias_ordenados = sorted(por_dia.keys())
+    rotulos_x = [dia.strftime("%d/%m") for dia in dias_ordenados]
+    max_segmentos = max((len(por_dia[dia]) for dia in dias_ordenados), default=0)
+
+    def _item_invisivel(valor: float = 0.0) -> Dict[str, object]:
+        return {"value": round(valor, 2), "name": "", "itemStyle": {"color": "transparent"}}
+
+    grafico = Bar(init_opts=opts.InitOpts(width="100%", height="560px"))
+    grafico.add_xaxis(rotulos_x)
+
+    dados_base = []
+    for dia in dias_ordenados:
+        segmentos = por_dia[dia]
+        filler_minutos = segmentos[0].minuto_inicio if segmentos else 0.0
+        dados_base.append(_item_invisivel(filler_minutos / 60))
+    grafico.add_yaxis(
+        "_base",
+        dados_base,
+        stack="linha_do_tempo",
+        label_opts=opts.LabelOpts(is_show=False),
+        tooltip_opts=opts.TooltipOpts(is_show=False),
+    )
+
+    for posicao in range(max_segmentos):
+        dados_posicao = []
+        for dia in dias_ordenados:
+            segmentos = por_dia[dia]
+            if posicao >= len(segmentos):
+                dados_posicao.append(_item_invisivel())
+                continue
+            segmento = segmentos[posicao]
+            classificacao = ClassificacaoInstante(tipo=segmento.tipo, motivo=segmento.motivo)
+            rotulo = rotulo_classificacao_pulso(classificacao)
+            duracao_minutos = segmento.minuto_fim - segmento.minuto_inicio
+            nome = (
+                f"{rotulo}<br/>"
+                f"{_minutos_para_hora_texto(segmento.minuto_inicio)}"
+                f"–{_minutos_para_hora_texto(segmento.minuto_fim)}"
+                f" ({round(duracao_minutos)} min)"
+            )
+            dados_posicao.append(
+                {
+                    "value": round(duracao_minutos / 60, 3),
+                    "name": nome,
+                    "itemStyle": {"color": cor_por_rotulo(rotulo)},
+                }
+            )
+        grafico.add_yaxis(
+            f"_pos_{posicao}",
+            dados_posicao,
+            stack="linha_do_tempo",
+            label_opts=opts.LabelOpts(is_show=False),
+        )
+
+    grafico.set_global_opts(
+        title_opts=_SEM_TITULO,
+        legend_opts=opts.LegendOpts(is_show=False),
+        xaxis_opts=_eixo_categoria_opts(),
+        yaxis_opts=opts.AxisOpts(
+            min_=0,
+            max_=24,
+            interval=1,
+            axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(color=_COR_EIXO)),
+            axislabel_opts=opts.LabelOpts(formatter="{value}:00", color=_COR_TEXTO_EIXO, font_size=11),
+            splitline_opts=opts.SplitLineOpts(
+                is_show=True, linestyle_opts=opts.LineStyleOpts(type_="dashed", color=_COR_GRADE)
+            ),
+        ),
+        tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}", is_confine=True),
+    )
+    return _aplicar_grid(grafico, bottom="10%", top="4%")
 
 
 def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:

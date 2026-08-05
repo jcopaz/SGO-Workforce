@@ -158,6 +158,84 @@ def test_classificar_instante_limite_inclusivo_no_fim_do_intervalo():
     assert classificacao.tipo == "PAUSA"
 
 
+# ----------------------------------------------------------------------
+# linha_do_tempo (ADR-0051) - decomposicao sequencial da jornada inteira.
+# ----------------------------------------------------------------------
+def test_linha_do_tempo_jornada_sem_inicio_devolve_vazio():
+    motor = MotorJornada("12345")
+    assert consolidacao.linha_do_tempo(motor.jornada) == []
+
+
+def test_linha_do_tempo_jornada_sem_nenhum_evento_e_uma_lacuna_so():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.encerrar_jornada(_dt(9, 0))
+
+    intervalos = consolidacao.linha_do_tempo(motor.jornada)
+
+    assert len(intervalos) == 1
+    assert intervalos[0].tipo == "SEM_ATIVIDADE"
+    assert intervalos[0].inicio == _dt(8, 0)
+    assert intervalos[0].fim == _dt(9, 0)
+
+
+def test_linha_do_tempo_jornada_completa_sem_lacunas_intermediarias():
+    jornada = _jornada_completa()  # evento 8:00-8:30, atividade 8:30-11:30 (pausa 9:00-9:10), atendimento 11:30-12:00
+
+    intervalos = consolidacao.linha_do_tempo(jornada)
+
+    assert [(i.tipo, i.inicio, i.fim) for i in intervalos] == [
+        ("EVENTO_SECUNDARIO", _dt(8, 0), _dt(8, 30)),
+        ("ATIVIDADE", _dt(8, 30), _dt(9, 0)),
+        ("PAUSA", _dt(9, 0), _dt(9, 10)),
+        ("ATIVIDADE", _dt(9, 10), _dt(11, 30)),
+        ("ATENDIMENTO_FALHA", _dt(11, 30), _dt(12, 0)),
+    ]
+    assert intervalos[2].motivo == "PAUSA_TESTE"
+    assert intervalos[0].motivo == "DESLOCAMENTO_TESTE"
+
+
+def test_linha_do_tempo_preenche_lacunas_entre_e_ao_redor_dos_eventos():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atividade(_dt(9, 0))  # lacuna 8:00-9:00
+    motor.encerrar_atividade(_dt(10, 0))
+    motor.encerrar_jornada(_dt(11, 0))  # lacuna 10:00-11:00
+
+    intervalos = consolidacao.linha_do_tempo(motor.jornada)
+
+    assert [(i.tipo, i.inicio, i.fim) for i in intervalos] == [
+        ("SEM_ATIVIDADE", _dt(8, 0), _dt(9, 0)),
+        ("ATIVIDADE", _dt(9, 0), _dt(10, 0)),
+        ("SEM_ATIVIDADE", _dt(10, 0), _dt(11, 0)),
+    ]
+
+
+def test_linha_do_tempo_jornada_aberta_nao_extrapola_ate_agora():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atividade(_dt(8, 0))
+    motor.encerrar_atividade(_dt(9, 0))
+    # jornada permanece aberta - sem encerrar_jornada.
+
+    intervalos = consolidacao.linha_do_tempo(motor.jornada)
+
+    assert len(intervalos) == 1
+    assert intervalos[0].tipo == "ATIVIDADE"
+    assert intervalos[0].fim == _dt(9, 0)
+
+
+def test_linha_do_tempo_ignora_atividade_ou_evento_sem_fim_gravado():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(_dt(8, 0))
+    motor.iniciar_atividade(_dt(8, 0))
+    # atividade fica em aberto (sem encerrar) - jornada tambem nao encerra.
+
+    intervalos = consolidacao.linha_do_tempo(motor.jornada)
+
+    assert intervalos == []
+
+
 def test_linhas_eventos_classificadas_agrupa_pelo_dia_de_brasilia_nao_utc():
     # Bug real corrigido em 2026-08-04 (ADR-0047): uma atividade que
     # comecou as 22h de Brasilia (01h UTC do dia seguinte, o formato que

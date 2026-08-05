@@ -1,5 +1,32 @@
 # Changelog
 
+## [2026-08-04] Gráfico de linha do tempo da jornada - dia × hora (ADR-0051)
+
+Ver `docs/78_ADR_0051_GRAFICO_LINHA_DO_TEMPO_DA_JORNADA.md` para a
+decisão completa. Pedido do responsável pelo produto: visualizar a
+sequência de apontamentos de cada dia posicionados no horário real em
+que aconteceram, ao lado do mapa operacional (uma jornada) e na Visão
+Geral (compilado por vários dias de um colaborador, com base nos
+filtros já existentes).
+
+### Adicionado
+- `workforce_core.consolidacao.linha_do_tempo(jornada)`: decompõe a
+  jornada inteira numa sequência de intervalos consecutivos (atividade,
+  pausa, evento secundário, ou lacuna "sem atividade").
+- `dados.fatiar_linha_do_tempo_por_dia`: recorta os intervalos por dia
+  calendário de Brasília (intervalo que atravessa meia-noite vira 2+
+  segmentos).
+- `graficos.grafico_linha_do_tempo`: barra empilhada dia × hora (grade
+  de hora em hora), cor por rótulo reaproveitada do mapa operacional
+  (mesmo código = mesma cor em todo o painel), tooltip com nome, horário
+  e minutos do apontamento.
+- Painel lateral no mapa operacional (linha do tempo do dia selecionado)
+  e novo expander "Linha do tempo do colaborador" na Visão Geral
+  (seletor de 1 colaborador por vez, dentro do multiselect principal já
+  existente).
+- 17 casos de teste novos (`tests/test_linha_do_tempo.py` novo + casos
+  em `test_consolidacao.py`) - 369 testes no total, sem regressão.
+
 ## [2026-08-04] Navegação hierárquica (drill-down) dos códigos EE na interface de campo (ADR-0050)
 
 Ver `docs/77_ADR_0050_NAVEGACAO_HIERARQUICA_CODIGOS_EE.md` para a decisão

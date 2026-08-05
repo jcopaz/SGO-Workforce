@@ -28,6 +28,7 @@ from dados import (
     agrupar_duracao_por_categoria,
     carregar_jornadas_via_api,
     contagem_e_duracao_media_por_motivo,
+    fatiar_linha_do_tempo_por_dia,
     formatar_data_hora,
     formatar_horas,
     horas_produtiva_nao_rentavel_do_resumo,
@@ -44,11 +45,13 @@ from graficos import (
     grafico_hh_por_categoria,
     grafico_hh_por_colaborador,
     grafico_hh_por_motivo,
+    grafico_linha_do_tempo,
     grafico_sankey_colaborador_categoria,
     grafico_scatter_duracao_frequencia,
     grafico_utilizacao_por_colaborador,
     renderizar_embutido,
 )
+from workforce_core.consolidacao import linha_do_tempo
 
 
 def _obter_secret_seguro(chave: str, default: str = "") -> str:
@@ -156,6 +159,15 @@ def _sanitizar_periodo_state(chave, minimo, maximo):
         )
         if fora_do_intervalo:
             st.session_state[chave] = (minimo, maximo)
+
+
+def _sanitizar_selectbox_state(chave, opcoes_validas):
+    """Mesma ideia de _sanitizar_multiselect_state, para um st.selectbox
+    de valor unico (ADR-0051: seletor de colaborador da linha do tempo,
+    que precisa ficar dentro do que o multiselect principal ja escolheu,
+    e esse conjunto muda entre reruns)."""
+    if chave in st.session_state and st.session_state[chave] not in opcoes_validas:
+        st.session_state[chave] = opcoes_validas[0] if opcoes_validas else None
 
 
 colaboradores_disponiveis = sorted({j.colaborador_matricula for j in jornadas})
@@ -386,6 +398,34 @@ with st.expander("Fluxo de HH: colaborador → categoria", expanded=True):
         height=620,
         scrolling=False,
     )
+
+with st.expander("Linha do tempo do colaborador", expanded=True):
+    st.caption(
+        "Sequência de apontamentos ao longo dos dias, no horário real em que "
+        "aconteceram - todos os dias do período filtrado acima para o "
+        "colaborador escolhido aqui."
+    )
+    _sanitizar_selectbox_state("painel_linha_tempo_colaborador", colaboradores_selecionados)
+    colaborador_linha_tempo = st.selectbox(
+        "Colaborador",
+        options=colaboradores_selecionados,
+        key="painel_linha_tempo_colaborador",
+    )
+    jornadas_do_colaborador = [
+        j for j in jornadas_filtradas if j.colaborador_matricula == colaborador_linha_tempo
+    ]
+    segmentos_por_dia: dict = {}
+    for jornada_do_colaborador in jornadas_do_colaborador:
+        for dia, segmentos in fatiar_linha_do_tempo_por_dia(linha_do_tempo(jornada_do_colaborador)).items():
+            segmentos_por_dia.setdefault(dia, []).extend(segmentos)
+    if segmentos_por_dia:
+        components.html(
+            renderizar_embutido(grafico_linha_do_tempo(segmentos_por_dia)),
+            height=560,
+            scrolling=False,
+        )
+    else:
+        st.info("Nenhum apontamento encontrado para este colaborador no período filtrado.")
 
 st.subheader("Jornadas carregadas")
 st.dataframe(
