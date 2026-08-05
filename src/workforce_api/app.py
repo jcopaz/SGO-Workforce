@@ -1,10 +1,11 @@
 """API minima de sincronizacao (Incremento de sincronizacao real - piloto).
 
-Contexto: interface_campo/ (PWA no Netlify) grava jornadas so em IndexedDB
-do navegador e painel/ (Streamlit) so le arquivos locais - nao existia
-nenhuma conexao real entre os dois (ADR-0003, ADR-0004). Este modulo e o
-backend que os conecta: recebe jornadas do app de campo e devolve a lista
-completa para o painel consumir.
+Contexto: interface_campo/ (PWA estatico, Cloudflare desde o ADR-0056)
+grava jornadas so em IndexedDB do navegador e painel/ (Streamlit) so le
+arquivos locais - nao existia nenhuma conexao real entre os dois
+(ADR-0003, ADR-0004). Este modulo e o backend que os conecta: recebe
+jornadas do app de campo e devolve a lista completa para o painel
+consumir.
 
 Decisoes de escopo-piloto (nao design de seguranca final - ver
 docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md):
@@ -50,7 +51,20 @@ from .repositorio_pulsos_postgres import RepositorioPulsosGpsPostgres
 
 app = FastAPI(title="SGO Workforce - API de sincronizacao (piloto)")
 
-_origens_padrao = "https://sgoworkforce.netlify.app,http://localhost:8000"
+# CORS e enforcado pelo NAVEGADOR, nao pelo servidor - por isso o backend
+# respondia normal (WebFetch/curl, sem navegador) mesmo com o app de
+# campo real mostrando "sem conexao com o backend": a origem nova do
+# Cloudflare (ADR-0056) nao estava na allowlist, so a antiga do Netlify.
+# ORIGENS_PERMITIDAS (variavel de ambiente no Render) sobrescreve esta
+# lista sem precisar de deploy novo - mas o padrao aqui tambem precisa
+# ficar correto, pra quem nunca configurou a variavel (ou esqueceu de
+# atualizar numa proxima migracao de hospedagem) nao cair nesse mesmo
+# problema de novo.
+_origens_padrao = (
+    "https://sgoworkforce.mrslogistica.workers.dev,"
+    "https://sgoworkforce.netlify.app,"
+    "http://localhost:8000"
+)
 _origens = [
     origem.strip()
     for origem in os.environ.get("ORIGENS_PERMITIDAS", _origens_padrao).split(",")

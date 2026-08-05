@@ -171,6 +171,32 @@ puro sem build facilitou a migração ser rápida - um lembrete de que
 manter dependência mínima de plataforma paga dividendo quando precisa
 trocar de provedor às pressas.
 
+### 2026-08-05 | CORS do backend esquecido na migração pro Cloudflare
+
+**Causa raiz**: a migração de `interface_campo/` pro Cloudflare
+(ADR-0056) trocou onde o app de campo é servido, mas ninguém atualizou
+`_origens_padrao` (lista de origens permitidas no `CORSMiddleware` do
+backend) - continuava só com o domínio antigo do Netlify. O app de
+campo real (celular) ficou com toda chamada de sincronização bloqueada
+pelo próprio navegador, mostrando "sem conexão com o backend".
+
+**Por que não foi pego na hora**: CORS é enforçado pelo **navegador**,
+nunca pelo servidor - `WebFetch`/`curl` num backend com CORS mal
+configurado responde normal (sem navegador, sem checagem de CORS
+nenhuma). A verificação de deploy já estabelecida nesta sessão
+(`WebFetch` em `/saude`/`openapi.json`) confirma que o backend está *no
+ar*, mas nunca confirmaria que o navegador consegue *falar* com ele.
+
+**Correção**: `_origens_padrao` atualizada para incluir a origem atual
+do Cloudflare. Teste novo garante que a origem de produção vigente
+sempre está na lista padrão. Ver ADR-0061.
+
+**Lição**: toda migração de hospedagem do app de campo (ou do painel)
+precisa checar CORS no backend como um passo explícito do checklist,
+não só "o backend está no ar" - as duas verificações são independentes
+e uma não implica a outra. `WebFetch`/`curl` nunca vão pegar um
+problema de CORS sozinhos, porque eles não são um navegador.
+
 ### 2026-08-05 | "Só Pausa pode aninhar numa atividade" parecia regra de motor, era só a lista da tela
 
 **Causa raiz**: a tela só oferecia os 5 códigos `tipo_registro="pausa"`

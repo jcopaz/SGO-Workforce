@@ -124,6 +124,19 @@ def test_saude_nao_exige_token(cliente):
     assert resposta.json() == {"status": "ok"}
 
 
+def test_origens_permitidas_padrao_inclui_cloudflare_e_netlify():
+    # Regressao: CORS e enforcado pelo navegador, nao pelo servidor - a
+    # migracao pro Cloudflare (ADR-0056) esqueceu de atualizar esta lista,
+    # e o backend respondia normal em teste direto (sem navegador)
+    # mesmo com o app de campo real bloqueado por CORS. Confirma que a
+    # origem de producao atual esta sempre na lista padrao, mesmo sem
+    # ORIGENS_PERMITIDAS configurada no ambiente.
+    from workforce_api.app import _origens_padrao
+
+    origens = [o.strip() for o in _origens_padrao.split(",")]
+    assert "https://sgoworkforce.mrslogistica.workers.dev" in origens
+
+
 def test_post_sem_token_e_401(cliente):
     resposta = cliente.post("/jornadas", json=_jornada_encerrada_dict())
     assert resposta.status_code == 401

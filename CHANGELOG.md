@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-08-05] Corrige CORS do backend esquecido na migração pro Cloudflare (ADR-0061)
+
+Ver `docs/89_ADR_0061_CORS_ESQUECIDO_NA_MIGRACAO_CLOUDFLARE.md`. A
+migração de `interface_campo/` pro Cloudflare (ADR-0056) trocou onde o
+app é servido, mas o backend continuava só aceitando CORS da origem
+antiga do Netlify - o app de campo real ficava bloqueado pelo próprio
+navegador ao tentar sincronizar, mostrando "sem conexão com o backend"
+mesmo com o backend saudável. `_origens_padrao` (`src/workforce_api/app.py`)
+atualizada para incluir a origem atual do Cloudflare; teste novo
+protege contra o mesmo esquecimento numa migração futura.
+
+**Ação pendente do responsável do produto**: se `ORIGENS_PERMITIDAS`
+já estiver configurada como variável de ambiente no Render, precisa ser
+atualizada lá também (o código não sobrescreve uma variável já setada).
+
 ## [2026-08-05] Pausa aninhada aceita qualquer código solto, não só os 5 de "pausa" (ADR-0060)
 
 Ver `docs/88_ADR_0060_PAUSA_ANINHADA_ACEITA_QUALQUER_CODIGO_SOLTO.md`.
