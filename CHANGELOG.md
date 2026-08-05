@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-08-05] Seleção de códigos EE volta a ser `<select>` nativo, agora com `<optgroup>` por bloco (ADR-0059)
+
+Ver `docs/87_ADR_0059_SELECAO_DE_CODIGOS_EE_VOLTA_A_SER_SELECT_NATIVO_COM_OPTGROUP.md`.
+Terceiro ajuste no mesmo dia na mesma tela: responsável do produto pediu
+de volta o formato de lista suspensa nativa (como antes do ADR-0050),
+agora separada por `<optgroup>` de bloco (Apoio e Preparação / Execução
+/ Interrupções-Esperas / Interrupções-Pausas) em vez de um grupo só.
+`renderSelecaoHierarquica` reescrita pra montar um `<select>` nativo em
+vez da árvore de botões customizada dos dois ajustes anteriores (CSS
+morto removido). `CACHE_VERSAO` v23.
+
 ## [2026-08-05] Lista de códigos EE de cada bloco com rolagem própria (ADR-0058)
 
 Ver `docs/86_ADR_0058_LISTA_DE_CODIGOS_EE_COM_ROLAGEM_PROPRIA.md`. Com

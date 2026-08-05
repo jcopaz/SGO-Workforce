@@ -255,18 +255,6 @@ body {
   color: var(--cor-texto);
 }
 
-/* Navegacao em blocos dos codigos EE (ADR-0050, ajustada em 2026-08-05):
-   os 3 blocos operacionais aparecem todos de uma vez, cada um com o
-   titulo em negrito seguido direto dos seus codigos - nao um acordeao
-   que esconde os outros blocos - ver
-   interface_campo/js/estruturaCodigos.js. */
-.selecao-hierarquica {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin: 0.5rem 0;
-}
-
 .selecao-hierarquica-contexto {
   font-size: 0.9rem;
   font-weight: 600;
@@ -274,56 +262,15 @@ body {
   margin: 0.75rem 0 0.25rem;
 }
 
-.selecao-hierarquica-titulo {
-  margin: 0.75rem 0 0.1rem;
-  font-size: 1rem;
-}
-
-.selecao-hierarquica-titulo:first-child {
-  margin-top: 0;
-}
-
-.selecao-hierarquica-subgrupo {
-  margin: 0.5rem 0 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #4a5a68;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-/* Lista de codigos de UM bloco (ADR-0058) - altura maxima com rolagem
-   propria, pra um bloco com muitos codigos (ex.: Apoio e Preparacao,
-   9 itens) nao esticar a pagina inteira. O titulo do bloco fica fora
-   deste container (sempre visivel); so os codigos dentro dele rolam,
-   como uma lista de selecao com barra de rolagem. */
-.selecao-hierarquica-itens {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  max-height: 15.5rem;
-  overflow-y: auto;
-  padding-right: 0.25rem;
-}
-
-/* Cores dos 3 blocos (🔵🟢🔴 pedido do responsavel pelo produto em
-   2026-08-04) como um filete lateral ao lado do titulo em negrito. */
-.bloco-operacional {
-  border-left-width: 6px;
-  border-left-style: solid;
-  padding-left: 0.5rem;
-}
-
-.bloco-operacional-apoio_preparacao {
-  border-left-color: #1e88e5;
-}
-
-.bloco-operacional-execucao {
-  border-left-color: #2e7d32;
-}
-
-.bloco-operacional-interrupcoes {
-  border-left-color: #c62828;
+/* Navegacao dos codigos EE (ADR-0050, passou por ADR-0055/0058 antes de
+   virar isto - ver ADR-0059): <select> nativo com um <optgroup> por
+   bloco (Apoio e Preparacao / Execucao / Interrupcoes-Esperas /
+   Interrupcoes-Pausas) - o SO cuida da propria lista/rolagem do
+   seletor, sem precisar de container/altura customizados aqui. Reusa
+   `.seletor-motivo` (mesmo estilo dos outros <select> do app), so
+   garante largura cheia. */
+.selecao-hierarquica-select {
+  width: 100%;
 }
 
 .bloco-localizacao,

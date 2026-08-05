@@ -79,6 +79,20 @@ descrever de volta pro responsável do produto o que foi construído
 antes de considerar a tarefa encerrada, principalmente quando não há
 como o agente testar visualmente no navegador.
 
+**Continuação (mesmo dia, mesma tela, mais 2 rodadas)**: "todos os
+blocos sempre visíveis" (ADR-0055) esticou a página inteira com 23
+códigos como botões - corrigido com rolagem própria por bloco
+(ADR-0058) - até o responsável do produto mostrar um print de uma lista
+suspensa nativa e pedir pra voltar a esse formato, agora com
+`<optgroup>` por bloco (ADR-0059). Quatro versões da mesma tela (0050 →
+0055 → 0058 → 0059) no mesmo dia. **Lição reforçada**: quando o agente
+não consegue testar visualmente e a especificação é só texto, o custo
+de iterar em cima de UI é alto - vale considerar perguntar por um
+mockup/desenho/print de referência (como o responsável do produto
+acabou fazendo na 3ª rodada) **antes** da primeira implementação, não só
+depois de errar - principalmente pra componentes de seleção/navegação
+que o usuário vai usar repetidamente.
+
 ### 2026-08-05 | Calendário de dias com jornada removido no dia seguinte de ser criado
 
 **Causa raiz**: ADR-0052 introduziu um calendário (`streamlit-calendar-input`,

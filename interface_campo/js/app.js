@@ -87,70 +87,76 @@ let idIntervaloCapturaPeriodica = null;
 const VALOR_INICIAR_ATIVIDADE = "__ATIVIDADE__";
 const VALOR_ATENDIMENTO_FALHA = "__FALHA__";
 
-// Navegacao em blocos (ADR-0050, ajustada em 2026-08-05 - pedido do
-// responsavel pelo produto: "nao separado nesses blocos... um Bloco em
-// negrito e as opcoes abaixo, outro bloco em negrito e as opcoes abaixo,
-// tudo no mesmo Drill", ou seja os 3 blocos operacionais (Apoio e
-// Preparacao / Execucao / Interrupcoes) aparecem TODOS de uma vez, cada
-// um com o titulo em negrito seguido direto dos seus codigos - nao um
-// acordeao onde escolher um bloco esconde os outros dois. Reduz a carga
-// cognitiva por AGRUPAMENTO visual (23 codigos organizados em secoes
-// rotuladas), nao por esconder opcao nenhuma atras de um toque extra.
+// Navegacao em blocos (ADR-0050, passou por 2 ajustes de apresentacao no
+// mesmo dia - ADR-0055 "blocos sempre visiveis" e ADR-0058 "rolagem
+// propria por bloco" - ate o responsavel pelo produto pedir de volta o
+// formato de lista suspensa nativa (`<select>`), so que agora separada
+// por optgroup por bloco em vez do <select> unico sem separacao de
+// antes do ADR-0050. Ver ADR-0059: um <select>/<optgroup> nativo da
+// plataforma resolve de vez o problema de "lista comprida" que motivou
+// o ADR-0058 - o SO cuida da propria rolagem/UI do seletor, sem
+// container nenhum pra dimensionar aqui.
 //
-// Segundo ajuste no mesmo dia (ADR-0058): com todos os blocos sempre
-// visiveis, o bloco "Apoio e Preparacao" (9 codigos) esticava a pagina
-// inteira - cada bloco agora tem sua propria lista de itens dentro de um
-// container com altura maxima e rolagem propria
-// (`.selecao-hierarquica-itens`, `overflow-y: auto`), igual uma barra de
-// rolagem interna de selecao - o titulo do bloco fica sempre visivel
-// (fora da area que rola), so os codigos dentro dele rolam.
+// Interrupcoes tem 2 subgrupos (Esperas/Pausas) - <optgroup> nativo nao
+// suporta aninhamento, entao cada subgrupo vira seu proprio optgroup de
+// primeiro nivel (rotulo "🔴 Interrupções - Esperas"/"- Pausas") em vez
+// de aninhado dentro de um optgroup "Interrupcoes" so.
 //
 // `motivosDisponiveis` e a mesma lista que os seletores antigos usavam
 // (cada contexto - jornada solta vs pausa aninhada numa atividade -
 // naturalmente so oferece um subconjunto, decidido pelo motor de
-// dominio, nunca por este componente). Tocar num codigo folha dispara
+// dominio, nunca por este componente). Selecionar um codigo dispara
 // `aoEscolherCodigo` diretamente (sem precisar de um botao "Iniciar"
-// separado depois).
+// separado depois) - o proprio `select.value` volta pro placeholder
+// logo em seguida (antes de aoEscolherCodigo rodar, que e assincrono),
+// pra: (1) o seletor nao ficar "preso" mostrando o ultimo codigo
+// escolhido, e (2) se a transicao falhar (GPS obrigatorio sem sinal,
+// que NAO re-renderiza a tela - ver executarComGpsObrigatorio), tentar
+// o mesmo codigo de novo ainda dispara um evento "change" de verdade
+// (valor mudou de "" pra um codigo), em vez de ficar sem efeito porque o
+// <select> ja estava com esse valor selecionado.
 function renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEscolherCodigo) {
   const blocos = EstruturaCodigos.agruparCodigosDisponiveis(motivosDisponiveis, itensExtrasPorBloco);
-  const container = document.createElement("div");
-  container.className = "selecao-hierarquica";
+  const select = document.createElement("select");
+  select.className = "seletor-motivo selecao-hierarquica-select";
 
-  const renderizarItens = (destino, itens) => {
+  const opcaoVazia = document.createElement("option");
+  opcaoVazia.value = "";
+  opcaoVazia.textContent = "Selecione...";
+  select.appendChild(opcaoVazia);
+
+  const adicionarOpcoes = (destino, itens) => {
     for (const item of itens) {
-      destino.appendChild(
-        botao(item.rotulo ?? `${item.codigo} - ${item.descricao}`, () => aoEscolherCodigo(item.codigo))
-      );
+      const opcao = document.createElement("option");
+      opcao.value = item.codigo;
+      opcao.textContent = item.rotulo ?? `${item.codigo} - ${item.descricao}`;
+      destino.appendChild(opcao);
     }
   };
 
   for (const bloco of blocos) {
-    const titulo = document.createElement("p");
-    titulo.className = `selecao-hierarquica-titulo bloco-operacional bloco-operacional-${bloco.id}`;
-    const forteTitulo = document.createElement("strong");
-    forteTitulo.textContent = `${bloco.emoji} ${bloco.titulo}`;
-    titulo.appendChild(forteTitulo);
-    container.appendChild(titulo);
-
-    const listaBloco = document.createElement("div");
-    listaBloco.className = "selecao-hierarquica-itens";
-
     if (bloco.subgrupos) {
       for (const subgrupo of bloco.subgrupos) {
-        const tituloSubgrupo = document.createElement("p");
-        tituloSubgrupo.className = "selecao-hierarquica-subgrupo";
-        tituloSubgrupo.textContent = subgrupo.titulo;
-        listaBloco.appendChild(tituloSubgrupo);
-        renderizarItens(listaBloco, subgrupo.itens);
+        const grupo = document.createElement("optgroup");
+        grupo.label = `${bloco.emoji} ${bloco.titulo} - ${subgrupo.titulo}`;
+        adicionarOpcoes(grupo, subgrupo.itens);
+        select.appendChild(grupo);
       }
     } else {
-      renderizarItens(listaBloco, bloco.itens);
+      const grupo = document.createElement("optgroup");
+      grupo.label = `${bloco.emoji} ${bloco.titulo}`;
+      adicionarOpcoes(grupo, bloco.itens);
+      select.appendChild(grupo);
     }
-
-    container.appendChild(listaBloco);
   }
 
-  return container;
+  select.addEventListener("change", () => {
+    const codigo = select.value;
+    select.value = "";
+    if (codigo) aoEscolherCodigo(codigo);
+  });
+
+  return select;
 }
 
 // Busca o tipo em ambas as listas (ADR-0030 fez motivosPausa tambem ter
