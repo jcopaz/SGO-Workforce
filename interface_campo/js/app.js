@@ -77,18 +77,6 @@ let mostrarTransferenciaFalha = false;
 // tanto "Iniciar jornada" quanto a recuperacao de jornada aberta em
 // iniciar(), sem duplicar a logica em cada botao.
 let idIntervaloCapturaPeriodica = null;
-// Estado da navegacao em blocos (ADR-0050, pedido do responsavel pelo
-// produto em 2026-08-04): null = mostrando so os 3 blocos operacionais
-// (Apoio e Preparacao / Execucao / Interrupcoes); um id de bloco = esse
-// bloco expandido, mostrando seus codigos. Compartilhado entre a selecao
-// de acao principal (jornada aberta, sem nada em andamento) e a selecao
-// de pausa aninhada (dentro de uma atividade) porque as duas telas nunca
-// aparecem ao mesmo tempo. Resetado a cada tela renderizada de novo do
-// zero (ver renderSelecaoHierarquica) - se uma transicao falhar (GPS
-// obrigatorio sem sinal), o colaborador so precisa re-expandir o bloco,
-// nao perde nada alem de um toque.
-let blocoExpandido = null;
-
 // Valores sentinela (nunca colidem com um codigo EE real, que e sempre
 // "EE" + 2 digitos) para os dois pontos de entrada especiais do bloco
 // Execucao - nao sao codigos soltos no motor de dominio, sao o que
@@ -99,80 +87,54 @@ let blocoExpandido = null;
 const VALOR_INICIAR_ATIVIDADE = "__ATIVIDADE__";
 const VALOR_ATENDIMENTO_FALHA = "__FALHA__";
 
-// Navegacao em blocos (ADR-0050): substitui os antigos <select> planos
-// de motivo/acao por 3 blocos operacionais, cada um expandindo pra
-// mostrar so os codigos daquele bloco - reduz a carga cognitiva de
-// escolher entre ate 23 codigos numa lista so. `motivosDisponiveis` e a
-// mesma lista que os seletores antigos usavam (cada contexto - jornada
-// solta vs pausa aninhada numa atividade - naturalmente so oferece um
-// subconjunto, decidido pelo motor de dominio, nunca por este
-// componente). Tocar num codigo folha dispara `aoEscolherCodigo`
-// diretamente (sem precisar de um botao "Iniciar" separado depois).
+// Navegacao em blocos (ADR-0050, ajustada em 2026-08-05 - pedido do
+// responsavel pelo produto: "nao separado nesses blocos... um Bloco em
+// negrito e as opcoes abaixo, outro bloco em negrito e as opcoes abaixo,
+// tudo no mesmo Drill", ou seja os 3 blocos operacionais (Apoio e
+// Preparacao / Execucao / Interrupcoes) aparecem TODOS de uma vez, cada
+// um com o titulo em negrito seguido direto dos seus codigos - nao um
+// acordeao onde escolher um bloco esconde os outros dois. Reduz a carga
+// cognitiva por AGRUPAMENTO visual (23 codigos organizados em secoes
+// rotuladas), nao por esconder opcao nenhuma atras de um toque extra.
+// `motivosDisponiveis` e a mesma lista que os seletores antigos usavam
+// (cada contexto - jornada solta vs pausa aninhada numa atividade -
+// naturalmente so oferece um subconjunto, decidido pelo motor de
+// dominio, nunca por este componente). Tocar num codigo folha dispara
+// `aoEscolherCodigo` diretamente (sem precisar de um botao "Iniciar"
+// separado depois).
 function renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEscolherCodigo) {
   const blocos = EstruturaCodigos.agruparCodigosDisponiveis(motivosDisponiveis, itensExtrasPorBloco);
   const container = document.createElement("div");
   container.className = "selecao-hierarquica";
 
-  if (blocoExpandido == null) {
-    for (const bloco of blocos) {
-      const quantidade = bloco.itens
-        ? bloco.itens.length
-        : bloco.subgrupos.reduce((soma, subgrupo) => soma + subgrupo.itens.length, 0);
-      const botaoBloco = botao(`${bloco.emoji} ${bloco.titulo} (${quantidade})`, () => {
-        blocoExpandido = bloco.id;
-        render();
-      });
-      botaoBloco.classList.add("bloco-operacional", `bloco-operacional-${bloco.id}`);
-      container.appendChild(botaoBloco);
-    }
-    return container;
-  }
-
-  const bloco = blocos.find((b) => b.id === blocoExpandido);
-  if (!bloco) {
-    // O bloco expandido nao tem nenhum codigo disponivel neste contexto
-    // (ex.: "Execucao" nao existe na selecao de pausa aninhada) - volta
-    // pra lista de blocos em vez de mostrar uma tela vazia.
-    blocoExpandido = null;
-    return renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEscolherCodigo);
-  }
-
-  const titulo = document.createElement("p");
-  titulo.className = "selecao-hierarquica-titulo";
-  const forteTitulo = document.createElement("strong");
-  forteTitulo.textContent = `${bloco.emoji} ${bloco.titulo}`;
-  titulo.appendChild(forteTitulo);
-  container.appendChild(titulo);
-
   const renderizarItens = (itens) => {
     for (const item of itens) {
       container.appendChild(
-        botao(item.rotulo ?? `${item.codigo} - ${item.descricao}`, () => {
-          blocoExpandido = null;
-          aoEscolherCodigo(item.codigo);
-        })
+        botao(item.rotulo ?? `${item.codigo} - ${item.descricao}`, () => aoEscolherCodigo(item.codigo))
       );
     }
   };
 
-  if (bloco.subgrupos) {
-    for (const subgrupo of bloco.subgrupos) {
-      const tituloSubgrupo = document.createElement("p");
-      tituloSubgrupo.className = "selecao-hierarquica-subgrupo";
-      tituloSubgrupo.textContent = subgrupo.titulo;
-      container.appendChild(tituloSubgrupo);
-      renderizarItens(subgrupo.itens);
-    }
-  } else {
-    renderizarItens(bloco.itens);
-  }
+  for (const bloco of blocos) {
+    const titulo = document.createElement("p");
+    titulo.className = `selecao-hierarquica-titulo bloco-operacional bloco-operacional-${bloco.id}`;
+    const forteTitulo = document.createElement("strong");
+    forteTitulo.textContent = `${bloco.emoji} ${bloco.titulo}`;
+    titulo.appendChild(forteTitulo);
+    container.appendChild(titulo);
 
-  container.appendChild(
-    botao("← Voltar", () => {
-      blocoExpandido = null;
-      render();
-    })
-  );
+    if (bloco.subgrupos) {
+      for (const subgrupo of bloco.subgrupos) {
+        const tituloSubgrupo = document.createElement("p");
+        tituloSubgrupo.className = "selecao-hierarquica-subgrupo";
+        tituloSubgrupo.textContent = subgrupo.titulo;
+        container.appendChild(tituloSubgrupo);
+        renderizarItens(subgrupo.itens);
+      }
+    } else {
+      renderizarItens(bloco.itens);
+    }
+  }
 
   return container;
 }

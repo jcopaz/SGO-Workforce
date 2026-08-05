@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-08-05] Blocos de códigos EE sempre visíveis, sem acordeão (ADR-0055)
+
+Ver `docs/82_ADR_0055_BLOCOS_EE_SEMPRE_VISIVEIS_SEM_ACORDEAO.md`. O
+ADR-0050 tinha implementado um acordeão de 2 telas (escolher bloco →
+ver códigos daquele bloco, escondendo os outros); o pedido original era
+os 3 blocos aparecerem todos juntos, cada um com título em negrito
+seguido direto da lista de códigos. Corrigido em
+`interface_campo/js/app.js::renderSelecaoHierarquica` - sem estado de
+navegação, sem botão "← Voltar". `CACHE_VERSAO` v21.
+
 ## [2026-08-05] Qualidade de GPS wireada, foto de falha no painel, expurgo de pulsos antigos (ADR-0054)
 
 Ver `docs/81_ADR_0054_QUALIDADE_GPS_FOTO_FALHA_E_EXPURGO_PULSOS.md` para a
