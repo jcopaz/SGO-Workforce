@@ -1,0 +1,11 @@
+name = "sgo-workforce"
+compatibility_date = "2026-08-05"
+
+# Interface de campo (PWA) publicada como Worker de assets estaticos -
+# ver ADR-0056. Servido direto de interface_campo/, sem build nenhum
+# (o app ja e HTML/CSS/JS puro, sem bundler). Migrado do Netlify por causa
+# de um bug generalizado de billing do Netlify ("operational credits")
+# travando deploys de producao em 2026-08-05, sem workaround conhecido
+# alem de abrir chamado de suporte.
+[assets]
+directory = "./interface_campo"
