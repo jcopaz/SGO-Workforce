@@ -1,5 +1,14 @@
 # Changelog
 
+## [2026-08-05] Lista de códigos EE de cada bloco com rolagem própria (ADR-0058)
+
+Ver `docs/86_ADR_0058_LISTA_DE_CODIGOS_EE_COM_ROLAGEM_PROPRIA.md`. Com
+os 3 blocos sempre visíveis (ADR-0055), o bloco "Apoio e Preparação" (9
+códigos) esticava a página inteira. Cada bloco agora tem sua lista de
+itens num container próprio com altura máxima e rolagem interna - o
+título do bloco continua sempre visível, só os códigos dentro dele
+rolam. `CACHE_VERSAO` v22.
+
 ## [2026-08-05] Lições adotadas da leitura completa do Gestão_OS (ADR-0057)
 
 Ver `docs/85_ADR_0057_LICOES_ADOTADAS_DO_GESTAO_OS.md`. Leitura completa

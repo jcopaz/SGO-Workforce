@@ -292,6 +292,20 @@ body {
   letter-spacing: 0.03em;
 }
 
+/* Lista de codigos de UM bloco (ADR-0058) - altura maxima com rolagem
+   propria, pra um bloco com muitos codigos (ex.: Apoio e Preparacao,
+   9 itens) nao esticar a pagina inteira. O titulo do bloco fica fora
+   deste container (sempre visivel); so os codigos dentro dele rolam,
+   como uma lista de selecao com barra de rolagem. */
+.selecao-hierarquica-itens {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 15.5rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
 /* Cores dos 3 blocos (🔵🟢🔴 pedido do responsavel pelo produto em
    2026-08-04) como um filete lateral ao lado do titulo em negrito. */
 .bloco-operacional {

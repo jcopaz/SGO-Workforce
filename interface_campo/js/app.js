@@ -96,6 +96,15 @@ const VALOR_ATENDIMENTO_FALHA = "__FALHA__";
 // acordeao onde escolher um bloco esconde os outros dois. Reduz a carga
 // cognitiva por AGRUPAMENTO visual (23 codigos organizados em secoes
 // rotuladas), nao por esconder opcao nenhuma atras de um toque extra.
+//
+// Segundo ajuste no mesmo dia (ADR-0058): com todos os blocos sempre
+// visiveis, o bloco "Apoio e Preparacao" (9 codigos) esticava a pagina
+// inteira - cada bloco agora tem sua propria lista de itens dentro de um
+// container com altura maxima e rolagem propria
+// (`.selecao-hierarquica-itens`, `overflow-y: auto`), igual uma barra de
+// rolagem interna de selecao - o titulo do bloco fica sempre visivel
+// (fora da area que rola), so os codigos dentro dele rolam.
+//
 // `motivosDisponiveis` e a mesma lista que os seletores antigos usavam
 // (cada contexto - jornada solta vs pausa aninhada numa atividade -
 // naturalmente so oferece um subconjunto, decidido pelo motor de
@@ -107,9 +116,9 @@ function renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEsc
   const container = document.createElement("div");
   container.className = "selecao-hierarquica";
 
-  const renderizarItens = (itens) => {
+  const renderizarItens = (destino, itens) => {
     for (const item of itens) {
-      container.appendChild(
+      destino.appendChild(
         botao(item.rotulo ?? `${item.codigo} - ${item.descricao}`, () => aoEscolherCodigo(item.codigo))
       );
     }
@@ -123,17 +132,22 @@ function renderSelecaoHierarquica(motivosDisponiveis, itensExtrasPorBloco, aoEsc
     titulo.appendChild(forteTitulo);
     container.appendChild(titulo);
 
+    const listaBloco = document.createElement("div");
+    listaBloco.className = "selecao-hierarquica-itens";
+
     if (bloco.subgrupos) {
       for (const subgrupo of bloco.subgrupos) {
         const tituloSubgrupo = document.createElement("p");
         tituloSubgrupo.className = "selecao-hierarquica-subgrupo";
         tituloSubgrupo.textContent = subgrupo.titulo;
-        container.appendChild(tituloSubgrupo);
-        renderizarItens(subgrupo.itens);
+        listaBloco.appendChild(tituloSubgrupo);
+        renderizarItens(listaBloco, subgrupo.itens);
       }
     } else {
-      renderizarItens(bloco.itens);
+      renderizarItens(listaBloco, bloco.itens);
     }
+
+    container.appendChild(listaBloco);
   }
 
   return container;
