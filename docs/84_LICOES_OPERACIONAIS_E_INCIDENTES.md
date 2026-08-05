@@ -171,6 +171,30 @@ puro sem build facilitou a migração ser rápida - um lembrete de que
 manter dependência mínima de plataforma paga dividendo quando precisa
 trocar de provedor às pressas.
 
+### 2026-08-05 | "Só Pausa pode aninhar numa atividade" parecia regra de motor, era só a lista da tela
+
+**Causa raiz**: a tela só oferecia os 5 códigos `tipo_registro="pausa"`
+pra iniciar durante uma atividade/atendimento de falha - parecia
+reflexo de uma regra de negócio (só pausa pode nascer dentro de uma
+atividade), mas era só escolha de apresentação desde o ADR-0050. O
+responsável do produto pediu pra oferecer os outros blocos também.
+
+**Correção**: antes de desenhar qualquer mudança de motor, li
+`engine.py`/`motorJornada.js::iniciarPausa` e `calculo.py`/`calculo.js`
+diretamente - `tipo_registro` nunca é lido em nenhum dos dois, e a
+consolidação de HH já classifica pausa por `catalogo.obter(pausa.motivo)`
+(o código específico), nunca por "é do tipo pausa". A mudança pedida
+não exigia tocar no motor - só ampliar a lista de códigos oferecida na
+tela (`interface_campo/js/app.js`). Ver ADR-0060.
+
+**Lição**: antes de assumir que atender um pedido exige mudar o motor de
+domínio (mudança de maior risco, dois lugares - Python e JS - pra
+manter sincronizados), ler o código real da regra suspeita primeiro.
+Um campo de catálogo com nome que *sugere* ser uma restrição de negócio
+(`tipo_registro`) pode ser só metadado de apresentação - só confirmar
+lendo onde ele é (ou não) consultado no motor/consolidação evita um
+refactor bem maior que o necessário.
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem

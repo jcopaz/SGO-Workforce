@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-08-05] Pausa aninhada aceita qualquer código solto, não só os 5 de "pausa" (ADR-0060)
+
+Ver `docs/88_ADR_0060_PAUSA_ANINHADA_ACEITA_QUALQUER_CODIGO_SOLTO.md`.
+Mudança de regra de negócio confirmada explicitamente com o responsável
+do produto: durante uma atividade/atendimento de falha em andamento, o
+seletor "Iniciar pausa" (agora "Iniciar pausa ou evento:") passa a
+oferecer todos os 20 códigos soltos (pausa + evento_secundário), não só
+os 5 de `tipo_registro="pausa"`. Investigação prévia confirmou que o
+motor de domínio (Python e JS) e a consolidação de HH já classificavam
+por código específico, nunca por `tipo_registro` - nenhuma mudança de
+engine foi necessária, só a lista oferecida na tela. Status "Em pausa."
+virou código-consciente. `CACHE_VERSAO` v24.
+
 ## [2026-08-05] Seleção de códigos EE volta a ser `<select>` nativo, agora com `<optgroup>` por bloco (ADR-0059)
 
 Ver `docs/87_ADR_0059_SELECAO_DE_CODIGOS_EE_VOLTA_A_SER_SELECT_NATIVO_COM_OPTGROUP.md`.

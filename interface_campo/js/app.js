@@ -765,7 +765,10 @@ function render() {
   const eventoSecundario = motor._eventoSecundarioAtivo;
 
   if (pausa) {
-    els.status.textContent = "Em pausa.";
+    // Codigo-aware desde o ADR-0060 - a pausa aninhada aceita qualquer
+    // codigo dos 4 blocos agora, "Em pausa." generico ficaria enganoso
+    // pra um deslocamento/espera nao literal de "pausa" (ver mais abaixo).
+    els.status.textContent = `${descricaoParaCodigo(pausa.motivo) ?? "Pausa"} em andamento.`;
     els.botoes.appendChild(
       botao(
         "Finalizar pausa",
@@ -783,10 +786,24 @@ function render() {
     }
     const rotuloPausa = document.createElement("p");
     rotuloPausa.className = "selecao-hierarquica-contexto";
-    rotuloPausa.textContent = "Iniciar pausa:";
+    rotuloPausa.textContent = "Iniciar pausa ou evento:";
     els.botoes.appendChild(rotuloPausa);
+    // ADR-0060 (pedido do responsavel do produto): durante atividade ou
+    // atendimento de falha em andamento, o unico mecanismo do motor que
+    // permite um sub-evento aninhado e Pausa (EventoSecundario exige
+    // NENHUMA atividade principal ativa - EventoSecundarioExigeNenhumaAtividadePrincipalAtivaError,
+    // regra de ouro 4, nao muda). Antes so oferecia os 5 codigos
+    // tipo_registro=pausa; agora oferece TODOS os codigos soltos (pausa +
+    // evento_secundario, os mesmos ["blocos"] do seletor de jornada
+    // solta) chamando sempre motor.iniciarPausa - o HH ja descontava
+    // (calculo.duracaoAtividadeLiquida subtrai toda pausa.pausas, sem
+    // filtrar por motivo) e ja classificava por catalogo.obter(motivo)
+    // (nunca por tipo_registro), entao nenhuma mudanca no motor de
+    // dominio (JS nem Python) ou em consolidacao foi necessaria - so a
+    // lista oferecida na tela. EE17/EE21 (iniciam uma NOVA atividade) e
+    // EE23 (so desfecho de encerramento) continuam de fora.
     els.botoes.appendChild(
-      renderSelecaoHierarquica(motivosPausa, {}, (codigo) =>
+      renderSelecaoHierarquica([...motivosPausa, ...eventosSecundarios], {}, (codigo) =>
         executarComGpsObrigatorio(() => motor.iniciarPausa(RelogioSimulado.agora(), codigo))
       )
     );
