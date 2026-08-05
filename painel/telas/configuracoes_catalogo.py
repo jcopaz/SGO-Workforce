@@ -156,6 +156,26 @@ with st.expander("Expurgo de pulsos GPS antigos", expanded=False):
         step=1,
         key="painel_expurgo_dias",
     )
+
+    # dry_run (ADR-0057, licao trazida do app irmao Gestao_OS): a API
+    # recusa apagar de verdade sem `dry_run=false` explicito - o botao de
+    # pre-visualizar chama sem esse parametro (fica no padrao seguro),
+    # nunca apaga nada, so mostra quantos pulsos seriam afetados.
+    if st.button("🔍 Pré-visualizar (não apaga nada)", key="painel_expurgo_preview_botao"):
+        try:
+            resposta_preview = requests.post(
+                f"{url_base}/pulsos/expurgar",
+                params={"dias": int(dias_retencao)},
+                headers=headers,
+                timeout=60,
+            )
+            resposta_preview.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            st.error(f"Não foi possível consultar a pré-visualização: {exc}")
+        else:
+            quantidade_prevista = resposta_preview.json().get("seriam_apagados", 0)
+            st.info(f"{quantidade_prevista} pulso(s) seriam apagados com esse número de dias.")
+
     confirmar_expurgo = st.checkbox(
         f"Confirmo que quero apagar permanentemente pulsos com mais de {int(dias_retencao)} dias.",
         key="painel_expurgo_confirmado",
@@ -166,7 +186,7 @@ with st.expander("Expurgo de pulsos GPS antigos", expanded=False):
         try:
             resposta_expurgo = requests.post(
                 f"{url_base}/pulsos/expurgar",
-                params={"dias": int(dias_retencao)},
+                params={"dias": int(dias_retencao), "dry_run": False},
                 headers=headers,
                 timeout=60,
             )

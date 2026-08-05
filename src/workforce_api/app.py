@@ -222,13 +222,20 @@ def listar_pulsos(
 @app.post("/pulsos/expurgar", dependencies=[Depends(exigir_token)])
 def expurgar_pulsos_antigos(
     dias: int = 90,
+    dry_run: bool = True,
     repositorio: RepositorioPulsosGpsPostgres = Depends(obter_repositorio_pulsos),
-) -> Dict[str, int]:
+) -> Dict[str, Any]:
     """Apaga permanentemente pulsos com mais de `dias` dias - mecanismo de
     retencao decidido no ADR-0043 (90 dias, o padrao aqui), implementado
     no ADR-0054. Acao manual (o painel expõe um botao em
     "Configuracoes" com confirmacao explicita) - nao ha agendamento
     automatico neste incremento (sem infraestrutura de cron no piloto).
+
+    `dry_run=True` por padrao (ADR-0057, licao trazida do app irmao
+    Gestao_OS: endpoint destrutivo default pra modo seguro) - so conta
+    quantos pulsos seriam apagados, nao apaga nada. So apaga de verdade
+    com `dry_run=false` explicito, o que o botao do painel ja faz depois
+    da confirmacao do usuario.
 
     `dias < 1` e recusado (400) - protege contra um erro de digitacao
     (0 ou negativo) apagando o historico inteiro por engano. Mesmo token
@@ -236,8 +243,11 @@ def expurgar_pulsos_antigos(
     if dias < 1:
         raise HTTPException(status_code=400, detail="dias precisa ser pelo menos 1.")
     data_limite = datetime.now(timezone.utc) - timedelta(days=dias)
+    if dry_run:
+        seriam_apagados = repositorio.contar_pulsos_anteriores_a(data_limite)
+        return {"dry_run": True, "seriam_apagados": seriam_apagados}
     apagados = repositorio.apagar_pulsos_anteriores_a(data_limite)
-    return {"apagados": apagados}
+    return {"dry_run": False, "apagados": apagados}
 
 
 @app.get("/catalogo", dependencies=[Depends(exigir_token)])

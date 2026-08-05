@@ -179,6 +179,37 @@ def test_linha_corrompida_nao_apaga_as_demais(tmp_path):
 
 
 # ----------------------------------------------------------------------
+# Contagem para dry_run (ADR-0057) - so conta, nunca apaga.
+# ----------------------------------------------------------------------
+def test_contar_pulsos_anteriores_a_conta_sem_apagar(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    jornada_id = uuid4()
+    antigo = _pulso(jornada_id, 0)  # 08:00:00
+    novo = _pulso(jornada_id, 600)  # 08:10:00
+    repo.gravar_lote([antigo, novo])
+
+    quantidade = repo.contar_pulsos_anteriores_a(datetime(2026, 1, 1, 8, 5, tzinfo=timezone.utc))
+
+    assert quantidade == 1
+    assert repo.contar_pulsos(jornada_id) == 2  # nada foi apagado
+
+
+def test_contar_pulsos_anteriores_a_soma_entre_varias_jornadas(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    jornada_a, jornada_b = uuid4(), uuid4()
+    repo.gravar_lote([_pulso(jornada_a, 0), _pulso(jornada_b, 0)])
+
+    quantidade = repo.contar_pulsos_anteriores_a(datetime(2026, 1, 1, 8, 5, tzinfo=timezone.utc))
+
+    assert quantidade == 2
+
+
+def test_contar_pulsos_anteriores_a_sem_jornada_nenhuma_devolve_zero(tmp_path):
+    repo = RepositorioPulsosGpsArquivo(tmp_path)
+    assert repo.contar_pulsos_anteriores_a(datetime(2030, 1, 1, tzinfo=timezone.utc)) == 0
+
+
+# ----------------------------------------------------------------------
 # Expurgo por retencao (ADR-0043 decidiu 90 dias, ADR-0054 implementa)
 # ----------------------------------------------------------------------
 def test_apagar_pulsos_anteriores_a_remove_so_os_antigos(tmp_path):

@@ -15,12 +15,30 @@ Projeto Supabase: "Repositorio de Evidencias do SGO", bucket dedicado
 from __future__ import annotations
 
 import os
+import re
+import unicodedata
 from uuid import uuid4
 
 import requests
 
 _BUCKET_PADRAO = "sgo-workforce-piloto"
 _TIMEOUT_SEGUNDOS = 30
+
+
+def _sanear_nome_arquivo(nome_arquivo: str) -> str:
+    """Remove acentos e qualquer caractere fora de `[A-Za-z0-9._-]` do
+    nome do arquivo antes de virar parte do caminho no Supabase Storage.
+
+    Bug real documentado no app irmao (Gestao_OS, mesma integracao
+    Supabase Storage): um nome de arquivo acentuado (comum em foto salva
+    automaticamente pelo celular ou renomeada por um colaborador) faz o
+    Supabase Storage recusar o upload com HTTP 400 - o `\\w` do regex
+    Python e Unicode-aware por padrao e deixaria o acento passar sem
+    normalizar antes. NFKD separa a letra do acento; codificar em ASCII
+    com `errors="ignore"` descarta só o acento, mantendo a letra."""
+    sem_acento = unicodedata.normalize("NFKD", nome_arquivo).encode("ascii", "ignore").decode("ascii")
+    saneado = re.sub(r"[^A-Za-z0-9._-]", "_", sem_acento)
+    return saneado or "foto.jpg"
 
 
 class SupabaseStorageNaoConfiguradoError(Exception):
@@ -48,7 +66,7 @@ def enviar_foto(conteudo: bytes, nome_arquivo: str, content_type: str) -> str:
     permanente do objeto (nao uma URL assinada - essa expira e e gerada
     sob demanda por `gerar_url_assinada`)."""
     url, chave, bucket = _configuracao()
-    caminho = f"{uuid4()}-{nome_arquivo}"
+    caminho = f"{uuid4()}-{_sanear_nome_arquivo(nome_arquivo)}"
     resposta = requests.post(
         f"{url}/storage/v1/object/{bucket}/{caminho}",
         headers={

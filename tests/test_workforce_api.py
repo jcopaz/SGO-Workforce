@@ -309,35 +309,51 @@ def test_pulsos_expurgar_dias_menor_que_1_e_400(cliente_pulsos):
     assert resposta.status_code == 400
 
 
-def test_pulsos_expurgar_apaga_apenas_os_antigos(cliente_pulsos):
+def _postar_pulso_com_timestamp(cliente_pulsos, jornada_id, timestamp_dispositivo, headers):
+    dado = pulso_gps_para_dict(
+        PulsoGps(
+            jornada_id=jornada_id,
+            colaborador_matricula="12345",
+            latitude=0.0,
+            longitude=0.0,
+            precisao_metros=10.0,
+            timestamp_dispositivo=timestamp_dispositivo,
+        )
+    )
+    cliente_pulsos.post("/pulsos", json=[dado], headers=headers)
+    return dado
+
+
+def test_pulsos_expurgar_dry_run_e_o_padrao_nao_apaga_nada(cliente_pulsos):
+    # ADR-0057 (licao trazida do app irmao Gestao_OS): endpoint
+    # destrutivo tem que ser seguro por padrao - sem dry_run=false
+    # explicito, nao apaga nada, so conta.
     headers = {"X-Sync-Token": TOKEN_TESTE}
     jornada_id = uuid4()
-    antigo = pulso_gps_para_dict(
-        PulsoGps(
-            jornada_id=jornada_id,
-            colaborador_matricula="12345",
-            latitude=0.0,
-            longitude=0.0,
-            precisao_metros=10.0,
-            timestamp_dispositivo=datetime(2000, 1, 1, tzinfo=timezone.utc),
-        )
-    )
-    recente = pulso_gps_para_dict(
-        PulsoGps(
-            jornada_id=jornada_id,
-            colaborador_matricula="12345",
-            latitude=0.0,
-            longitude=0.0,
-            precisao_metros=10.0,
-            timestamp_dispositivo=datetime.now(timezone.utc),
-        )
-    )
-    cliente_pulsos.post("/pulsos", json=[antigo, recente], headers=headers)
+    _postar_pulso_com_timestamp(cliente_pulsos, jornada_id, datetime(2000, 1, 1, tzinfo=timezone.utc), headers)
 
     resposta = cliente_pulsos.post("/pulsos/expurgar", headers=headers)
 
     assert resposta.status_code == 200
-    assert resposta.json() == {"apagados": 1}
+    assert resposta.json() == {"dry_run": True, "seriam_apagados": 1}
+    restantes = cliente_pulsos.get(
+        "/pulsos", params={"jornada_id": str(jornada_id)}, headers=headers
+    ).json()
+    assert len(restantes) == 1  # nada foi apagado de verdade
+
+
+def test_pulsos_expurgar_dry_run_false_apaga_apenas_os_antigos(cliente_pulsos):
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    jornada_id = uuid4()
+    _postar_pulso_com_timestamp(cliente_pulsos, jornada_id, datetime(2000, 1, 1, tzinfo=timezone.utc), headers)
+    recente = _postar_pulso_com_timestamp(cliente_pulsos, jornada_id, datetime.now(timezone.utc), headers)
+
+    resposta = cliente_pulsos.post(
+        "/pulsos/expurgar", params={"dry_run": False}, headers=headers
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"dry_run": False, "apagados": 1}
     restantes = cliente_pulsos.get(
         "/pulsos", params={"jornada_id": str(jornada_id)}, headers=headers
     ).json()
@@ -350,22 +366,16 @@ def test_pulsos_expurgar_aceita_dias_customizado(cliente_pulsos):
     # mais de 90 dias (padrao).
     headers = {"X-Sync-Token": TOKEN_TESTE}
     jornada_id = uuid4()
-    ontem = pulso_gps_para_dict(
-        PulsoGps(
-            jornada_id=jornada_id,
-            colaborador_matricula="12345",
-            latitude=0.0,
-            longitude=0.0,
-            precisao_metros=10.0,
-            timestamp_dispositivo=datetime.now(timezone.utc) - timedelta(days=2),
-        )
+    _postar_pulso_com_timestamp(
+        cliente_pulsos, jornada_id, datetime.now(timezone.utc) - timedelta(days=2), headers
     )
-    cliente_pulsos.post("/pulsos", json=[ontem], headers=headers)
 
-    resposta = cliente_pulsos.post("/pulsos/expurgar", params={"dias": 1}, headers=headers)
+    resposta = cliente_pulsos.post(
+        "/pulsos/expurgar", params={"dias": 1, "dry_run": False}, headers=headers
+    )
 
     assert resposta.status_code == 200
-    assert resposta.json() == {"apagados": 1}
+    assert resposta.json() == {"dry_run": False, "apagados": 1}
 
 
 # ----------------------------------------------------------------------

@@ -110,6 +110,17 @@ class RepositorioPulsosGpsPostgres:
                 linhas = cursor.fetchall()
         return [pulso_gps_de_dict(linha[0]) for linha in linhas]
 
+    def contar_pulsos_anteriores_a(self, data_limite: datetime) -> int:
+        """Conta (sem apagar) quantos pulsos `apagar_pulsos_anteriores_a`
+        apagaria com a mesma `data_limite` - usado pelo modo `dry_run` do
+        endpoint de expurgo (ADR-0057), para conferir o impacto antes de
+        confirmar uma acao permanente e irreversivel."""
+        with self._conectar() as conexao:
+            with conexao.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM pulsos_gps WHERE criado_em < %s", [data_limite])
+                (quantidade,) = cursor.fetchone()
+        return quantidade
+
     def apagar_pulsos_anteriores_a(self, data_limite: datetime) -> int:
         """Apaga permanentemente pulsos recebidos pelo servidor antes de
         `data_limite` - mecanismo de retencao de 90 dias decidido no

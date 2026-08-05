@@ -110,6 +110,18 @@ class RepositorioPulsosGpsArquivo:
     def contar_pulsos(self, jornada_id: UUID) -> int:
         return len(self.ler_pulsos(jornada_id))
 
+    def contar_pulsos_anteriores_a(self, data_limite: datetime) -> int:
+        """Conta (sem apagar) quantos pulsos `apagar_pulsos_anteriores_a`
+        apagaria com a mesma `data_limite` - mesmo papel do equivalente em
+        `RepositorioPulsosGpsPostgres`, usado pelo modo `dry_run` do
+        endpoint de expurgo (ADR-0057)."""
+        total = 0
+        for caminho in sorted(self.diretorio.glob("*.jsonl")):
+            jornada_id = UUID(caminho.stem)
+            pulsos, _ = self.ler_pulsos_com_erros(jornada_id)
+            total += sum(1 for p in pulsos if _tz_aware(p.timestamp_dispositivo) < data_limite)
+        return total
+
     def apagar_pulsos_anteriores_a(self, data_limite: datetime) -> int:
         """Mesmo papel de
         `workforce_api.repositorio_pulsos_postgres.RepositorioPulsosGpsPostgres.apagar_pulsos_anteriores_a`

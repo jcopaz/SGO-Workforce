@@ -91,9 +91,38 @@ def test_configuracoes_expurgo_confirmado_chama_endpoint_com_dias_padrao(monkeyp
     assert len(chamadas) == 1
     url_chamada, params_chamados = chamadas[0]
     assert url_chamada.endswith("/pulsos/expurgar")
-    assert params_chamados == {"dias": 90}
+    # dry_run=False explicito (ADR-0057) - sem isso a API recusaria apagar
+    # de verdade, ficando so no modo seguro de contagem.
+    assert params_chamados == {"dias": 90, "dry_run": False}
     textos = " ".join(s.value for s in at.success)
     assert "7 pulso(s) apagado(s)" in textos
+
+
+def test_configuracoes_expurgo_preview_nao_apaga_so_mostra_contagem(monkeypatch):
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: _RespostaFalsa([]))
+
+    chamadas = []
+
+    def _post_falso(url, **kwargs):
+        chamadas.append((url, kwargs.get("params")))
+        return _RespostaFalsa({"dry_run": True, "seriam_apagados": 12})
+
+    monkeypatch.setattr(requests, "post", _post_falso)
+
+    at = AppTest.from_file(_CAMINHO_CONFIGURACOES)
+    _preparar_secrets_de_teste(at)
+    at.run(timeout=30)
+
+    botao_preview = next(b for b in at.button if "Pré-visualizar" in b.label)
+    botao_preview.click().run(timeout=30)
+
+    assert not at.exception
+    assert len(chamadas) == 1
+    url_chamada, params_chamados = chamadas[0]
+    assert url_chamada.endswith("/pulsos/expurgar")
+    assert params_chamados == {"dias": 90}  # sem dry_run - fica no padrao seguro da API
+    textos = " ".join(i.value for i in at.info)
+    assert "12 pulso(s) seriam apagados" in textos
 
 
 def test_configuracoes_expurgo_erro_de_rede_mostra_st_error_sem_quebrar(monkeypatch):

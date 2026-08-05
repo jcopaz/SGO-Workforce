@@ -1,5 +1,29 @@
 # Changelog
 
+## [2026-08-05] Lições adotadas da leitura completa do Gestão_OS (ADR-0057)
+
+Ver `docs/85_ADR_0057_LICOES_ADOTADAS_DO_GESTAO_OS.md`. Leitura completa
+do app irmão (Gestão_OS) a pedido do responsável do produto, pensando em
+integração futura - três lacunas técnicas puras adotadas direto, o
+resto (pool de conexões, RBAC, geofence) registrado como recomendação
+futura sem implementar agora.
+
+### Adicionado
+- Sanitização de nome de arquivo (remove acento/símbolo) antes do
+  upload pro Supabase Storage - evita HTTP 400 em fotos com nome
+  acentuado, bug já visto e corrigido no app irmão.
+- `dry_run` seguro por padrão em `POST /pulsos/expurgar` - por padrão só
+  conta quantos pulsos seriam apagados, nunca apaga. Botão novo "🔍
+  Pré-visualizar" no painel; o botão de apagar de verdade agora envia
+  `dry_run=False` explícito.
+- `docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md` - log vivo de incidentes
+  reais (causa raiz/correção/lição), inspirado no app irmão, referenciado
+  no `CLAUDE.md` como prática contínua.
+
+### Alterado (contrato)
+- Resposta de `POST /pulsos/expurgar` mudou de `{"apagados": N}` pra
+  `{"dry_run": bool, "apagados": N}` ou `{"dry_run": true, "seriam_apagados": N}`.
+
 ## [2026-08-05] Interface de campo migrada do Netlify para Cloudflare (ADR-0056)
 
 Ver `docs/83_ADR_0056_MIGRACAO_INTERFACE_CAMPO_NETLIFY_PARA_CLOUDFLARE.md`.

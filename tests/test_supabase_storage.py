@@ -51,6 +51,36 @@ def test_enviar_foto_sucesso_devolve_caminho_com_nome_original(monkeypatch):
     assert chamadas[0]["headers"]["Authorization"] == "Bearer chave-de-teste"
 
 
+def test_enviar_foto_remove_acento_do_nome_do_arquivo(monkeypatch):
+    # Bug real ja corrigido no app irmao (Gestao_OS, mesma integracao
+    # Supabase Storage): nome de arquivo acentuado faz o Storage recusar
+    # o upload com HTTP 400. `_sanear_nome_arquivo` normaliza antes.
+    monkeypatch.setenv("SUPABASE_URL", "https://exemplo.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "chave-de-teste")
+    monkeypatch.delenv("SUPABASE_BUCKET", raising=False)
+
+    chamadas = []
+    monkeypatch.setattr(
+        supabase_storage.requests,
+        "post",
+        lambda url, **kwargs: chamadas.append(url) or _RespostaFalsa(200),
+    )
+
+    caminho = supabase_storage.enviar_foto(b"conteudo", "foto_reparo_calçada.jpg", "image/jpeg")
+
+    assert caminho.endswith("-foto_reparo_calcada.jpg")
+    assert "ç" not in caminho
+    assert " " not in caminho
+
+
+def test_sanear_nome_arquivo_substitui_espaco_e_simbolo_por_underscore():
+    assert supabase_storage._sanear_nome_arquivo("foto (1) - falha.jpg") == "foto__1__-_falha.jpg"
+
+
+def test_sanear_nome_arquivo_nome_so_de_simbolos_cai_no_fallback():
+    assert supabase_storage._sanear_nome_arquivo("🔧📷") == "foto.jpg"
+
+
 def test_enviar_foto_usa_bucket_customizado(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://exemplo.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "chave-de-teste")

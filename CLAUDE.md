@@ -26,7 +26,8 @@ Leia `docs/00_INDICE.md` e todos os documentos indicados, principalmente regras 
 - entregue a sessão completa alterada;
 - valide sintaxe, migração e caso real;
 - mantenha changelog e decisão arquitetural;
-- prefira micro-sessões e patches cirúrgicos.
+- prefira micro-sessões e patches cirúrgicos;
+- registre todo incidente real corrigido (bug relatado, interpretação errada de especificação, decisão revertida) em `docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md` (causa raiz, correção, lição) — prática adotada em 2026-08-05 a partir do app irmão Gestão_OS.
 
 ## Validações mínimas
 - `python -m py_compile` nos módulos Python;
