@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-08-05] Interface de campo migrada do Netlify para Cloudflare (ADR-0056)
+
+Ver `docs/83_ADR_0056_MIGRACAO_INTERFACE_CAMPO_NETLIFY_PARA_CLOUDFLARE.md`.
+Netlify parou de publicar deploys de produção (bug generalizado de
+billing do próprio Netlify - "operational credits" travados mesmo com
+saldo disponível, sem workaround além de chamado de suporte).
+`interface_campo/` migrado para Cloudflare Workers (assets estáticos,
+sem build) via novo `wrangler.toml` na raiz do repositório. Nova URL:
+`https://sgoworkforce.mrslogistica.workers.dev` (subdomínio da conta
+encurtado a pedido do responsável do produto antes de divulgar o link
+pros colaboradores de campo). URL antiga do Netlify continua publicada
+mas travada na v18 - sem uso a partir de agora.
+
 ## [2026-08-05] Blocos de códigos EE sempre visíveis, sem acordeão (ADR-0055)
 
 Ver `docs/82_ADR_0055_BLOCOS_EE_SEMPRE_VISIVEIS_SEM_ACORDEAO.md`. O
