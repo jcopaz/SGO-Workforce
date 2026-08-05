@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit_calendar_input import calendar_input
 from streamlit_folium import st_folium
 
 from dados import (
@@ -44,6 +45,15 @@ def _obter_secret_seguro(chave: str, default: str = "") -> str:
         return st.secrets.get(chave, default)
     except Exception:
         return default
+
+
+def _sanitizar_selectbox_state(chave: str, opcoes_validas) -> None:
+    """Evita StreamlitAPIException quando as opcoes de um selectbox mudam
+    entre reruns (ex.: trocar o colaborador muda a lista de jornadas) e o
+    valor salvo em session_state nao existe mais nas opcoes atuais - mesmo
+    padrao ja usado em painel/telas/dashboard.py."""
+    if chave in st.session_state and st.session_state[chave] not in opcoes_validas:
+        st.session_state[chave] = opcoes_validas[0] if opcoes_validas else None
 
 
 # Cache das chamadas ao backend (ADR-0049, pedido do responsavel pelo
@@ -114,9 +124,51 @@ if not jornadas:
     st.info("Nenhuma jornada encerrada no backend ainda.")
     st.stop()
 
-opcoes_jornada = {
-    f"{j.colaborador_matricula} - {formatar_data_hora(j.inicio)}": j for j in jornadas
-}
+# Colaborador e Jornada separados (pedido do responsavel pelo produto em
+# 2026-08-04) - antes era um selectbox so, misturando matricula e
+# horario de inicio no mesmo rotulo. Ao lado do Colaborador, um
+# calendario (streamlit-calendar-input - pacote pequeno/pouco maduro,
+# risco aceito explicitamente, ver ADR-0052) marca em verde os dias com
+# jornada e vermelho os sem jornada daquele colaborador - clicar num dia
+# verde restringe a lista de Jornada abaixo a esse dia. Sem clicar em
+# nada, Jornada continua mostrando todas as jornadas do colaborador (nao
+# trava a tela numa dependencia de clique).
+colaboradores_disponiveis = sorted({j.colaborador_matricula for j in jornadas})
+_sanitizar_selectbox_state("painel_mapa_colaborador_selecionado", colaboradores_disponiveis)
+
+col_colaborador, col_calendario = st.columns([1, 2])
+with col_colaborador:
+    colaborador_selecionado = st.selectbox(
+        "Colaborador",
+        options=colaboradores_disponiveis,
+        key="painel_mapa_colaborador_selecionado",
+    )
+
+jornadas_do_colaborador = sorted(
+    (j for j in jornadas if j.colaborador_matricula == colaborador_selecionado),
+    key=lambda j: j.inicio,
+    reverse=True,
+)
+datas_com_jornada = sorted({para_horario_brasil(j.inicio).date() for j in jornadas_do_colaborador})
+
+with col_calendario:
+    st.caption("Jornada - dias em verde têm apontamento registrado")
+    # Chave por colaborador: evita reaproveitar um dia clicado de outra
+    # pessoa que pode nem existir na lista de dias disponiveis atual.
+    dia_calendario = calendar_input(
+        datas_com_jornada, key=f"painel_mapa_calendario_{colaborador_selecionado}"
+    )
+
+if dia_calendario is not None:
+    jornadas_do_dia = [
+        j for j in jornadas_do_colaborador if para_horario_brasil(j.inicio).date() == dia_calendario.date()
+    ]
+    if jornadas_do_dia:
+        jornadas_do_colaborador = jornadas_do_dia
+
+opcoes_jornada = {formatar_data_hora(j.inicio): j for j in jornadas_do_colaborador}
+_sanitizar_selectbox_state("painel_mapa_jornada_selecionada", list(opcoes_jornada.keys()))
+
 rotulo_selecionado = st.selectbox(
     "Jornada", options=list(opcoes_jornada.keys()), key="painel_mapa_jornada_selecionada"
 )

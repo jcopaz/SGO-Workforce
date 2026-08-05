@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-08-04] Filtro Colaborador separado + calendário de dias com jornada no mapa (ADR-0052)
+
+Ver `docs/79_ADR_0052_FILTRO_COLABORADOR_E_CALENDARIO_DE_JORNADAS.md` para
+a decisão completa.
+
+### Adicionado
+- Filtro "Colaborador" separado de "Jornada" no mapa operacional (antes
+  era um selectbox só, misturando matrícula e horário no mesmo rótulo).
+- Calendário (`streamlit-calendar-input`) ao lado do filtro de
+  Colaborador, marcando em verde os dias com jornada registrada -
+  clicar num dia restringe a lista de Jornada a esse dia.
+
+### Risco assumido conscientemente
+- `streamlit-calendar-input` é um pacote pequeno e pouco maduro (2
+  estrelas, mantido por 1 pessoa, sem teste automatizado visível) -
+  risco apresentado e aceito explicitamente pelo responsável pelo
+  produto. Versão fixada (`==0.0.3`) em `requirements.txt` para uma
+  atualização futura nunca quebrar o painel sem decisão explícita. Sem
+  clicar no calendário, a tela continua funcionando exatamente como
+  antes (fallback sempre disponível).
+
 ## [2026-08-04] Gráfico de linha do tempo da jornada - dia × hora (ADR-0051)
 
 Ver `docs/78_ADR_0051_GRAFICO_LINHA_DO_TEMPO_DA_JORNADA.md` para a
