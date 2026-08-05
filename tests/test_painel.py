@@ -195,14 +195,16 @@ def test_utilizacao_hh_do_resumo_sem_jornada_bruta_retorna_none():
 
 def test_horas_produtiva_nao_rentavel_do_resumo_com_dados_de_exemplo(tmp_path):
     # gerar_jornadas_exemplo usa DESLOCAMENTO_TESTE (motivo de teste,
-    # NAO_DEFINIDO) para o evento secundario, entao nao cai em
-    # PRODUTIVA_NAO_RENTAVEL - o valor deve ser zero, mas nunca ausente
-    # (dict.get com default).
+    # NAO_DEFINIDO) para o evento secundario, entao esse pedaco nao cai em
+    # PRODUTIVA_NAO_RENTAVEL - mas a primeira jornada (i=0) tambem inclui
+    # um atendimento de falha de 45min (EE21, categoria ATENDIMENTO_FALHA),
+    # que desde o ADR-0053 e PRODUTIVA_NAO_RENTAVEL - o valor esperado nao
+    # e mais zero.
     gerar_jornadas_exemplo(tmp_path, quantidade=1)
     jornadas, _ = carregar_jornadas(tmp_path)
     resumo = montar_resumo(jornadas)
 
-    assert horas_produtiva_nao_rentavel_do_resumo(resumo) == timedelta()
+    assert horas_produtiva_nao_rentavel_do_resumo(resumo) == timedelta(minutes=45)
 
 
 def test_carregar_jornadas_reporta_arquivo_corrompido_sem_apagar(tmp_path):

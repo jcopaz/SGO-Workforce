@@ -1,5 +1,35 @@
 # Changelog
 
+## [2026-08-05] Lote de decisões pendentes (EE21, RASF, Performance, GPS 2º plano) + calendário do mapa removido (ADR-0053)
+
+Ver `docs/80_ADR_0053_LOTE_DECISOES_PENDENTES_08_05.md` para a decisão
+completa.
+
+### Alterado
+- `EE21` "Atendimento de Falha": `PRODUTIVA` → `PRODUTIVA_NAO_RENTAVEL`
+  (confirma leitura já registrada como provável no ADR-0028). `EE23` não
+  foi incluída nesta decisão.
+- Filtro "Jornada" do mapa operacional volta a mostrar só a data
+  (`dd/mm/aaaa`), sem hora/minuto/segundo — usa a nova
+  `dados.formatar_data`. Jornadas do mesmo colaborador que colidiriam no
+  mesmo dia voltam a mostrar o horário completo, para nenhuma opção
+  sumir do dropdown.
+
+### Removido
+- Calendário (`streamlit-calendar-input`) do filtro de Jornada do mapa
+  operacional (introduzido no ADR-0052 no dia anterior) — pedido do
+  responsável do produto ao testar a tela ao vivo. O filtro "Colaborador"
+  separado de "Jornada" continua. Dependência removida de
+  `requirements.txt`.
+
+### Decidido sem mudança de código
+- RASF: continuar importação manual por enquanto.
+- Indicador de Performance: esperar a Fase 5 (integração com o SGO) para
+  a fonte de tempo planejado.
+- GPS em segundo plano: manter só a mitigação atual (captura ao voltar
+  ao primeiro plano, ADR-0048), sem investir em app nativo ou Traccar
+  por enquanto.
+
 ## [2026-08-04] Filtro Colaborador separado + calendário de dias com jornada no mapa (ADR-0052)
 
 Ver `docs/79_ADR_0052_FILTRO_COLABORADOR_E_CALENDARIO_DE_JORNADAS.md` para

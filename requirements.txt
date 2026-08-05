@@ -8,13 +8,6 @@ python-dotenv>=1.0,<2
 requests>=2.31,<3
 defusedxml>=0.7,<1
 tzdata>=2024.1
-# Pacote pequeno e pouco maduro (2 estrelas, mantido por 1 pessoa, sem
-# teste automatizado visivel) - risco aceito explicitamente pelo
-# responsavel pelo produto em 2026-08-04 (ver ADR-0052). Se quebrar numa
-# atualizacao futura do Streamlit, resolver na hora ou trocar de
-# abordagem (existe fallback documentado no ADR: contagem no rotulo do
-# selectbox, sem dependencia nenhuma).
-streamlit-calendar-input==0.0.3
 
 # Dependencias do backend (FastAPI, uvicorn, psycopg2-binary) ficaram em
 # requirements-api.txt, nao aqui - o painel (Streamlit Cloud) so fala com

@@ -305,6 +305,17 @@ def formatar_data_hora(data: Optional[datetime]) -> str:
     return para_horario_brasil(data).strftime("%d/%m/%Y %H:%M:%S")
 
 
+def formatar_data(data: Optional[datetime]) -> str:
+    """Formato dd/mm/aaaa (sem hora) - mesma conversao pro horario de
+    Brasilia de `formatar_data_hora`, so mais curto para listas onde o
+    horario exato nao ajuda a diferenciar visualmente (ex.: selectbox de
+    Jornada, ADR-0053 - pedido do responsavel pelo produto em
+    2026-08-05: o rotulo completo com segundos ficava verboso demais)."""
+    if data is None:
+        return "--"
+    return para_horario_brasil(data).strftime("%d/%m/%Y")
+
+
 def formatar_horas(duracao: timedelta) -> str:
     """Formato "XhYY" para exibicao - nunca usado como fonte de calculo."""
     total_minutos = round(duracao.total_seconds() / 60)

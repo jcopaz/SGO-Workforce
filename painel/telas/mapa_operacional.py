@@ -12,6 +12,7 @@ docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md.
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from datetime import time, timedelta
 from pathlib import Path
 
@@ -22,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
-from streamlit_calendar_input import calendar_input
 from streamlit_folium import st_folium
 
 from dados import (
@@ -30,6 +30,7 @@ from dados import (
     carregar_pulsos_via_api,
     fatiar_linha_do_tempo_por_dia,
     filtrar_pulsos_por_periodo,
+    formatar_data,
     formatar_data_hora,
 )
 from graficos import grafico_linha_do_tempo, renderizar_embutido
@@ -126,47 +127,37 @@ if not jornadas:
 
 # Colaborador e Jornada separados (pedido do responsavel pelo produto em
 # 2026-08-04) - antes era um selectbox so, misturando matricula e
-# horario de inicio no mesmo rotulo. Ao lado do Colaborador, um
-# calendario (streamlit-calendar-input - pacote pequeno/pouco maduro,
-# risco aceito explicitamente, ver ADR-0052) marca em verde os dias com
-# jornada e vermelho os sem jornada daquele colaborador - clicar num dia
-# verde restringe a lista de Jornada abaixo a esse dia. Sem clicar em
-# nada, Jornada continua mostrando todas as jornadas do colaborador (nao
-# trava a tela numa dependencia de clique).
+# horario de inicio no mesmo rotulo. O rotulo de Jornada mostra so a data
+# (ADR-0053, pedido do responsavel pelo produto em 2026-08-05 - o rotulo
+# completo com segundos ficava verboso demais; o calendario que existia
+# aqui foi removido no mesmo pedido). Quando o colaborador tem mais de
+# uma jornada no mesmo dia, o horario volta a aparecer so nessas jornadas
+# para nao colidir/sumir uma opcao do dropdown.
 colaboradores_disponiveis = sorted({j.colaborador_matricula for j in jornadas})
 _sanitizar_selectbox_state("painel_mapa_colaborador_selecionado", colaboradores_disponiveis)
 
-col_colaborador, col_calendario = st.columns([1, 2])
-with col_colaborador:
-    colaborador_selecionado = st.selectbox(
-        "Colaborador",
-        options=colaboradores_disponiveis,
-        key="painel_mapa_colaborador_selecionado",
-    )
+colaborador_selecionado = st.selectbox(
+    "Colaborador",
+    options=colaboradores_disponiveis,
+    key="painel_mapa_colaborador_selecionado",
+)
 
 jornadas_do_colaborador = sorted(
     (j for j in jornadas if j.colaborador_matricula == colaborador_selecionado),
     key=lambda j: j.inicio,
     reverse=True,
 )
-datas_com_jornada = sorted({para_horario_brasil(j.inicio).date() for j in jornadas_do_colaborador})
 
-with col_calendario:
-    st.caption("Jornada - dias em verde têm apontamento registrado")
-    # Chave por colaborador: evita reaproveitar um dia clicado de outra
-    # pessoa que pode nem existir na lista de dias disponiveis atual.
-    dia_calendario = calendar_input(
-        datas_com_jornada, key=f"painel_mapa_calendario_{colaborador_selecionado}"
-    )
+contagem_por_data = Counter(para_horario_brasil(j.inicio).date() for j in jornadas_do_colaborador)
 
-if dia_calendario is not None:
-    jornadas_do_dia = [
-        j for j in jornadas_do_colaborador if para_horario_brasil(j.inicio).date() == dia_calendario.date()
-    ]
-    if jornadas_do_dia:
-        jornadas_do_colaborador = jornadas_do_dia
 
-opcoes_jornada = {formatar_data_hora(j.inicio): j for j in jornadas_do_colaborador}
+def _rotulo_jornada(jornada):
+    if contagem_por_data[para_horario_brasil(jornada.inicio).date()] > 1:
+        return formatar_data_hora(jornada.inicio)
+    return formatar_data(jornada.inicio)
+
+
+opcoes_jornada = {_rotulo_jornada(j): j for j in jornadas_do_colaborador}
 _sanitizar_selectbox_state("painel_mapa_jornada_selecionada", list(opcoes_jornada.keys()))
 
 rotulo_selecionado = st.selectbox(

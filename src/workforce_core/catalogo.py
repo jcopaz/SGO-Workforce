@@ -275,13 +275,17 @@ def catalogo_padrao() -> CatalogoMotivos:
 # desmontar atividade, carregar/descarregar veiculo, SMS, treinamento)
 # como produtivos mas nao rentaveis. Resolve tambem o mismatch apontado
 # para EE16 (estava IMPRODUTIVA, o original classificava como produtivo
-# nao rentavel). EE17 (Manutencao Programada) e EE21 (Atendimento de
-# Falha) permanecem PRODUTIVA - correspondem a "Ordem de Servico" no
-# original, a unica categoria plenamente rentavel da tabela OptJob;
-# EE21/"manutencao nao planejada" tem uma leitura razoavel como produtivo
-# nao rentavel no original, mas a correspondencia nao e inequivoca o
-# suficiente para mudar sem confirmacao explicita - fica registrado como
-# pergunta em aberto em docs/23_DECISOES_PENDENTES.md.
+# nao rentavel). EE17 (Manutencao Programada) permanece PRODUTIVA -
+# corresponde a "Ordem de Servico" no original, a unica categoria
+# plenamente rentavel da tabela OptJob.
+#
+# Reclassificacao de 2026-08-05 (ADR-0053, item 17 de
+# docs/23_DECISOES_PENDENTES.md): EE21 (Atendimento de Falha) passa de
+# PRODUTIVA para PRODUTIVA_NAO_RENTAVEL - decisao explicita do
+# responsavel pelo produto, confirmando a leitura ja registrada como
+# provavel (manutencao nao planejada no OptJob original era nao
+# rentavel). EE23 (Manutencao Programada Nao Concluida) NAO foi incluida
+# nesta decisao - continua PRODUTIVA, nao foi perguntada.
 _RELATORIO_1_ENTRADAS = [
     ("EE01", "Preparação para jornada", Categoria.PREPARACAO_JORNADA, "evento_secundario", ClassificacaoHH.IMPRODUTIVA, TipoEventoSecundario.APOIO),
     ("EE02", "Refeição 1 hora", Categoria.REFEICAO, "pausa", ClassificacaoHH.NAO_COMPUTAVEL, TipoEventoSecundario.APOIO),
@@ -303,7 +307,7 @@ _RELATORIO_1_ENTRADAS = [
     ("EE18", "Carregar veículo", Categoria.CARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE19", "Descarregar veículo", Categoria.DESCARREGAR_VEICULO, "evento_secundario", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE20", "DDS / APR", Categoria.SMS, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
-    ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA, None),
+    ("EE21", "Atendimento de Falha", Categoria.ATENDIMENTO_FALHA, "atividade", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, None),
     ("EE22", "Treinamento", Categoria.TREINAMENTO, "pausa", ClassificacaoHH.PRODUTIVA_NAO_RENTAVEL, TipoEventoSecundario.APOIO),
     ("EE23", "Manutenção Programada Não Concluída", Categoria.ATIVIDADE_PLANEJADA_NAO_CONCLUIDA, "atividade", ClassificacaoHH.PRODUTIVA, None),
 ]
