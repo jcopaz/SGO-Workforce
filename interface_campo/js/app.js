@@ -1,9 +1,10 @@
 // Interface operacional simples para celular (Incremento 4).
 //
 // Piloto tecnico: apenas Jornada + Atividade + Pausa, sem autenticacao.
-// GPS obrigatorio para iniciar/encerrar jornada e atividade, com captura
+// GPS obrigatorio em todo iniciar/encerrar de jornada, atividade, pausa e
+// evento secundario (ADR-0043 "obrigatorio em tudo", ADR-0048), com captura
 // periodica em segundo plano durante a jornada aberta (Fase 2 da captacao
-// de geolocalizacao, ADR-0043/0045 - ver geolocalizacao.js/armazenamento.js).
+// de geolocalizacao, ADR-0045 - ver geolocalizacao.js/armazenamento.js).
 // Sincronizacao com o backend real existe (ver
 // sincronizacao.js e docs/44_ADR_0017_SINCRONIZACAO_REAL_BACKEND_HOSPEDADO.md)
 // mas e best-effort: uma falha de rede nunca impede o registro local do
@@ -540,6 +541,25 @@ function sincronizarEstadoCapturaPeriodica() {
   }
 }
 
+// Captura um pulso extra assim que o colaborador volta pro app depois de
+// minimizar/trocar de aba (ADR-0048, pedido do responsavel pelo produto em
+// 2026-08-04): o navegador suspende a captura periodica de fundo enquanto o
+// app nao esta em primeiro plano (limitacao de plataforma, nao tem como
+// contornar so com JS - ver docs do ADR-0048), entao o retorno ao app e uma
+// janela garantida que hoje ficava sem aproveitar. Best-effort, igual a
+// captura periodica - nunca mostra erro nem bloqueia nada se falhar.
+function configurarCapturaAoVoltarParaPrimeiroPlano() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!motor || motor.jornada.estado !== "ABERTA") return;
+    Geolocalizacao.capturarPosicaoAtual().then((posicao) => {
+      if (posicao) {
+        registrarPulsoCapturado(posicao);
+      }
+    });
+  });
+}
+
 // Envia os pulsos ainda nao sincronizados desta jornada - best-effort,
 // nunca lanca (sincronizacao.js garante isso). So marca como sincronizado
 // no IndexedDB depois de uma confirmacao real do backend.
@@ -729,9 +749,11 @@ function render() {
   if (pausa) {
     els.status.textContent = "Em pausa.";
     els.botoes.appendChild(
-      botao("Finalizar pausa", () => executar(() => motor.finalizarPausa(RelogioSimulado.agora())), {
-        destaque: true,
-      })
+      botao(
+        "Finalizar pausa",
+        () => executarComGpsObrigatorio(() => motor.finalizarPausa(RelogioSimulado.agora())),
+        { destaque: true }
+      )
     );
   } else if (atividade) {
     if (atividade.dadosFalha) {
@@ -745,7 +767,7 @@ function render() {
     els.botoes.appendChild(seletorMotivo);
     els.botoes.appendChild(
       botao("Iniciar pausa", () =>
-        executar(() => motor.iniciarPausa(RelogioSimulado.agora(), seletorMotivo.value))
+        executarComGpsObrigatorio(() => motor.iniciarPausa(RelogioSimulado.agora(), seletorMotivo.value))
       )
     );
     if (atividade.dadosFalha) {
@@ -792,7 +814,7 @@ function render() {
     els.botoes.appendChild(
       botao(
         "Encerrar evento",
-        () => executar(() => motor.encerrarEventoSecundario(RelogioSimulado.agora())),
+        () => executarComGpsObrigatorio(() => motor.encerrarEventoSecundario(RelogioSimulado.agora())),
         { destaque: true }
       )
     );
@@ -812,7 +834,9 @@ function render() {
             await executarComGpsObrigatorio(() => motor.iniciarAtendimentoFalha(RelogioSimulado.agora()));
           } else {
             const tipo = tipoEventoSecundarioParaCodigo(valor);
-            executar(() => motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, valor));
+            await executarComGpsObrigatorio(() =>
+              motor.iniciarEventoSecundario(RelogioSimulado.agora(), tipo, valor)
+            );
           }
         },
         { destaque: true }
@@ -845,8 +869,10 @@ async function executar(transicao) {
   render();
 }
 
-// Trava de "GPS obrigatorio" (ADR-0043) para iniciar/encerrar jornada e
-// atividade: exige uma leitura de GPS local bem-sucedida antes de aplicar a
+// Trava de "GPS obrigatorio" (ADR-0043 "obrigatorio em tudo", escopo
+// completado no ADR-0048 - inicialmente so cobria jornada/atividade)
+// para iniciar/encerrar jornada, atividade, pausa e evento secundario:
+// exige uma leitura de GPS local bem-sucedida antes de aplicar a
 // transicao - nao depende de rede (a leitura e local, so o pulso e que
 // sincroniza depois). Se a captura falhar, a transicao NAO roda (trava de
 // verdade, diferente da captura periodica de fundo, que nunca bloqueia).
@@ -966,4 +992,5 @@ async function iniciar() {
 }
 
 configurarSimulador();
+configurarCapturaAoVoltarParaPrimeiroPlano();
 iniciar();

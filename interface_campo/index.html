@@ -22,9 +22,13 @@
 
   <p class="aviso-piloto">
     Piloto tecnico do SGO Workforce. GPS obrigatorio para iniciar/encerrar
-    jornada e atividade, com captura periodica em segundo plano (1
-    pulso/minuto) durante a jornada aberta, tudo offline - so sincroniza
-    junto com a jornada. Os 23 codigos do Relatorio de Atividades Diarias
+    jornada, atividade, pausa e evento secundario, com captura periodica
+    em segundo plano (1 pulso/minuto) enquanto o app estiver em primeiro
+    plano durante a jornada aberta - a captura pausa se o app for
+    minimizado (limitacao do navegador, ver ADR-0048), retomando um pulso
+    extra assim que o colaborador volta pro app. Tudo offline - so
+    sincroniza junto com a jornada. Os 23 codigos do Relatorio de
+    Atividades Diarias
     de Manutencao (Relatorio 1) ja tem tela propria (atividade planejada,
     pausa, deslocamento/espera/apoio, atendimento de falha) e
     classificacao produtiva/produtiva nao rentavel/improdutiva validada
@@ -75,7 +79,7 @@
        CACHE_VERSAO de service-worker.js, atualizado junto dela. Se o que
        aparece na tela for menor que o ultimo commit, e cache antigo, nao
        bug novo. -->
-  <p class="rodape-versao">Versão v18</p>
+  <p class="rodape-versao">Versão v19</p>
 </footer>
 
 <script type="module" src="js/app.js"></script>

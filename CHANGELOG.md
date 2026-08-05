@@ -1,5 +1,30 @@
 # Changelog
 
+## [2026-08-04] GPS obrigatório completo (pausa/evento secundário) e captura ao retornar ao primeiro plano (ADR-0048)
+
+Ver `docs/75_ADR_0048_GPS_OBRIGATORIO_COMPLETO_E_CAPTURA_AO_RETORNAR.md`
+para a decisão completa. Colaboradores reais relataram o pulso periódico
+parando ao minimizar o app - confirmado como limitação de plataforma
+(navegador suspende JS fora do primeiro plano), não bug. Pesquisa
+completa de alternativas de captação contínua em segundo plano (app
+nativo Android, Traccar, orçamento) registrada em memória do projeto,
+não implementada ainda - decisão maior em aberto.
+
+### Corrigido
+- GPS obrigatório (ADR-0043 "obrigatório em tudo") estava incompleto
+  desde o ADR-0045 - só cobria iniciar/encerrar jornada e atividade.
+  Estendido para pausa (iniciar/finalizar) e evento secundário
+  (iniciar/encerrar) - 10 pontos de transição no total agora.
+
+### Adicionado
+- Captura de GPS imediata ao voltar para o app depois de minimizar
+  (`visibilitychange`) - aproveita a janela garantida de primeiro plano
+  em vez de esperar até 1 minuto pelo próximo ciclo periódico.
+
+### Alterado
+- `interface_campo/service-worker.js`: `CACHE_VERSAO` v18 → v19.
+- `interface_campo/index.html`: aviso atualizado, rodapé "Versão v19".
+
 ## [2026-08-04] Calibração para horário de Brasília e filtros/marcos do mapa operacional (ADR-0047)
 
 Ver `docs/74_ADR_0047_TIMEZONE_BRASIL_E_FILTROS_MAPA_OPERACIONAL.md` para
