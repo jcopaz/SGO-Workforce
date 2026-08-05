@@ -161,11 +161,22 @@ def construir_mapa(
     Falhas por sintoma/impacto e heatmap de HH ficam para quando houver
     mais volume de dados reais para validar a utilidade de cada camada
     adicional (ver ADR-0010).
+
+    Pedido do responsavel pelo produto em 2026-08-04 (ADR-0049): so a
+    trajetoria simplificada e opcional/togglable - malha ferrea, marcos
+    de inicio/fim, pulsos brutos (ja selecionaveis por atividade/data/
+    horario nos filtros da tela, nao precisam de outro toggle no mapa) e
+    clusters de permanencia sao sempre desenhados direto no mapa, sem
+    passar por `FeatureGroup`/`LayerControl` - mapa mais limpo, e o
+    controle de camadas deixa de listar "escolhas" que na pratica nunca
+    faziam sentido desligar. O tile base tambem nao aparece mais no
+    controle (`TileLayer(..., control=False)`) - so existe um tile, nao e
+    uma escolha real.
     """
-    mapa = folium.Map(location=_centro(pulsos), zoom_start=14 if pulsos else 4, tiles=_TILES_BASEMAP)
+    mapa = folium.Map(location=_centro(pulsos), zoom_start=14 if pulsos else 4, tiles=None)
+    folium.TileLayer(tiles=_TILES_BASEMAP, control=False).add_to(mapa)
 
     if trilhos_ferrovia:
-        camada_ferrovia = folium.FeatureGroup(name="Malha ferrea MRS", show=True)
         for trilho in trilhos_ferrovia:
             folium.PolyLine(
                 locations=trilho,
@@ -173,40 +184,33 @@ def construir_mapa(
                 weight=2,
                 opacity=0.85,
                 tooltip="Malha ferrea MRS",
-            ).add_to(camada_ferrovia)
-        camada_ferrovia.add_to(mapa)
+            ).add_to(mapa)
 
-    if marco_inicio is not None or marco_fim is not None:
-        camada_marcos = folium.FeatureGroup(name="Inicio e fim", show=True)
-        if marco_inicio is not None:
-            folium.Marker(
-                location=(marco_inicio.latitude, marco_inicio.longitude),
-                icon=folium.Icon(color="green", icon="play"),
-                tooltip="Inicio da jornada",
-                popup=folium.Popup(
-                    f"Inicio da jornada<br>Horario: {html.escape(_horario_legivel(marco_inicio.timestamp_dispositivo))}",
-                    max_width=300,
-                ),
-            ).add_to(camada_marcos)
-        if marco_fim is not None:
-            folium.Marker(
-                location=(marco_fim.latitude, marco_fim.longitude),
-                icon=folium.Icon(color="red", icon="stop"),
-                tooltip="Fim da jornada",
-                popup=folium.Popup(
-                    f"Fim da jornada<br>Horario: {html.escape(_horario_legivel(marco_fim.timestamp_dispositivo))}",
-                    max_width=300,
-                ),
-            ).add_to(camada_marcos)
-        camada_marcos.add_to(mapa)
+    if marco_inicio is not None:
+        folium.Marker(
+            location=(marco_inicio.latitude, marco_inicio.longitude),
+            icon=folium.Icon(color="green", icon="play"),
+            tooltip="Inicio da jornada",
+            popup=folium.Popup(
+                f"Inicio da jornada<br>Horario: {html.escape(_horario_legivel(marco_inicio.timestamp_dispositivo))}",
+                max_width=300,
+            ),
+        ).add_to(mapa)
+    if marco_fim is not None:
+        folium.Marker(
+            location=(marco_fim.latitude, marco_fim.longitude),
+            icon=folium.Icon(color="red", icon="stop"),
+            tooltip="Fim da jornada",
+            popup=folium.Popup(
+                f"Fim da jornada<br>Horario: {html.escape(_horario_legivel(marco_fim.timestamp_dispositivo))}",
+                max_width=300,
+            ),
+        ).add_to(mapa)
 
     if not pulsos:
-        if trilhos_ferrovia or marco_inicio is not None or marco_fim is not None:
-            folium.LayerControl(collapsed=False).add_to(mapa)
         return mapa
 
     if mostrar_pulsos_brutos:
-        camada_brutos = folium.FeatureGroup(name="Pulsos brutos", show=True)
         for pulso in pulsos:
             cor_categoria = cor_por_pulso.get(pulso.id) if cor_por_pulso else None
             cor_marcador = cor_categoria or _COR_PULSO_BRUTO
@@ -220,14 +224,13 @@ def construir_mapa(
                 fill_color=cor_marcador,
                 fill_opacity=0.9,
                 popup=folium.Popup(_popup_pulso(pulso), max_width=300),
-            ).add_to(camada_brutos)
-        camada_brutos.add_to(mapa)
+            ).add_to(mapa)
 
     trajetoria = simplificar_trajetoria(
         pulsos, distancia_minima_metros=distancia_simplificacao_metros
     )
     if len(trajetoria) > 1:
-        camada_trajetoria = folium.FeatureGroup(name="Trajetoria simplificada", show=True)
+        camada_trajetoria = folium.FeatureGroup(name="Traçar trajetória", show=True)
         folium.PolyLine(
             locations=[(p.latitude, p.longitude) for p in trajetoria],
             color=_COR_TRAJETORIA,
@@ -236,12 +239,12 @@ def construir_mapa(
             dash_array="10,6,2,6",
         ).add_to(camada_trajetoria)
         camada_trajetoria.add_to(mapa)
+        folium.LayerControl(collapsed=False).add_to(mapa)
 
     clusters = agrupar_permanencia(
         pulsos, raio_metros=raio_cluster_metros, tempo_minimo=tempo_minimo_cluster
     )
     if clusters:
-        camada_clusters = folium.FeatureGroup(name="Clusters de permanencia (inferencia)", show=True)
         for cluster in clusters:
             folium.CircleMarker(
                 location=(cluster.latitude_media, cluster.longitude_media),
@@ -250,8 +253,6 @@ def construir_mapa(
                 fill=True,
                 fill_opacity=0.4,
                 popup=folium.Popup(_popup_cluster(cluster), max_width=300),
-            ).add_to(camada_clusters)
-        camada_clusters.add_to(mapa)
+            ).add_to(mapa)
 
-    folium.LayerControl(collapsed=False).add_to(mapa)
     return mapa

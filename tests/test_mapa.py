@@ -5,6 +5,7 @@ depender do runtime do Streamlit) - o smoke test real do servidor
 (`streamlit run`) fica em docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md.
 """
 
+import json
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 
@@ -23,6 +24,15 @@ from mapa import (
 )
 from workforce_core.consolidacao import ClassificacaoInstante
 from workforce_core.entities import PulsoGps
+
+
+def _contido(rotulo: str, html: str) -> bool:
+    """Confere se `rotulo` aparece no HTML gerado pelo Folium, cru ou
+    escapado como `json.dumps` (padrao `ensure_ascii=True`) grava nomes de
+    camada dentro do <script> do LayerControl - "ç"/"ó" viram literalmente
+    "\\u00e7"/"\\u00f3" no HTML, nao o caractere em si (mesmo fenomeno de
+    `_contido` em test_painel.py, so que no Folium em vez do pyecharts)."""
+    return rotulo in html or json.dumps(rotulo)[1:-1] in html
 
 
 def test_gerar_pulsos_exemplo_cobre_o_periodo_da_jornada(tmp_path):
@@ -60,6 +70,11 @@ def test_construir_mapa_sem_pulsos_nao_quebra():
 
 
 def test_construir_mapa_com_pulsos_gera_camadas(tmp_path):
+    # Pedido do responsavel pelo produto em 2026-08-04 (ADR-0049): pulsos
+    # brutos sao sempre desenhados direto no mapa (sem FeatureGroup/toggle
+    # proprio - ja sao selecionaveis pelos filtros de atividade/data/
+    # horario da tela) - so a trajetoria continua como camada nomeada/
+    # togglable no LayerControl.
     jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
     jornada = jornadas[0]
     pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=180)
@@ -72,8 +87,8 @@ def test_construir_mapa_com_pulsos_gera_camadas(tmp_path):
     )
 
     html = mapa.get_root().render()
-    assert "Pulsos brutos" in html
-    assert "Trajetoria simplificada" in html
+    assert html.count("L.circleMarker(") >= len(pulsos)  # um marcador por pulso, sempre visivel
+    assert _contido("Traçar trajetória", html)
 
 
 def test_popup_escapa_html_de_campos_controlados_pelo_usuario(tmp_path):
@@ -129,7 +144,10 @@ def test_construir_mapa_trajetoria_vermelha_tracejada(tmp_path):
     assert "dashArray" in html  # folium traduz dash_array para a opcao Leaflet dashArray
 
 
-def test_construir_mapa_camada_malha_ferrea_opcional(tmp_path):
+def test_construir_mapa_malha_ferrea_sempre_visivel_sem_toggle(tmp_path):
+    # ADR-0049: malha ferrea desenhada direto no mapa, nunca como camada
+    # nomeada/togglable - "Malha ferrea MRS" aqui e so o texto do tooltip
+    # de cada trecho, nao um nome de FeatureGroup no LayerControl.
     jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
     jornada = jornadas[0]
     pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
@@ -145,6 +163,8 @@ def test_construir_mapa_camada_malha_ferrea_opcional(tmp_path):
     html = mapa.get_root().render()
     assert "Malha ferrea MRS" in html
     assert _COR_MALHA_FERREA in html
+    # Nunca vira uma entrada do LayerControl (so "Tracar trajetoria" e).
+    assert '"Malha ferrea MRS" :' not in html
 
 
 def test_construir_mapa_sem_pulsos_ainda_mostra_malha_ferrea():
@@ -209,9 +229,11 @@ def test_construir_mapa_marcos_de_inicio_e_fim(tmp_path):
     html = mapa.get_root().render()
     assert "Inicio da jornada" in html
     assert "Fim da jornada" in html
-    assert "Inicio e fim" in html  # nome da camada no LayerControl
     assert '"green"' in html
     assert '"red"' in html
+    # Marcos sao desenhados direto no mapa (ADR-0049) - nunca viram uma
+    # camada nomeada/togglable no LayerControl.
+    assert "Inicio e fim" not in html
 
 
 def test_construir_mapa_cor_por_pulso_sobrescreve_amarelo_padrao(tmp_path):

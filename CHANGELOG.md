@@ -1,5 +1,33 @@
 # Changelog
 
+## [2026-08-04] Mapa operacional: camadas sempre visíveis e fluidez (ADR-0049)
+
+Ver `docs/76_ADR_0049_MAPA_CAMADAS_SEMPRE_VISIVEIS_E_FLUIDEZ.md` para a
+decisão completa. Feedback do responsável pelo produto: controle de
+camadas do mapa "pouco interativo" (a maioria dos toggles não era uma
+escolha real) e Streamlit lento por causa de rerun em excesso.
+
+### Alterado
+- Malha férrea, marcos de início/fim, pulsos brutos e clusters de
+  permanência agora são sempre desenhados no mapa - deixaram de ser
+  camadas togglable no `LayerControl`. Só "Traçar trajetória" continua
+  opcional.
+- Tile base deixou de aparecer no controle de camadas (nunca foi uma
+  escolha real, só existe um tile).
+- `carregar_jornadas_via_api`/`carregar_pulsos_via_api` agora passam por
+  cache (`st.cache_data`, TTL 60s) na tela do mapa - ajustar um slider/
+  filtro não rebate mais no backend a cada interação. Botão "Sincronizar
+  dados" agora limpa esse cache de verdade (antes só mostrava um toast).
+- `st_folium(..., returned_objects=[])` - interagir com o mapa (pan/
+  zoom/clique) não reexecuta mais o script inteiro.
+
+### Corrigido
+- Bug de teste real encontrado durante a validação: `st.cache_data` tem
+  escopo de processo, não por teste - os testes de ponta a ponta do mapa
+  vazavam jornada/pulso em cache entre si (mesma URL/token fake em
+  todos). Corrigido com uma fixture que limpa o cache antes de cada
+  teste.
+
 ## [2026-08-04] GPS obrigatório completo (pausa/evento secundário) e captura ao retornar ao primeiro plano (ADR-0048)
 
 Ver `docs/75_ADR_0048_GPS_OBRIGATORIO_COMPLETO_E_CAPTURA_AO_RETORNAR.md`

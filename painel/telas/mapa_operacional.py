@@ -43,6 +43,28 @@ def _obter_secret_seguro(chave: str, default: str = "") -> str:
         return default
 
 
+# Cache das chamadas ao backend (ADR-0049, pedido do responsavel pelo
+# produto em 2026-08-04 - fluidez, Streamlit reexecuta o script inteiro a
+# cada slider/filtro mexido). Sem isso, ajustar qualquer um dos 7 widgets
+# da tela (atividade/data/horario x2/simplificacao/cluster/tempo) refazia
+# as duas chamadas de rede (`carregar_jornadas_via_api`/
+# `carregar_pulsos_via_api`, timeout de 60s pro cold start do Render) do
+# zero a cada interacao. TTL de 60s (mesmo numero do timeout de rede -
+# nao e coincidencia, o dado nao muda mais rapido que isso na pratica) -
+# "Sincronizar dados" abaixo limpa o cache na hora pra nunca segurar um
+# refresh manual pedido explicitamente. Os wrappers ficam aqui (nao em
+# dados.py) porque dados.py e deliberadamente livre de Streamlit, pra
+# continuar testavel com pytest puro (ver docstring do modulo).
+@st.cache_data(ttl=60, show_spinner=False)
+def _carregar_jornadas_cache(url: str, token: str):
+    return carregar_jornadas_via_api(url, token)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _carregar_pulsos_cache(url: str, token: str, jornada_id):
+    return carregar_pulsos_via_api(url, token, jornada_id)
+
+
 st.warning(
     "Piloto tecnico. Filtros de coordenacao, equipe, patio, sintoma e "
     "impacto ainda nao existem porque esses conceitos ainda nao foram "
@@ -56,6 +78,8 @@ with col_titulo:
 with col_sync:
     st.write("")  # alinhamento vertical com o titulo
     if st.button("🔄 Sincronizar dados", width="stretch", key="mapa_sincronizar"):
+        _carregar_jornadas_cache.clear()
+        _carregar_pulsos_cache.clear()
         st.toast("Sincronizando com o backend...", icon="🔄")
 
 # Fonte de dados fixa em API (nuvem, ADR-0041) - ver mesmo comentario em
@@ -75,7 +99,7 @@ if not url_api or not token_api:
     st.stop()
 
 try:
-    jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+    jornadas, com_erro = _carregar_jornadas_cache(url_api, token_api)
 except requests.exceptions.RequestException as exc:
     st.error(f"Não foi possível buscar dados do backend: {exc}")
     st.stop()
@@ -96,7 +120,7 @@ rotulo_selecionado = st.selectbox(
 jornada_selecionada = opcoes_jornada[rotulo_selecionado]
 
 try:
-    pulsos, pulsos_com_erro = carregar_pulsos_via_api(url_api, token_api, jornada_selecionada.id)
+    pulsos, pulsos_com_erro = _carregar_pulsos_cache(url_api, token_api, jornada_selecionada.id)
 except requests.exceptions.RequestException as exc:
     st.error(f"Não foi possível buscar pulsos GPS do backend: {exc}")
     st.stop()
@@ -198,4 +222,11 @@ mapa = construir_mapa(
     marco_fim=marco_fim,
 )
 
-st_folium(mapa, width="100%", height=560, key="painel_mapa_folium")
+st_folium(
+    mapa,
+    width="100%",
+    height=560,
+    key="painel_mapa_folium",
+    returned_objects=[],  # nada do retorno e usado - pan/zoom/clique no
+    # mapa nunca deveria reexecutar o script inteiro (ADR-0049, fluidez).
+)

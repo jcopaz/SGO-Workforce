@@ -17,6 +17,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 import dados as dados_modulo
@@ -26,6 +28,17 @@ from workforce_core.entities import PulsoGps
 _CAMINHO_MAPA = str(
     Path(__file__).resolve().parent.parent / "painel" / "telas" / "mapa_operacional.py"
 )
+
+
+@pytest.fixture(autouse=True)
+def _limpar_cache_do_mapa():
+    # painel/telas/mapa_operacional.py cacheia as chamadas de API com
+    # `st.cache_data` (ADR-0049, fluidez) - o cache e por processo, nao
+    # por instancia de AppTest, entao sem isso um teste vaza jornada/pulso
+    # em cache pro proximo (todos usam a mesma URL/token fake de
+    # `_preparar_secrets_de_teste`, mesma chave de cache).
+    st.cache_data.clear()
+    yield
 
 
 def _preparar_secrets_de_teste(at: AppTest) -> None:
