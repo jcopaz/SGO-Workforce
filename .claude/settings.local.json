@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile app.py)",
+      "Bash(python -m pyflakes app.py)",
+      "Bash(python -c \"import streamlit_calendar; print\\(streamlit_calendar.__file__\\)\")",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pip install streamlit-calendar --quiet)",
+      "Bash(.venv/Scripts/python.exe -c \"import streamlit_calendar; print\\('OK:', streamlit_calendar.__file__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import streamlit_echarts\")",
+      "Bash(.venv/Scripts/python.exe -c \"import psycopg2\")",
+      "Bash(.venv/Scripts/python.exe -c \"import fastapi\")",
+      "Bash(node --check interface_campo/js/calculo.js)"
+    ]
+  }
+}
