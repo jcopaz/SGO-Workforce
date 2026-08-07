@@ -151,6 +151,27 @@ def _preparar_tela_com_pulsos(tmp_path, monkeypatch):
     return at
 
 
+def test_tela_mapa_tabela_resumo_mostra_colunas_e_localizacao(tmp_path, monkeypatch):
+    # Pedido do responsavel do produto em 2026-08-07: tabela abaixo do
+    # mapa/linha do tempo com Atividade/Evento, inicio, termino e
+    # localizacao de inicio/encerramento.
+    at = _preparar_tela_com_pulsos(tmp_path, monkeypatch)
+
+    assert not at.exception
+    assert len(at.dataframe) >= 1
+    dados_tabela = at.dataframe[-1].value  # a tabela resumo e' o ultimo st.dataframe da tela
+    colunas = list(dados_tabela.columns)
+    assert "Atividade/Evento" in colunas
+    assert "Data/Hora Início" in colunas
+    assert "Data/Hora Término" in colunas
+    assert "Localização Início/Encerramento" in colunas
+    assert len(dados_tabela) > 0
+    # Os 5 pulsos de teste (8:00-8:04) caem dentro do evento secundario -
+    # a coluna de localizacao deveria ter coordenadas reais, nao "sem
+    # pulso proximo", para essa linha.
+    assert "sem pulso próximo" not in " ".join(dados_tabela["Localização Início/Encerramento"])
+
+
 def test_tela_mapa_filtro_atividade_lista_rotulos_presentes(tmp_path, monkeypatch):
     at = _preparar_tela_com_pulsos(tmp_path, monkeypatch)
 

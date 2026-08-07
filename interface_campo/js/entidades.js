@@ -33,6 +33,7 @@ export function novaAtividade({ inicio = null } = {}) {
     estado: "CRIADA",
     pausas: [],
     ordensServico: [],
+    equipe: [],
     // null ate a atividade ser encerrada (ADR-0025) - encerrarAtividade
     // grava CONCLUIDA, encerrarAtividadeNaoConcluida grava NAO_CONCLUIDA.
     resultado: null,
@@ -47,6 +48,19 @@ export function novaOrdemServico({ numero, criadaEm = null }) {
     id: gerarId(),
     numero,
     criadaEm,
+    excluida: false,
+  };
+}
+
+// Colaborador (matricula, texto livre) que trabalhou junto numa Atividade -
+// aba "Equipe" (pedido do responsavel pelo produto em 2026-08-07). Mesmo
+// espirito de novaOrdemServico: excluida e soft-delete, nunca remove da
+// lista. Nao afeta calculo de HH - so registro de quem estava presente.
+export function novoMembroEquipe({ matricula, adicionadoEm = null }) {
+  return {
+    id: gerarId(),
+    matricula,
+    adicionadoEm,
     excluida: false,
   };
 }

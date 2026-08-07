@@ -1,5 +1,65 @@
 # Changelog
 
+## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
+
+Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do
+pulso no mapa agora mostra a atividade/evento (não só qualidade/precisão).
+Paleta de cores por categoria padronizada entre mapa, linha do tempo,
+pizza de distribuição e barra empilhada por colaborador (`cor_por_rotulo`
+em vez da paleta automática do pyecharts). Linha do tempo da jornada
+ganhou código dentro de cada segmento (≥30min), legenda própria (HTML,
+abaixo do gráfico - a nativa do ECharts não se aplica a séries sintéticas
+por posição) e zoom por scroll/pinça no eixo Y. Nova tabela resumo abaixo
+do mapa/gráfico (Atividade/Evento, Data/Hora Início, Data/Hora Término,
+Localização Início/Encerramento) - localização vem do pulso mais próximo
+de cada transição, real (GPS obrigatório em toda transição), não estimada.
+
+## [2026-08-07] Aba Equipe - múltiplos colaboradores por Atividade (ADR-0063)
+
+Ver `docs/91_ADR_0063_ABA_EQUIPE.md`. Nova lista `equipe` anexada a
+`Atividade` (matrícula, texto livre, adicionar/excluir soft-delete) -
+mesmo padrão de Ordem de Serviço (ADR-0025), nos dois lados do domínio
+(Python e JS). Não muda o modelo de Jornada (continua um único
+colaborador dono/HH) nem afeta cálculo de HH - é só registro de quem
+esteve presente. Diferente de OS, é permitida também em atendimento de
+falha. Nenhuma mudança de banco/backend necessária (jornada inteira é um
+único JSONB). `CACHE_VERSAO` v26.
+
+## [2026-08-07] Login integrado com o SGO (Gestão_OS) e atalho de apontamento de OS no EE17 (ADR-0062)
+
+Ver `docs/90_ADR_0062_INTEGRACAO_LOGIN_SGO_E_APONTAMENTO_OS.md`. Novo
+endpoint `POST /auth/validar` no `api.py` do Gestão_OS (repositório
+separado) valida matrícula/senha reais contra a base de usuários do SGO
+e devolve perfil/escopo/governança e um token de sessão (`sid`) - sem o
+Workforce nunca guardar a connection string do Postgres de produção. A
+interface de campo ganhou um campo opcional de senha do SGO
+(`index.html`) e, ao "Iniciar atividade" (EE17), abre o apontamento de OS
+direto no SGO em nova aba já autenticado quando há sessão válida -
+mantendo o formulário manual de número de OS como alternativa sempre
+disponível (nunca removido), inclusive como único caminho quando não há
+conexão (offline-first preservado). `CACHE_VERSAO` v25.
+
+O painel Streamlit também ganhou login obrigatório (`painel/login.py`,
+novo) contra o mesmo `/auth/validar` - `st.stop()` até validar, nenhuma
+tela roda sem login (diferente da interface de campo, onde a senha do
+SGO é opcional e nunca bloqueia).
+
+As mudanças do lado do Gestão_OS (`api.py`, `Agente/04_ARQUITETURA.md`)
+foram feitas e depois **movidas** para uma pasta separada -
+`Documents/Integração SGOWorkforce/` (fora de qualquer repositório git,
+com `LEIA-ME.md` próprio) - a pedido do responsável do produto, para o
+Gestão_OS (app real em produção da MRS) nunca ser alterado/commitado
+diretamente. O repositório `Gestão_OS` foi restaurado ao estado de
+produção e confirmado limpo.
+
+**Ação pendente do responsável do produto**: levar os arquivos de
+`Documents/Integração SGOWorkforce/` para o branch `dev` do Gestão_OS,
+configurar `WORKFORCE_API_KEY_SECRET` e `AUTH_TOKEN_SECRET` no ambiente
+do `api.py` no Render (o `AUTH_TOKEN_SECRET` precisa ser idêntico ao já
+usado pelo `app.py` no Streamlit Cloud), e preencher os valores reais em
+`interface_campo/js/configSgo.js` e nos secrets `SGO_API_URL`/
+`SGO_WORKFORCE_API_KEY` do painel (hoje com placeholders/ausentes).
+
 ## [2026-08-05] Corrige CORS do backend esquecido na migração pro Cloudflare (ADR-0061)
 
 Ver `docs/89_ADR_0061_CORS_ESQUECIDO_NA_MIGRACAO_CLOUDFLARE.md`. A

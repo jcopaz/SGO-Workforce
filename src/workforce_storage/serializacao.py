@@ -17,6 +17,7 @@ from workforce_core.entities import (
     DadosFalha,
     EventoSecundario,
     Jornada,
+    MembroEquipe,
     OrdemServico,
     Pausa,
     PulsoGps,
@@ -36,10 +37,11 @@ from workforce_core.integracao_sgo import ReferenciaOS
 # v3 adiciona dados_falha em Atividade (Incremento 6).
 # v4 adiciona os_referencia em DadosFalha (Incremento 13).
 # v5 adiciona ordens_servico e resultado em Atividade (ADR-0025).
+# v6 adiciona equipe em Atividade (aba Equipe, 2026-08-07).
 # Arquivos de versoes anteriores nao tem esses campos - jornada_de_dict e
 # atividade_de_dict tratam isso com .get(..., valor_padrao) por
 # compatibilidade retroativa, sem exigir migracao dos arquivos ja gravados.
-FORMATO_VERSAO = 5
+FORMATO_VERSAO = 6
 
 
 def _dt_para_str(valor: Optional[datetime]) -> Optional[str]:
@@ -151,6 +153,24 @@ def ordem_servico_de_dict(dados: Dict[str, Any]) -> OrdemServico:
     )
 
 
+def membro_equipe_para_dict(membro: MembroEquipe) -> Dict[str, Any]:
+    return {
+        "id": str(membro.id),
+        "matricula": membro.matricula,
+        "adicionado_em": _dt_para_str(membro.adicionado_em),
+        "excluida": membro.excluida,
+    }
+
+
+def membro_equipe_de_dict(dados: Dict[str, Any]) -> MembroEquipe:
+    return MembroEquipe(
+        id=UUID(dados["id"]),
+        matricula=dados["matricula"],
+        adicionado_em=_str_para_dt(dados.get("adicionado_em")),
+        excluida=dados.get("excluida", False),
+    )
+
+
 def atividade_para_dict(atividade: Atividade) -> Dict[str, Any]:
     return {
         "id": str(atividade.id),
@@ -160,6 +180,7 @@ def atividade_para_dict(atividade: Atividade) -> Dict[str, Any]:
         "pausas": [pausa_para_dict(pausa) for pausa in atividade.pausas],
         "dados_falha": dados_falha_para_dict(atividade.dados_falha),
         "ordens_servico": [ordem_servico_para_dict(ordem) for ordem in atividade.ordens_servico],
+        "equipe": [membro_equipe_para_dict(membro) for membro in atividade.equipe],
         "resultado": atividade.resultado.value if atividade.resultado is not None else None,
     }
 
@@ -174,6 +195,7 @@ def atividade_de_dict(dados: Dict[str, Any]) -> Atividade:
         pausas=[pausa_de_dict(p) for p in dados["pausas"]],
         dados_falha=dados_falha_de_dict(dados.get("dados_falha")),
         ordens_servico=[ordem_servico_de_dict(o) for o in dados.get("ordens_servico", [])],
+        equipe=[membro_equipe_de_dict(m) for m in dados.get("equipe", [])],
         resultado=ResultadoAtividade(resultado_bruto) if resultado_bruto else None,
     )
 

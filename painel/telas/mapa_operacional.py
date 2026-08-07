@@ -11,6 +11,7 @@ docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md.
 
 from __future__ import annotations
 
+import html
 import sys
 from collections import Counter
 from datetime import time, timedelta
@@ -34,9 +35,9 @@ from dados import (
     formatar_data_hora,
     reclassificar_qualidade_pulsos,
 )
-from graficos import grafico_linha_do_tempo, renderizar_embutido
+from graficos import grafico_linha_do_tempo, legenda_linha_do_tempo, renderizar_embutido
 from malha_ferrea import carregar_trilhos_malha_mrs
-from mapa import construir_mapa, cor_por_rotulo, rotulo_classificacao_pulso
+from mapa import construir_mapa, cor_por_rotulo, resumo_jornada_com_localizacao, rotulo_classificacao_pulso
 from workforce_core.catalogo import catalogo_completo
 from workforce_core.consolidacao import classificar_instante, linha_do_tempo
 from workforce_core.fuso_horario import para_horario_brasil
@@ -270,6 +271,10 @@ mapa = construir_mapa(
     tempo_minimo_cluster=timedelta(minutes=tempo_minimo_cluster_minutos),
     trilhos_ferrovia=carregar_trilhos_malha_mrs(),
     cor_por_pulso=cor_por_pulso,
+    # rotulos_por_pulso ja calculado acima (usado tambem pro filtro de
+    # atividade e pra colorir) - so faltava chegar ate o popup (pedido do
+    # responsavel pelo produto em 2026-08-07).
+    rotulo_por_pulso=rotulos_por_pulso,
     marco_inicio=marco_inicio,
     marco_fim=marco_fim,
 )
@@ -299,5 +304,54 @@ with col_linha_tempo:
             height=560,
             scrolling=False,
         )
+        # Legenda HTML simples (pedido do responsavel do produto em
+        # 2026-08-07) - o grafico acima nao usa a legenda nativa do ECharts
+        # de proposito (series sinteticas por posicao, ver docstring de
+        # grafico_linha_do_tempo), entao a legenda e' montada aqui a partir
+        # dos rotulos distintos que aparecem no dia selecionado.
+        chips = "".join(
+            f'<span style="display:inline-flex;align-items:center;margin:2px 10px 2px 0;'
+            f'font-size:12px;color:#475569;">'
+            f'<span style="width:10px;height:10px;border-radius:2px;background:{cor};'
+            f'margin-right:4px;flex-shrink:0;"></span>{html.escape(rotulo)}</span>'
+            for rotulo, cor in legenda_linha_do_tempo({data_filtro: segmentos_do_dia}, catalogo)
+        )
+        st.markdown(f'<div style="line-height:1.8;">{chips}</div>', unsafe_allow_html=True)
     else:
         st.info("Nenhum apontamento registrado nesta jornada no dia selecionado.")
+
+
+# Tabela resumo da jornada (pedido do responsavel do produto em
+# 2026-08-07): Atividade/Evento, inicio, termino, localizacao de
+# inicio/encerramento. Usa a JORNADA INTEIRA e os pulsos COMPLETOS (nao
+# `pulsos_filtrados`/`data_filtro`) - mesmo espirito da linha do tempo
+# acima (o resumo e da jornada toda, o filtro do mapa e' so pro mapa).
+st.caption("Resumo da jornada")
+
+
+def _formatar_localizacao_resumo(pulso) -> str:
+    if pulso is None:
+        return "sem pulso próximo"
+    return f"{pulso.latitude:.5f}, {pulso.longitude:.5f} ({formatar_data_hora(pulso.timestamp_dispositivo)})"
+
+
+linhas_resumo = resumo_jornada_com_localizacao(jornada_selecionada, pulsos, catalogo)
+if linhas_resumo:
+    st.dataframe(
+        [
+            {
+                "Atividade/Evento": linha.atividade_evento,
+                "Data/Hora Início": formatar_data_hora(linha.inicio),
+                "Data/Hora Término": formatar_data_hora(linha.fim),
+                "Localização Início/Encerramento": (
+                    f"Início: {_formatar_localizacao_resumo(linha.localizacao_inicio)} "
+                    f"→ Fim: {_formatar_localizacao_resumo(linha.localizacao_fim)}"
+                ),
+            }
+            for linha in linhas_resumo
+        ],
+        width="stretch",
+        hide_index=True,
+    )
+else:
+    st.info("Nenhum intervalo classificado nesta jornada.")

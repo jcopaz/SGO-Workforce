@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import hashlib
 import html
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -22,8 +23,8 @@ import folium
 
 from dados import rotulo_motivo
 from workforce_core.catalogo import CatalogoMotivos
-from workforce_core.consolidacao import ClassificacaoInstante
-from workforce_core.entities import PulsoGps
+from workforce_core.consolidacao import ClassificacaoInstante, linha_do_tempo
+from workforce_core.entities import Jornada, PulsoGps
 from workforce_core.enums import QualidadePulso
 from workforce_core.fuso_horario import para_horario_brasil
 from workforce_core.geo import ClusterPermanencia, agrupar_permanencia, simplificar_trajetoria
@@ -120,13 +121,22 @@ def _horario_legivel(momento) -> str:
     return convertido.strftime("%d/%m/%Y %H:%M:%S") if convertido is not None else "--"
 
 
-def _popup_pulso(pulso: PulsoGps) -> str:
+def _popup_pulso(pulso: PulsoGps, rotulo: Optional[str] = None) -> str:
     linhas = [
         f"Colaborador: {html.escape(pulso.colaborador_matricula)}",
         f"Horario: {html.escape(_horario_legivel(pulso.timestamp_dispositivo))}",
         f"Precisao: {pulso.precisao_metros:.0f} m",
         f"Qualidade: {html.escape(pulso.qualidade.value)}",
     ]
+    # Rotulo da atividade/pausa/evento no instante do pulso (pedido do
+    # responsavel pelo produto em 2026-08-07: o popup so mostrava
+    # qualidade, sem dar pra saber qual atividade era so pela cor).
+    # Primeira linha (mais visivel), so quando informado - quem chama
+    # (mapa_operacional.py) ja calcula isso para colorir o pulso
+    # (rotulo_classificacao_pulso/cor_por_rotulo), so nao repassava ao
+    # popup ate agora.
+    if rotulo:
+        linhas.insert(0, f"Atividade/Evento: {html.escape(rotulo)}")
     return "<br>".join(linhas)
 
 
@@ -150,12 +160,14 @@ def construir_mapa(
     mostrar_pulsos_brutos: bool = True,
     trilhos_ferrovia: Optional[List[List[Tuple[float, float]]]] = None,
     cor_por_pulso: Optional[Dict[UUID, str]] = None,
+    rotulo_por_pulso: Optional[Dict[UUID, str]] = None,
     marco_inicio: Optional[PulsoGps] = None,
     marco_fim: Optional[PulsoGps] = None,
 ) -> folium.Map:
     """Monta o mapa com as camadas de docs/13_MAPA_OPERACIONAL.md que ja
     sao possiveis com o que existe hoje: pulsos brutos (coloridos por
-    atividade quando `cor_por_pulso` e informado - ver
+    atividade quando `cor_por_pulso` e informado, com o rotulo da
+    atividade no popup quando `rotulo_por_pulso` tambem e informado - ver
     `rotulo_classificacao_pulso`/`cor_por_rotulo`), trajetoria
     simplificada, clusters de permanencia, marcos de inicio/fim
     (`marco_inicio`/`marco_fim` - pedido do responsavel pelo produto em
@@ -226,6 +238,7 @@ def construir_mapa(
             cor_categoria = cor_por_pulso.get(pulso.id) if cor_por_pulso else None
             cor_marcador = cor_categoria or _COR_PULSO_BRUTO
             cor_borda = _COR_BORDA_PULSO_BRUTO if cor_categoria is None else cor_marcador
+            rotulo_pulso = rotulo_por_pulso.get(pulso.id) if rotulo_por_pulso else None
             folium.CircleMarker(
                 location=(pulso.latitude, pulso.longitude),
                 radius=6 if suspeito else 4,
@@ -235,7 +248,7 @@ def construir_mapa(
                 fill=True,
                 fill_color=cor_marcador,
                 fill_opacity=0.9,
-                popup=folium.Popup(_popup_pulso(pulso), max_width=300),
+                popup=folium.Popup(_popup_pulso(pulso, rotulo_pulso), max_width=300),
             ).add_to(mapa)
 
     # Trajetoria/clusters sao camadas de INFERENCIA (docs/13: "nunca prova
@@ -277,3 +290,59 @@ def construir_mapa(
             ).add_to(mapa)
 
     return mapa
+
+
+# ----------------------------------------------------------------------
+# Tabela resumo da jornada (pedido do responsavel do produto em
+# 2026-08-07): Atividade/Evento, inicio, termino e a localizacao de
+# inicio/encerramento de cada intervalo.
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class LinhaResumoJornada:
+    """Uma linha da tabela resumo - um intervalo classificado da jornada
+    (`linha_do_tempo`) com o pulso mais proximo do inicio e do fim.
+
+    `localizacao_inicio`/`localizacao_fim` sao o `PulsoGps` inteiro (nao so
+    lat/lon) para quem exibe decidir o que mostrar (coordenadas, horario
+    real do pulso, precisao). Como GPS e obrigatorio em toda transicao
+    (ADR-0043/0048), o pulso mais proximo do timestamp de inicio/fim do
+    intervalo tende a ser exatamente o pulso capturado naquela transicao -
+    nao e uma estimativa vaga, e a mesma leitura que travou a transicao."""
+
+    atividade_evento: str
+    inicio: datetime
+    fim: datetime
+    localizacao_inicio: Optional[PulsoGps]
+    localizacao_fim: Optional[PulsoGps]
+
+
+def _pulso_mais_proximo(momento: datetime, pulsos: List[PulsoGps]) -> Optional[PulsoGps]:
+    if not pulsos:
+        return None
+    return min(pulsos, key=lambda p: abs((p.timestamp_dispositivo - momento).total_seconds()))
+
+
+def resumo_jornada_com_localizacao(
+    jornada: Jornada, pulsos: List[PulsoGps], catalogo: Optional[CatalogoMotivos] = None
+) -> List[LinhaResumoJornada]:
+    """Uma linha por intervalo real da jornada (atividade, atendimento de
+    falha, pausa, evento secundario) - "Sem atividade" (lacuna, nada que o
+    colaborador de fato fez) fica de fora, nao e um item pra reportar
+    localizacao. `pulsos` deveria ser a lista completa da jornada (nao
+    filtrada por atividade/horario), senao o pulso mais proximo pode nao
+    ser encontrado para um intervalo fora do filtro."""
+    linhas = []
+    for intervalo in linha_do_tempo(jornada):
+        if intervalo.tipo == "SEM_ATIVIDADE":
+            continue
+        classificacao = ClassificacaoInstante(tipo=intervalo.tipo, motivo=intervalo.motivo)
+        linhas.append(
+            LinhaResumoJornada(
+                atividade_evento=rotulo_classificacao_pulso(classificacao, catalogo),
+                inicio=intervalo.inicio,
+                fim=intervalo.fim,
+                localizacao_inicio=_pulso_mais_proximo(intervalo.inicio, pulsos),
+                localizacao_fim=_pulso_mais_proximo(intervalo.fim, pulsos),
+            )
+        )
+    return linhas

@@ -32,9 +32,11 @@ import * as Geolocalizacao from "./geolocalizacao.js";
 import * as FotoFalha from "./fotoFalha.js";
 import * as ContinuacoesFalha from "./continuacoesFalha.js";
 import * as EstruturaCodigos from "./estruturaCodigos.js";
+import * as IntegracaoSgo from "./integracaoSgo.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
+  senhaSgo: document.getElementById("senhaSgo"),
   status: document.getElementById("status"),
   statusSincronizacao: document.getElementById("statusSincronizacao"),
   mensagem: document.getElementById("mensagem"),
@@ -77,6 +79,14 @@ let mostrarTransferenciaFalha = false;
 // tanto "Iniciar jornada" quanto a recuperacao de jornada aberta em
 // iniciar(), sem duplicar a logica em cada botao.
 let idIntervaloCapturaPeriodica = null;
+// Sessao validada contra o SGO (login real do colaborador, ver
+// tentarValidarLoginSgo/integracaoSgo.js) - null enquanto nao houver login
+// validado com sucesso (sem senha digitada, senha errada, sem conexao, ou
+// integracao ainda nao configurada). So habilita o botao "Abrir apontamento
+// de OS no SGO" em criarBlocoOrdensServico - nunca bloqueia nada do fluxo
+// normal do Workforce (offline-first: iniciar jornada/atividade nunca
+// depende disto, so o atalho pro SGO depende).
+let sessaoSgo = null;
 // Valores sentinela (nunca colidem com um codigo EE real, que e sempre
 // "EE" + 2 digitos) para os dois pontos de entrada especiais do bloco
 // Execucao - nao sao codigos soltos no motor de dominio, sao o que
@@ -426,12 +436,67 @@ function criarFormularioTransferenciaFalha(atividade) {
   return bloco;
 }
 
+// Valida a senha do SGO digitada (opcional) contra /auth/validar - best
+// effort, dispara em paralelo ao "Iniciar jornada" (nunca await'ada por
+// quem chama, nunca atrasa nem bloqueia o inicio da jornada). Sem senha
+// digitada, nao tenta nada (colaborador que nao usa a integracao com o SGO
+// no dia nao gasta uma chamada de rede a toa). Resultado (sucesso ou
+// falha) so afeta se o botao "Abrir apontamento de OS no SGO" aparece mais
+// tarde, em criarBlocoOrdensServico - nunca o resto do fluxo.
+function tentarValidarLoginSgo(matricula, senha) {
+  if (!senha) return;
+  IntegracaoSgo.validarLoginSgo(matricula, senha).then((resultado) => {
+    if (resultado.ok) {
+      sessaoSgo = resultado;
+      render();
+    }
+    // Falha (senha errada, sem conexao, integracao nao configurada): fica
+    // silenciosa aqui de proposito - criarBlocoOrdensServico ja explica o
+    // estado "sem sessao do SGO" quando isso importar de verdade (quando o
+    // colaborador chegar numa Atividade e o bloco de OS for renderizado).
+  });
+}
+
 // Bloco de OS (ADR-0025) - texto livre, múltiplas OS por atividade,
 // exclusão individual soft-delete (a OS some da lista visível mas nunca é
-// removida do registro, ver motorJornada.js::excluirOrdemServico).
+// removida do registro, ver motorJornada.js::excluirOrdemServico). Desde a
+// integracao com o SGO (2026-08-07), tambem oferece abrir o apontamento de
+// OS direto no SGO (nova aba, ja autenticado) quando ha uma sessaoSgo
+// valida - a entrada manual de numero de OS continua sempre disponivel
+// como alternativa/complemento (nunca removida: e o unico caminho quando
+// nao ha sessao do SGO, ex.: sem conexao no momento).
 function criarBlocoOrdensServico(atividade) {
   const bloco = document.createElement("div");
   bloco.className = "bloco-ordens-servico";
+
+  const linkSgo = IntegracaoSgo.linkApontamentoSgo(sessaoSgo);
+  const avisoSgo = document.createElement("p");
+  avisoSgo.className = "aviso-piloto";
+  if (linkSgo) {
+    avisoSgo.textContent = `Sessão do SGO ativa (${sessaoSgo.nome || sessaoSgo.username}).`;
+    bloco.appendChild(avisoSgo);
+    bloco.appendChild(
+      botao(
+        "Abrir apontamento de OS no SGO",
+        () => {
+          window.open(linkSgo, "_blank", "noopener");
+          // Revisao de seguranca 2026-08-07: o sid e' de uso curto (5 min,
+          // ver TTL_HORAS_SID_SSO em api.py) e viaja na URL - depois de
+          // aberto uma vez, descarta da memoria do Workforce em vez de
+          // deixar disponivel pra reabrir/reusar (aparelho compartilhado).
+          // O formulario manual de OS abaixo continua disponivel; abrir o
+          // SGO de novo exige "Iniciar jornada" de novo (novo login).
+          sessaoSgo = { ...sessaoSgo, sid: null };
+          render();
+        },
+        { destaque: true }
+      )
+    );
+  } else {
+    avisoSgo.textContent =
+      "Sem sessão ativa do SGO (sem conexão agora, senha não informada, ou integração ainda não configurada) - registre o número da OS manualmente abaixo.";
+    bloco.appendChild(avisoSgo);
+  }
 
   const ativas = atividade.ordensServico.filter((ordem) => !ordem.excluida);
   if (ativas.length > 0) {
@@ -467,6 +532,63 @@ function criarBlocoOrdensServico(atividade) {
         return;
       }
       executar(() => motor.adicionarOrdemServico(RelogioSimulado.agora(), numero));
+    })
+  );
+
+  return bloco;
+}
+
+// Aba Equipe (pedido do responsavel pelo produto em 2026-08-07): lista de
+// matriculas que trabalharam junto nesta atividade - mesmo padrao de
+// criarBlocoOrdensServico (adicionar/excluir soft-delete), disponivel tanto
+// em atividade comum quanto em atendimento de falha (quem estava presente
+// nao depende do tipo de atividade). So registro/auditoria - nunca muda o
+// dono da Jornada nem o calculo de HH (esse continua exclusivamente do
+// colaborador logado, regra de ouro 4).
+function criarBlocoEquipe(atividade) {
+  const bloco = document.createElement("div");
+  bloco.className = "bloco-equipe";
+
+  const titulo = document.createElement("p");
+  titulo.className = "selecao-hierarquica-contexto";
+  titulo.textContent = "Equipe (quem mais participou desta atividade):";
+  bloco.appendChild(titulo);
+
+  const ativos = atividade.equipe.filter((membro) => !membro.excluida);
+  if (ativos.length > 0) {
+    const lista = document.createElement("ul");
+    lista.className = "lista-equipe";
+    for (const membro of ativos) {
+      const item = document.createElement("li");
+      const texto = document.createElement("span");
+      texto.textContent = membro.matricula;
+      item.appendChild(texto);
+      item.appendChild(
+        botao("Excluir", () => executar(() => motor.excluirMembroEquipe(membro.id)))
+      );
+      lista.appendChild(item);
+    }
+    bloco.appendChild(lista);
+  }
+
+  const label = document.createElement("label");
+  label.className = "campo";
+  const span = document.createElement("span");
+  span.textContent = "Matrícula do colega";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.inputMode = "numeric";
+  label.append(span, input);
+  bloco.appendChild(label);
+
+  bloco.appendChild(
+    botao("Adicionar à equipe", () => {
+      const matricula = input.value.trim();
+      if (!matricula) {
+        mostrarAviso("Informe a matrícula antes de adicionar à equipe.");
+        return;
+      }
+      executar(() => motor.adicionarMembroEquipe(RelogioSimulado.agora(), matricula));
     })
   );
 
@@ -711,6 +833,7 @@ function render() {
         async () => {
           if (!prepararMotorComMatricula()) return;
           const matricula = motor.jornada.colaboradorMatricula;
+          tentarValidarLoginSgo(matricula, els.senhaSgo.value);
           const pendente = await ContinuacoesFalha.buscarPendente(matricula);
           if (pendente) {
             const sucesso = await executarComGpsObrigatorio(() => {
@@ -750,6 +873,12 @@ function render() {
         () => {
           motor = null;
           mostrarTransferenciaFalha = false;
+          // Sessao do SGO e' por colaborador (o proximo "Iniciar jornada"
+          // pode ser outra matricula, aparelho compartilhado) - nunca
+          // carrega a sessao (nem a senha digitada) de quem usou o
+          // aparelho antes.
+          sessaoSgo = null;
+          if (els.senhaSgo) els.senhaSgo.value = "";
           limparMensagem();
           render();
         },
@@ -780,9 +909,11 @@ function render() {
     if (atividade.dadosFalha) {
       els.status.textContent = "Atendimento de falha em andamento.";
       renderFormularioAtendimentoFalha(atividade);
+      els.botoes.appendChild(criarBlocoEquipe(atividade));
     } else {
       els.status.textContent = "Atividade em andamento.";
       els.botoes.appendChild(criarBlocoOrdensServico(atividade));
+      els.botoes.appendChild(criarBlocoEquipe(atividade));
     }
     const rotuloPausa = document.createElement("p");
     rotuloPausa.className = "selecao-hierarquica-contexto";

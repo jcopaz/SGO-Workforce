@@ -15,7 +15,7 @@ import json
 from datetime import date, datetime, timezone
 
 from dados import SegmentoLinhaDoTempo, fatiar_linha_do_tempo_por_dia
-from graficos import grafico_linha_do_tempo
+from graficos import grafico_linha_do_tempo, legenda_linha_do_tempo
 from mapa import cor_por_rotulo
 from workforce_core.consolidacao import IntervaloClassificado
 
@@ -200,3 +200,105 @@ def test_grafico_linha_do_tempo_legenda_oculta():
     opcoes = json.loads(grafico.dump_options())
 
     assert opcoes["legend"][0]["show"] is False
+
+
+# ----------------------------------------------------------------------
+# Codigo dentro do segmento + dataZoom por scroll (pedido do responsavel
+# do produto em 2026-08-07).
+# ----------------------------------------------------------------------
+def test_grafico_linha_do_tempo_mostra_codigo_dentro_do_segmento_longo():
+    dia = date(2026, 8, 1)
+    # 90 min - acima do limiar de 30min pro rotulo nao ficar espremido.
+    por_dia = {dia: [_segmento(dia, 7, 0, 8, 30, "EVENTO_SECUNDARIO", "EE12")]}
+
+    grafico = grafico_linha_do_tempo(por_dia)
+    opcoes = json.loads(grafico.dump_options())
+
+    item = opcoes["series"][1]["data"][0]
+    assert item["label"]["show"] is True
+    assert item["label"]["formatter"] == "EE12"
+
+
+def test_grafico_linha_do_tempo_esconde_codigo_em_segmento_curto():
+    dia = date(2026, 8, 1)
+    # 10 min - abaixo do limiar, nao deveria ganhar rotulo dentro da barra.
+    por_dia = {dia: [_segmento(dia, 7, 0, 7, 10, "EVENTO_SECUNDARIO", "EE12")]}
+
+    grafico = grafico_linha_do_tempo(por_dia)
+    opcoes = json.loads(grafico.dump_options())
+
+    item = opcoes["series"][1]["data"][0]
+    assert "label" not in item
+
+
+def test_grafico_linha_do_tempo_codigo_atividade_e_atendimento_falha():
+    # ATIVIDADE/ATENDIMENTO_FALHA nao tem "motivo" (so PAUSA/EVENTO_SECUNDARIO
+    # tem) - o codigo vem fixo (EE17/EE21, ja documentados em app.js).
+    dia = date(2026, 8, 1)
+    por_dia = {
+        dia: [
+            _segmento(dia, 7, 0, 8, 0, "ATIVIDADE"),
+            _segmento(dia, 8, 0, 9, 0, "ATENDIMENTO_FALHA"),
+        ]
+    }
+
+    grafico = grafico_linha_do_tempo(por_dia)
+    opcoes = json.loads(grafico.dump_options())
+
+    assert opcoes["series"][1]["data"][0]["label"]["formatter"] == "EE17"
+    assert opcoes["series"][2]["data"][0]["label"]["formatter"] == "EE21"
+
+
+def test_grafico_linha_do_tempo_sem_atividade_nunca_ganha_codigo():
+    dia = date(2026, 8, 1)
+    por_dia = {dia: [_segmento(dia, 7, 0, 9, 0, "SEM_ATIVIDADE")]}
+
+    grafico = grafico_linha_do_tempo(por_dia)
+    opcoes = json.loads(grafico.dump_options())
+
+    assert "label" not in opcoes["series"][1]["data"][0]
+
+
+def test_grafico_linha_do_tempo_tem_datazoom_vertical_por_scroll():
+    dia = date(2026, 8, 1)
+    por_dia = {dia: [_segmento(dia, 8, 0, 9, 0, "ATIVIDADE")]}
+
+    grafico = grafico_linha_do_tempo(por_dia)
+    opcoes = json.loads(grafico.dump_options())
+
+    datazoom = opcoes["dataZoom"][0]
+    assert datazoom["type"] == "inside"
+    assert datazoom["orient"] == "vertical"
+
+
+# ----------------------------------------------------------------------
+# legenda_linha_do_tempo - legenda HTML montada a parte (o grafico acima
+# nao usa a legenda nativa do ECharts, series sinteticas por posicao).
+# ----------------------------------------------------------------------
+def test_legenda_linha_do_tempo_rotulos_distintos_ordenados():
+    dia1 = date(2026, 8, 1)
+    dia2 = date(2026, 8, 2)
+    por_dia = {
+        dia1: [
+            _segmento(dia1, 7, 0, 8, 0, "ATIVIDADE"),
+            _segmento(dia1, 8, 0, 8, 15, "PAUSA", "EE02"),
+        ],
+        dia2: [
+            _segmento(dia2, 7, 0, 8, 0, "ATIVIDADE"),  # repetido de proposito - so 1 entrada
+            _segmento(dia2, 8, 0, 8, 30, "EVENTO_SECUNDARIO", "EE12"),
+        ],
+    }
+
+    legenda = legenda_linha_do_tempo(por_dia)
+
+    rotulos = [rotulo for rotulo, _cor in legenda]
+    assert rotulos == sorted(set(rotulos))  # sem duplicata, ordenado
+    assert "Atividade" in rotulos
+    assert any("EE02" in r for r in rotulos)
+    assert any("EE12" in r for r in rotulos)
+    for rotulo, cor in legenda:
+        assert cor == cor_por_rotulo(rotulo)
+
+
+def test_legenda_linha_do_tempo_vazia_sem_segmentos():
+    assert legenda_linha_do_tempo({}) == []

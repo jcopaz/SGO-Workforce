@@ -27,8 +27,10 @@ from mapa import (
     _COR_TRAJETORIA,
     construir_mapa,
     cor_por_rotulo,
+    resumo_jornada_com_localizacao,
     rotulo_classificacao_pulso,
 )
+from workforce_core import MotorJornada
 from workforce_core.consolidacao import ClassificacaoInstante
 from workforce_core.entities import PulsoGps
 from workforce_core.enums import QualidadePulso
@@ -263,6 +265,41 @@ def test_construir_mapa_cor_por_pulso_sobrescreve_amarelo_padrao(tmp_path):
     assert _COR_PULSO_BRUTO not in html
 
 
+def test_construir_mapa_rotulo_por_pulso_aparece_no_popup(tmp_path):
+    # Pedido do responsavel pelo produto em 2026-08-07: o popup do pulso so
+    # mostrava qualidade, sem dar pra saber qual atividade era so pela cor.
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
+    rotulo_por_pulso = {pulso.id: "EE07 - Reunião ou ADM" for pulso in pulsos}
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        rotulo_por_pulso=rotulo_por_pulso,
+    )
+    html = mapa.get_root().render()
+    assert "Atividade/Evento:" in html
+    assert "EE07" in html
+
+
+def test_construir_mapa_sem_rotulo_por_pulso_nao_mostra_linha_de_atividade(tmp_path):
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+    )
+    html = mapa.get_root().render()
+    assert "Atividade/Evento:" not in html
+
+
 # ----------------------------------------------------------------------
 # Filtro de data + faixa de horario (pedido do responsavel pelo produto
 # em 2026-08-04, ver ADR-0047).
@@ -415,3 +452,84 @@ def test_construir_mapa_pulso_suspeito_fica_fora_da_trajetoria(tmp_path):
     )
     html = mapa.get_root().render()
     assert not _contido("Traçar trajetória", html)
+
+
+# ----------------------------------------------------------------------
+# resumo_jornada_com_localizacao (tabela resumo, pedido do responsavel do
+# produto em 2026-08-07).
+# ----------------------------------------------------------------------
+def _pulso_no_instante(momento: datetime, matricula: str = "12345") -> PulsoGps:
+    return PulsoGps(
+        jornada_id=uuid4(),
+        colaborador_matricula=matricula,
+        latitude=-23.5505,
+        longitude=-46.6333,
+        precisao_metros=10.0,
+        timestamp_dispositivo=momento,
+    )
+
+
+def test_resumo_jornada_com_localizacao_pega_pulso_mais_proximo_de_inicio_e_fim():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(datetime(2026, 1, 1, 8, 0))
+    motor.iniciar_atividade(datetime(2026, 1, 1, 8, 10))
+    motor.encerrar_atividade(datetime(2026, 1, 1, 9, 0))
+    motor.encerrar_jornada(datetime(2026, 1, 1, 9, 0))
+
+    # Pulso exatamente no inicio/fim da atividade (GPS obrigatorio em toda
+    # transicao, ADR-0043/0048 - o caso real e exatamente este) + um pulso
+    # de "ruido" bem mais longe no tempo, que nunca deveria ser escolhido.
+    pulso_inicio = _pulso_no_instante(datetime(2026, 1, 1, 8, 10))
+    pulso_fim = _pulso_no_instante(datetime(2026, 1, 1, 9, 0))
+    pulso_ruido = _pulso_no_instante(datetime(2026, 1, 1, 23, 0))
+
+    resumo = resumo_jornada_com_localizacao(motor.jornada, [pulso_ruido, pulso_inicio, pulso_fim])
+
+    assert len(resumo) == 1
+    linha = resumo[0]
+    assert linha.atividade_evento == "Atividade"
+    assert linha.inicio == datetime(2026, 1, 1, 8, 10)
+    assert linha.fim == datetime(2026, 1, 1, 9, 0)
+    assert linha.localizacao_inicio is pulso_inicio
+    assert linha.localizacao_fim is pulso_fim
+
+
+def test_resumo_jornada_com_localizacao_ignora_sem_atividade():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(datetime(2026, 1, 1, 8, 0))
+    motor.iniciar_atividade(datetime(2026, 1, 1, 8, 30))  # lacuna 8:00-8:30 = SEM_ATIVIDADE
+    motor.encerrar_atividade(datetime(2026, 1, 1, 9, 0))
+    motor.encerrar_jornada(datetime(2026, 1, 1, 9, 0))
+
+    resumo = resumo_jornada_com_localizacao(motor.jornada, [])
+
+    assert len(resumo) == 1  # so a Atividade - a lacuna SEM_ATIVIDADE nao vira linha
+    assert resumo[0].atividade_evento == "Atividade"
+
+
+def test_resumo_jornada_com_localizacao_sem_pulsos_devolve_localizacao_none():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(datetime(2026, 1, 1, 8, 0))
+    motor.iniciar_atividade(datetime(2026, 1, 1, 8, 10))
+    motor.encerrar_atividade(datetime(2026, 1, 1, 9, 0))
+    motor.encerrar_jornada(datetime(2026, 1, 1, 9, 0))
+
+    resumo = resumo_jornada_com_localizacao(motor.jornada, [])
+
+    assert resumo[0].localizacao_inicio is None
+    assert resumo[0].localizacao_fim is None
+
+
+def test_resumo_jornada_com_localizacao_pausa_usa_rotulo_do_motivo():
+    motor = MotorJornada("12345")
+    motor.iniciar_jornada(datetime(2026, 1, 1, 8, 0))
+    motor.iniciar_atividade(datetime(2026, 1, 1, 8, 10))
+    motor.iniciar_pausa(datetime(2026, 1, 1, 9, 0), "EE02")
+    motor.finalizar_pausa(datetime(2026, 1, 1, 9, 15))
+    motor.encerrar_atividade(datetime(2026, 1, 1, 10, 0))
+    motor.encerrar_jornada(datetime(2026, 1, 1, 10, 0))
+
+    resumo = resumo_jornada_com_localizacao(motor.jornada, [])
+
+    rotulos = [linha.atividade_evento for linha in resumo]
+    assert any("EE02" in rotulo for rotulo in rotulos)

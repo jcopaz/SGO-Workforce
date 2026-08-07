@@ -274,6 +274,10 @@ test("recuperacao de estado: aPartirDe tolera jornada antiga sem eventosSecundar
   assert.equal(recuperado._atividadeAtiva.id, "atividade-1");
   assert.deepEqual(recuperado.jornada.eventosSecundarios, []);
   assert.deepEqual(recuperado.jornada.atividades[0].ordensServico, []);
+  // equipe ausente de proposito (formato anterior a aba Equipe, 2026-08-07)
+  // - mesmo bug de producao do comentario acima, prevenido aqui desde o
+  // inicio (normalizarCamposRetrocompativeis ja cobre equipe).
+  assert.deepEqual(recuperado.jornada.atividades[0].equipe, []);
   // A jornada recuperada continua utilizavel normalmente depois do reparo.
   recuperado.encerrarAtividade(dt(10, 0));
   recuperado.encerrarJornada(dt(10, 0));
@@ -723,6 +727,109 @@ test("excluirOrdemServico sem atividade ativa", () => {
   motor.iniciarJornada(dt(8, 0));
   assert.throws(
     () => motor.excluirOrdemServico("qualquer-id"),
+    Erros.AtividadeNaoAtivaError
+  );
+});
+
+// ----------------------------------------------------------------------
+// Equipe (aba Equipe, pedido do responsavel pelo produto em 2026-08-07,
+// espelha tests/test_equipe.py) - mesmo padrao de ordem de servico acima,
+// exceto que TAMBEM e permitida em atendimento de falha (quem estava
+// presente independe do tipo de atividade).
+// ----------------------------------------------------------------------
+test("adicionarMembroEquipe associa a atividade ativa", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+
+  const membro = motor.adicionarMembroEquipe(dt(8, 15), "54321");
+
+  assert.equal(membro.matricula, "54321");
+  assert.equal(membro.excluida, false);
+  assert.deepEqual(motor.jornada.atividades[0].equipe, [membro]);
+});
+
+test("adicionar multiplos membros de equipe", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+
+  motor.adicionarMembroEquipe(dt(8, 15), "54321");
+  motor.adicionarMembroEquipe(dt(8, 20), "67890");
+
+  const matriculas = motor.jornada.atividades[0].equipe.map((m) => m.matricula);
+  assert.deepEqual(matriculas, ["54321", "67890"]);
+});
+
+test("adicionarMembroEquipe matricula obrigatoria", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  assert.throws(
+    () => motor.adicionarMembroEquipe(dt(8, 15), ""),
+    Erros.MembroEquipeMatriculaObrigatoriaError
+  );
+});
+
+test("adicionarMembroEquipe sem atividade ativa", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.adicionarMembroEquipe(dt(8, 15), "54321"),
+    Erros.AtividadeNaoAtivaError
+  );
+});
+
+test("adicionarMembroEquipe e permitido em atendimento de falha", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtendimentoFalha(dt(8, 10));
+
+  const membro = motor.adicionarMembroEquipe(dt(8, 15), "54321");
+
+  assert.equal(membro.matricula, "54321");
+});
+
+test("excluirMembroEquipe marca excluida sem remover da lista", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const membro = motor.adicionarMembroEquipe(dt(8, 15), "54321");
+
+  motor.excluirMembroEquipe(membro.id);
+
+  const atividade = motor.jornada.atividades[0];
+  assert.equal(atividade.equipe.length, 1);
+  assert.equal(atividade.equipe[0].excluida, true);
+});
+
+test("excluirMembroEquipe e idempotente", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const membro = motor.adicionarMembroEquipe(dt(8, 15), "54321");
+
+  motor.excluirMembroEquipe(membro.id);
+  motor.excluirMembroEquipe(membro.id);
+
+  assert.equal(motor.jornada.atividades[0].equipe[0].excluida, true);
+});
+
+test("excluirMembroEquipe inexistente", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  assert.throws(
+    () => motor.excluirMembroEquipe("id-que-nao-existe"),
+    Erros.MembroEquipeNaoEncontradoError
+  );
+});
+
+test("excluirMembroEquipe sem atividade ativa", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  assert.throws(
+    () => motor.excluirMembroEquipe("qualquer-id"),
     Erros.AtividadeNaoAtivaError
   );
 });

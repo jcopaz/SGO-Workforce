@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import streamlit as st
 
 from estilo import aplicar_estilo_sgo
+from login import exigir_login, mostrar_usuario_logado
 
 st.set_page_config(
     page_title="SGO Workforce | Painel (piloto)",
@@ -29,6 +30,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 aplicar_estilo_sgo()
+
+# Login contra o SGO (ADR-0062) - bloqueia (st.stop()) tudo abaixo ate' o
+# login ser validado. Nada do painel (telas/dados) deve rodar sem isso.
+exigir_login()
+mostrar_usuario_logado()
 
 _CAMINHO_ASSETS = Path(__file__).resolve().parent / "assets"
 

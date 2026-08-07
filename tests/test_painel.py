@@ -310,6 +310,29 @@ def test_grafico_distribuicao_pizza_renderiza_html_autocontido():
     assert _contido("Deslocamento rodoviário", html)
 
 
+def test_grafico_distribuicao_pizza_usa_cor_por_rotulo_pedido_2026_08_07():
+    # Mesma categoria = mesma cor em qualquer grafico do painel (e no mapa
+    # operacional) - nunca a paleta automatica do pyecharts.
+    from mapa import cor_por_rotulo
+
+    por_categoria = {Categoria.DESLOCAMENTO_RODOVIARIO: timedelta(minutes=30)}
+    grafico = grafico_distribuicao_pizza(por_categoria)
+    html = renderizar_embutido(grafico)
+
+    cor_esperada = cor_por_rotulo(rotulo_categoria(Categoria.DESLOCAMENTO_RODOVIARIO))
+    assert cor_esperada.lower() in html.lower()
+
+
+def test_grafico_hh_por_colaborador_usa_cor_por_rotulo_pedido_2026_08_07():
+    from mapa import cor_por_rotulo
+
+    grafico = grafico_hh_por_colaborador(_linhas_evento_exemplo())
+    html = renderizar_embutido(grafico)
+
+    cor_esperada = cor_por_rotulo(rotulo_categoria(Categoria.ATIVIDADE_PLANEJADA))
+    assert cor_esperada.lower() in html.lower()
+
+
 def _linhas_evento_exemplo():
     return [
         LinhaEvento(

@@ -62,7 +62,7 @@ from typing import Dict, List, Optional, Tuple
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Funnel, Gauge, Line, Pie, Sankey, Scatter
 
-from workforce_core.catalogo import Categoria
+from workforce_core.catalogo import Categoria, CatalogoMotivos
 from workforce_core.consolidacao import ClassificacaoInstante, LinhaAtendimentoFalha, LinhaEvento
 
 from dados import SegmentoLinhaDoTempo, rotulo_categoria, rotulo_motivo
@@ -224,8 +224,23 @@ def grafico_distribuicao_pizza(por_categoria: Dict[Optional[Categoria], timedelt
     pyecharts, nao precisa de dict cru) esconde o rotulo de fatia fina
     demais pro texto caber - mesma ideia do `minAngle` do sunburst
     (secao 5 do ADR-0033), evitando o mesmo tipo de sobreposicao com
-    muitas categorias (ate 19 aqui)."""
-    dados = [(rotulo_categoria(c), _horas(d)) for c, d in por_categoria.items()]
+    muitas categorias (ate 19 aqui).
+
+    Cor por fatia via `cor_por_rotulo` (pedido do responsavel do produto em
+    2026-08-07: mesma categoria = mesma cor no mapa, na linha do tempo e
+    aqui - nunca a paleta automatica do pyecharts, que variava conforme a
+    ordem/quantidade de fatias). `opts.PieItem` (em vez do par
+    nome/valor cru) e a unica forma do pyecharts 2.1 aceitar `itemstyle_opts`
+    por fatia (ver `Pie.add`: uma lista de `PieItem` e usada tal e qual,
+    sem essa opcao para o formato tupla)."""
+    dados = [
+        opts.PieItem(
+            name=rotulo_categoria(c),
+            value=_horas(d),
+            itemstyle_opts=opts.ItemStyleOpts(color=cor_por_rotulo(rotulo_categoria(c))),
+        )
+        for c, d in por_categoria.items()
+    ]
     return (
         Pie(init_opts=opts.InitOpts(width="100%", height="520px"))
         .add(
@@ -284,6 +299,47 @@ def _minutos_para_hora_texto(minutos: float) -> str:
     minutos_inteiros = round(minutos)
     horas, resto = divmod(minutos_inteiros, 60)
     return f"{horas:02d}:{resto:02d}"
+
+
+# EE17/EE21 nao vem de ClassificacaoInstante.motivo (so PAUSA/EVENTO_SECUNDARIO
+# tem motivo - ver rotulo_classificacao_pulso em mapa.py) - sao os codigos fixos
+# e ja documentados de "iniciar atividade"/"iniciar atendimento de falha"
+# (interface_campo/js/app.js: VALOR_INICIAR_ATIVIDADE/VALOR_ATENDIMENTO_FALHA,
+# rotulados la como "Iniciar atividade (EE17)"/"Atendimento de falha (EE21)").
+_CODIGO_POR_TIPO_SEM_MOTIVO = {"ATIVIDADE": "EE17", "ATENDIMENTO_FALHA": "EE21"}
+
+
+def _codigo_do_segmento(tipo: str, motivo: Optional[str]) -> str:
+    """Codigo curto (ex.: "EE07") pra caber dentro da barra - pedido do
+    responsavel do produto em 2026-08-07. "Sem atividade" (lacuna, sem
+    codigo nenhum) devolve string vazia."""
+    codigo_fixo = _CODIGO_POR_TIPO_SEM_MOTIVO.get(tipo)
+    if codigo_fixo is not None:
+        return codigo_fixo
+    if not motivo:
+        return ""
+    return motivo.split(" - ", 1)[0]
+
+
+def legenda_linha_do_tempo(
+    por_dia: Dict[date, List[SegmentoLinhaDoTempo]], catalogo: Optional[CatalogoMotivos] = None
+) -> List[Tuple[str, str]]:
+    """Rotulos distintos presentes em `por_dia` com sua cor (`cor_por_rotulo`),
+    ordenados por rotulo - pedido do responsavel do produto em 2026-08-07
+    ("coloque a legenda tambem" no grafico de linha do tempo).
+
+    Nao da pra usar a legenda nativa do ECharts aqui: as series do grafico
+    sao sinteticas por posicao (`_pos_0`, `_pos_1`...), nao por codigo (ver
+    docstring de `grafico_linha_do_tempo`) - uma legenda presa a nome de
+    serie mostraria "_pos_0, _pos_1..." sem sentido nenhum. Quem chama
+    (`painel/telas/mapa_operacional.py`) renderiza esta lista como uma
+    legenda HTML simples abaixo do grafico."""
+    rotulos_vistos = set()
+    for segmentos in por_dia.values():
+        for segmento in segmentos:
+            classificacao = ClassificacaoInstante(tipo=segmento.tipo, motivo=segmento.motivo)
+            rotulos_vistos.add(rotulo_classificacao_pulso(classificacao, catalogo))
+    return [(rotulo, cor_por_rotulo(rotulo)) for rotulo in sorted(rotulos_vistos)]
 
 
 def grafico_linha_do_tempo(por_dia: Dict[date, List[SegmentoLinhaDoTempo]]) -> Bar:
@@ -350,13 +406,24 @@ def grafico_linha_do_tempo(por_dia: Dict[date, List[SegmentoLinhaDoTempo]]) -> B
                 f"–{_minutos_para_hora_texto(segmento.minuto_fim)}"
                 f" ({round(duracao_minutos)} min)"
             )
-            dados_posicao.append(
-                {
-                    "value": round(duracao_minutos / 60, 3),
-                    "name": nome,
-                    "itemStyle": {"color": cor_por_rotulo(rotulo)},
+            codigo = _codigo_do_segmento(segmento.tipo, segmento.motivo)
+            item = {
+                "value": round(duracao_minutos / 60, 3),
+                "name": nome,
+                "itemStyle": {"color": cor_por_rotulo(rotulo)},
+            }
+            # Codigo dentro do segmento (pedido do responsavel do produto em
+            # 2026-08-07) - so quando ha altura suficiente pro texto nao
+            # ficar cortado/ilegivel (30min = 0.5h de barra, limiar visual,
+            # nao um numero oficial de nada).
+            if codigo and duracao_minutos >= 30:
+                item["label"] = {
+                    "show": True,
+                    "formatter": codigo,
+                    "color": "#FFFFFF",
+                    "fontSize": 10,
                 }
-            )
+            dados_posicao.append(item)
         grafico.add_yaxis(
             f"_pos_{posicao}",
             dados_posicao,
@@ -366,6 +433,11 @@ def grafico_linha_do_tempo(por_dia: Dict[date, List[SegmentoLinhaDoTempo]]) -> B
 
     grafico.set_global_opts(
         title_opts=_SEM_TITULO,
+        # Legenda nativa do ECharts continua desligada de proposito (series
+        # sinteticas por posicao, ver docstring) - a legenda pedida pelo
+        # responsavel do produto em 2026-08-07 e montada a parte por
+        # legenda_linha_do_tempo() e renderizada em HTML por quem chama
+        # (painel/telas/mapa_operacional.py), nao pelo ECharts.
         legend_opts=opts.LegendOpts(is_show=False),
         xaxis_opts=_eixo_categoria_opts(),
         yaxis_opts=opts.AxisOpts(
@@ -379,13 +451,25 @@ def grafico_linha_do_tempo(por_dia: Dict[date, List[SegmentoLinhaDoTempo]]) -> B
             ),
         ),
         tooltip_opts=opts.TooltipOpts(trigger="item", formatter="{b}", is_confine=True),
+        # Zoom por scroll/pinch no eixo Y (pedido do responsavel do produto
+        # em 2026-08-07: "utilize o scroll do echarts para dar zoom") -
+        # type_="inside" e o zoom por gesto (roda do mouse/pinca no
+        # celular), sem uma barra deslizante visivel ocupando espaco extra
+        # no layout (diferente de type_="slider").
+        datazoom_opts=[
+            opts.DataZoomOpts(type_="inside", orient="vertical", yaxis_index=0, range_start=0, range_end=100)
+        ],
     )
     return _aplicar_grid(grafico, bottom="10%", top="4%")
 
 
 def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:
     """Barras empilhadas por colaborador x categoria - permite comparar
-    colaboradores, nao so o total geral."""
+    colaboradores, nao so o total geral.
+
+    Cor por serie via `cor_por_rotulo` (pedido do responsavel do produto em
+    2026-08-07: mesma categoria = mesma cor em qualquer grafico do painel,
+    nunca a paleta automatica do pyecharts)."""
     colaboradores = sorted({linha.colaborador_matricula for linha in linhas})
     categorias_presentes = sorted({linha.categoria for linha in linhas}, key=rotulo_categoria)
     rotulos_categoria = [rotulo_categoria(c) for c in categorias_presentes]
@@ -400,7 +484,9 @@ def grafico_hh_por_colaborador(linhas: List[LinhaEvento]) -> Bar:
     grafico = Bar(init_opts=opts.InitOpts(width="100%", height="540px")).add_xaxis(colaboradores)
     for rotulo in rotulos_categoria:
         valores = [_horas(totais[rotulo].get(colaborador, timedelta())) for colaborador in colaboradores]
-        grafico.add_yaxis(rotulo, valores, stack="total")
+        grafico.add_yaxis(
+            rotulo, valores, stack="total", itemstyle_opts=opts.ItemStyleOpts(color=cor_por_rotulo(rotulo))
+        )
     grafico.set_global_opts(
         title_opts=_SEM_TITULO,
         tooltip_opts=opts.TooltipOpts(trigger="axis", is_confine=True),

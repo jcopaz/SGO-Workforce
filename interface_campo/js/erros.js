@@ -33,4 +33,6 @@ export class JornadaComEventoSecundarioAbertoError extends ErroDominio {}
 export class OrdemServicoNumeroObrigatorioError extends ErroDominio {}
 export class OrdemServicoExigeAtividadeSemFalhaError extends ErroDominio {}
 export class OrdemServicoNaoEncontradaError extends ErroDominio {}
+export class MembroEquipeMatriculaObrigatoriaError extends ErroDominio {}
+export class MembroEquipeNaoEncontradoError extends ErroDominio {}
 export class AtividadeNaoConcluidaExigeSemDadosFalhaError extends ErroDominio {}

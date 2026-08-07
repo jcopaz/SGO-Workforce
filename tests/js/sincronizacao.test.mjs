@@ -132,6 +132,27 @@ test("paraPayloadSincronizacao serializa ordens_servico e resultado (ADR-0025)",
   assert.equal(atividade.ordens_servico[1].excluida, false);
 });
 
+test("paraPayloadSincronizacao serializa equipe (aba Equipe, 2026-08-07)", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  motor.iniciarJornada(dt(8, 0));
+  motor.iniciarAtividade(dt(8, 10));
+  const membro1 = motor.adicionarMembroEquipe(dt(8, 15), "54321");
+  motor.adicionarMembroEquipe(dt(8, 20), "67890");
+  motor.excluirMembroEquipe(membro1.id);
+  motor.encerrarAtividade(dt(9, 0));
+  motor.encerrarJornada(dt(9, 0));
+
+  const payload = paraPayloadSincronizacao(motor.jornada);
+  const atividade = payload.atividades[0];
+
+  assert.equal(atividade.equipe.length, 2);
+  assert.equal(atividade.equipe[0].matricula, "54321");
+  assert.equal(atividade.equipe[0].excluida, true);
+  assert.equal(atividade.equipe[0].adicionado_em, dt(8, 15).toISOString());
+  assert.equal(atividade.equipe[1].matricula, "67890");
+  assert.equal(atividade.equipe[1].excluida, false);
+});
+
 test("paraPayloadSincronizacao trata jornada em andamento (fim nulo)", () => {
   const motor = new MotorJornada({ colaboradorMatricula: "99999" });
   motor.iniciarJornada(dt(8, 0));

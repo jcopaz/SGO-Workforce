@@ -32,7 +32,10 @@
     de Manutencao (Relatorio 1) ja tem tela propria (atividade planejada,
     pausa, deslocamento/espera/apoio, atendimento de falha) e
     classificacao produtiva/produtiva nao rentavel/improdutiva validada
-    com a operacao.
+    com a operacao. Informe a senha do SGO (opcional) para abrir o
+    apontamento de OS direto no SGO ao iniciar uma atividade - sem senha,
+    ou sem conexao no momento, o numero da OS continua sendo registrado
+    manualmente aqui mesmo.
   </p>
 
   <details class="simulador">
@@ -61,6 +64,10 @@
     <span>Matricula</span>
     <input id="matricula" type="text" inputmode="numeric" placeholder="Ex.: 12345" autocomplete="off" />
   </label>
+  <label class="campo">
+    <span>Senha do SGO (opcional)</span>
+    <input id="senhaSgo" type="password" placeholder="So necessario para abrir OS direto no SGO" autocomplete="off" />
+  </label>
 
   <p id="status" class="status">Carregando...</p>
   <p id="statusSincronizacao" class="status-sincronizacao"></p>
@@ -79,7 +86,7 @@
        CACHE_VERSAO de service-worker.js, atualizado junto dela. Se o que
        aparece na tela for menor que o ultimo commit, e cache antigo, nao
        bug novo. -->
-  <p class="rodape-versao">Versão v24</p>
+  <p class="rodape-versao">Versão v26</p>
 </footer>
 
 <script type="module" src="js/app.js"></script>

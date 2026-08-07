@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .entities import Atividade, DadosFalha, EventoSecundario, Jornada, OrdemServico, Pausa
+from .entities import Atividade, DadosFalha, EventoSecundario, Jornada, MembroEquipe, OrdemServico, Pausa
 from .enums import (
     EstadoAtividade,
     EstadoEventoSecundario,
@@ -42,6 +42,8 @@ from .exceptions import (
     JornadaComPausaAbertaError,
     JornadaJaAbertaError,
     JornadaNaoAbertaError,
+    MembroEquipeMatriculaObrigatoriaError,
+    MembroEquipeNaoEncontradoError,
     OrdemServicoExigeAtividadeSemFalhaError,
     OrdemServicoNaoEncontradaError,
     OrdemServicoNumeroObrigatorioError,
@@ -282,6 +284,31 @@ class MotorJornada:
                 ordem.excluida = True
                 return ordem
         raise OrdemServicoNaoEncontradaError(f"Nenhuma OS com id {ordem_id} na atividade ativa.")
+
+    # ------------------------------------------------------------------
+    # Equipe (aba Equipe, pedido do responsavel pelo produto em 2026-08-07)
+    # ------------------------------------------------------------------
+    def adicionar_membro_equipe(self, quando: datetime, matricula: str) -> MembroEquipe:
+        self._garantir_jornada_aberta()
+        if self._atividade_ativa is None:
+            raise AtividadeNaoAtivaError("Nao ha atividade ativa para associar um membro de equipe.")
+        if not matricula:
+            raise MembroEquipeMatriculaObrigatoriaError("A matricula do membro de equipe e obrigatoria.")
+        membro = MembroEquipe(matricula=matricula, adicionado_em=quando)
+        self._atividade_ativa.equipe.append(membro)
+        return membro
+
+    def excluir_membro_equipe(self, membro_id) -> MembroEquipe:
+        """Soft-delete, nunca remove da lista - mesmo principio de
+        excluir_ordem_servico (reenviar a mesma exclusao e idempotente)."""
+        self._garantir_jornada_aberta()
+        if self._atividade_ativa is None:
+            raise AtividadeNaoAtivaError("Nao ha atividade ativa para excluir um membro de equipe.")
+        for membro in self._atividade_ativa.equipe:
+            if membro.id == membro_id:
+                membro.excluida = True
+                return membro
+        raise MembroEquipeNaoEncontradoError(f"Nenhum membro de equipe com id {membro_id} na atividade ativa.")
 
     # ------------------------------------------------------------------
     # Atendimento de falha (Incremento 6)

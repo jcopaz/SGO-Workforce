@@ -21,6 +21,7 @@ import {
   novaPausa,
   novoDadosFalha,
   novoEventoSecundario,
+  novoMembroEquipe,
 } from "./entidades.js";
 
 function validarOrdem(inicio, fim, rotulo) {
@@ -59,6 +60,7 @@ function normalizarCamposRetrocompativeis(jornada) {
   for (const atividade of jornada.atividades) {
     atividade.pausas = atividade.pausas ?? [];
     atividade.ordensServico = atividade.ordensServico ?? [];
+    atividade.equipe = atividade.equipe ?? [];
   }
 }
 
@@ -276,6 +278,39 @@ export class MotorJornada {
     }
     ordem.excluida = true;
     return ordem;
+  }
+
+  // Equipe (aba Equipe, pedido do responsavel pelo produto em 2026-08-07) -
+  // mesmo espirito de adicionarOrdemServico/excluirOrdemServico, sem a
+  // restricao de "so atividade comum" (equipe se aplica tambem a
+  // atendimento de falha - quem esta presente independe de ser falha ou
+  // atividade normal).
+  adicionarMembroEquipe(quando, matricula) {
+    this._garantirJornadaAberta();
+    if (!this._atividadeAtiva) {
+      throw new Erros.AtividadeNaoAtivaError("Nao ha atividade ativa para associar um membro de equipe.");
+    }
+    if (!matricula) {
+      throw new Erros.MembroEquipeMatriculaObrigatoriaError("A matricula do membro de equipe e obrigatoria.");
+    }
+    const membro = novoMembroEquipe({ matricula, adicionadoEm: quando });
+    this._atividadeAtiva.equipe.push(membro);
+    return membro;
+  }
+
+  // Exclusao (soft-delete) de membro de equipe - reenviar a mesma exclusao
+  // e idempotente, mesmo padrao de excluirOrdemServico.
+  excluirMembroEquipe(membroId) {
+    this._garantirJornadaAberta();
+    if (!this._atividadeAtiva) {
+      throw new Erros.AtividadeNaoAtivaError("Nao ha atividade ativa para excluir um membro de equipe.");
+    }
+    const membro = this._atividadeAtiva.equipe.find((m) => m.id === membroId);
+    if (!membro) {
+      throw new Erros.MembroEquipeNaoEncontradoError(`Nenhum membro de equipe com id ${membroId} na atividade ativa.`);
+    }
+    membro.excluida = true;
+    return membro;
   }
 
   // Atendimento de falha (ADR-0021, espelhando

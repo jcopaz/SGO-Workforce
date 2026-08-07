@@ -104,6 +104,23 @@ class OrdemServico:
 
 
 @dataclass
+class MembroEquipe:
+    """Colaborador (matricula, texto livre) que trabalhou junto numa
+    Atividade - aba "Equipe" pedida pelo responsavel pelo produto em
+    2026-08-07, mesmo espirito de OrdemServico: lista anexada a
+    Atividade, soft-delete (excluida nunca remove da lista), nao muda o
+    modelo de Jornada (que continua de um unico colaborador dono/HH -
+    regra de ouro 4, nao muda). Nao afeta calculo de HH - e so registro
+    de quem estava presente, sem duplicar jornada/HH pros acompanhantes.
+    """
+
+    matricula: str
+    id: UUID = field(default_factory=uuid4)
+    adicionado_em: Optional[datetime] = None
+    excluida: bool = False
+
+
+@dataclass
 class Atividade:
     id: UUID = field(default_factory=uuid4)
     inicio: Optional[datetime] = None
@@ -112,6 +129,7 @@ class Atividade:
     pausas: List[Pausa] = field(default_factory=list)
     dados_falha: Optional[DadosFalha] = None
     ordens_servico: List[OrdemServico] = field(default_factory=list)
+    equipe: List[MembroEquipe] = field(default_factory=list)
     # None (todas as Atividades encerradas antes do ADR-0025) e tratado
     # como CONCLUIDA na consolidacao - ver ResultadoAtividade.
     resultado: Optional[ResultadoAtividade] = None

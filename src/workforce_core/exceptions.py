@@ -132,6 +132,16 @@ class OrdemServicoNaoEncontradaError(ErroDominio):
     """Nao existe OS com o id informado na atividade ativa."""
 
 
+class MembroEquipeMatriculaObrigatoriaError(ErroDominio):
+    """A matricula do membro de equipe e obrigatoria para associa-lo a uma
+    atividade (aba Equipe, pedido do responsavel pelo produto em
+    2026-08-07)."""
+
+
+class MembroEquipeNaoEncontradoError(ErroDominio):
+    """Nao existe membro de equipe com o id informado na atividade ativa."""
+
+
 class AtividadeNaoConcluidaExigeSemDadosFalhaError(ErroDominio):
     """encerrar_atividade_nao_concluida (EE23, ADR-0025) so se aplica a
     Atividade comum - atendimento de falha usa transferir_atendimento_falha
