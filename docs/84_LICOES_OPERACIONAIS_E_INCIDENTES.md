@@ -221,6 +221,43 @@ Um campo de catálogo com nome que *sugere* ser uma restrição de negócio
 lendo onde ele é (ou não) consultado no motor/consolidação evita um
 refactor bem maior que o necessário.
 
+### 2026-08-11 | Secret `SGO_API_URL` do painel apontava pro `api.py` de produção sem o endpoint de login
+
+**Causa raiz**: a ADR-0062 (2026-08-07) adicionou `POST /auth/validar` só na
+branch `dev` do repositório `Gestão_OS` (decisão deliberada, pra nunca
+alterar produção sem revisão explícita do responsável do produto - ver
+"Correção pós-revisão de segurança" da própria ADR). Ao configurar os
+secrets `SGO_API_URL`/`SGO_WORKFORCE_API_KEY` no Streamlit Cloud do
+painel Workforce pra destravar o login (`painel/login.py::exigir_login`),
+`SGO_API_URL` foi apontado para `https://gestao-os-ee-mrs-producao.onrender.com`
+(a URL de produção, já conhecida de `_sincronizar_baixa_offline`) - que
+roda o `api.py` da branch `main`, sem o endpoint novo. O sintoma era
+"SGO recusou a validação (HTTP 404)" - fácil de confundir com problema
+de senha/chave (401/403), mas 404 significa rota inexistente no
+processo que respondeu, nunca autenticação.
+
+**Correção**: `SGO_API_URL` trocado para `https://api-sgo-mrs.onrender.com`
+(serviço Render `api-sgo-mrs-dev`, branch `dev`, onde o endpoint
+realmente existe) - confirmado antes da troca, via prints do próprio
+responsável do produto, que esse serviço tinha deploy live do commit
+com `/auth/validar` e as env vars `WORKFORCE_API_KEY_SECRET`/
+`AUTH_TOKEN_SECRET` configuradas. `SGO_WORKFORCE_API_KEY` já estava
+correto (mesmo valor de `WORKFORCE_API_KEY_SECRET`), não precisou
+mudar. Login do painel passa hoje pelo banco de **dev**, não o de
+produção - promover pra produção (merge `dev` → `main` no Gestão_OS)
+fica como decisão pendente do responsável do produto, mesma ressalva já
+registrada na ADR-0062.
+
+**Lição**: quando uma integração nova tem código publicado em mais de
+um ambiente/branch (aqui, `dev` com o endpoint vs. `main` sem ele), a
+URL configurada no consumidor (o secret `SGO_API_URL` do Workforce)
+precisa ser conferida contra qual ambiente specificamente tem o código
+esperado - não basta reaproveitar uma URL já conhecida do mesmo
+provedor (produção "parecia" a escolha óbvia por já ser usada em outro
+fluxo). E: **HTTP 404 num contrato de API é sinal de ambiente/deploy
+errado, não de credencial errada** - vale checar isso antes de suspeitar
+de senha/chave.
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem
