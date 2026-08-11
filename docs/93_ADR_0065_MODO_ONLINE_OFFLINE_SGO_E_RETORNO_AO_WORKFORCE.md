@@ -111,6 +111,19 @@ Link estático, sem nenhum estado compartilhado entre os dois apps -
 lembrando o caminho de volta, em vez de depender do colaborador lembrar
 sozinho.
 
+### 4.1. Correção no mesmo dia: o link de volta também precisa estar no pacote offline
+
+Achado testando ao vivo, no ambiente dev, pelo responsável do produto: o
+botão do item 4 só existe na tela **online** do SGO (`_render_apontamento`).
+O pacote PWA offline (`gerar_html_offline`) é um artefato HTML
+autocontido **separado**, gerado à parte - não herda nada da tela online,
+então continuava sem nenhum caminho de volta pro Workforce. Corrigido no
+mesmo `app.py` staged: mesmo link (`URL_APP_WORKFORCE`) adicionado também
+na `topbar` do HTML gerado por `gerar_html_offline`, ao lado do badge
+"📡 Offline" - funciona mesmo sem rede porque aponta pro próprio PWA do
+Workforce, que já está cacheado no aparelho (mesmo mecanismo de
+service worker do `interface_campo`).
+
 ### 5. HH produtivo inclui o tempo no SGO, sem exigir pausa (decisão de negócio, sem código)
 
 Confirmado com o responsável do produto: não há nenhuma trava/aviso pra
@@ -185,8 +198,9 @@ decisão consciente (ver Contexto).
 - `tests/js/motorJornada.test.mjs` (4 testes novos).
 - Fora deste repositório: `app.py` do SGO
   (`Documents/Integração SGOWorkforce/app.py`, novo - cópia de
-  `origin/dev` com o botão "Voltar ao Workforce"), `LEIA-ME.md` da mesma
-  pasta atualizado.
+  `origin/dev` com o botão "Voltar ao Workforce" em `_render_apontamento`
+  **e** em `gerar_html_offline`, item 4.1), `LEIA-ME.md` da mesma pasta
+  atualizado.
 
 ## Data e responsáveis
 
