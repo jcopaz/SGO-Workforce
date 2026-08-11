@@ -871,3 +871,42 @@ test("encerrarAtividadeNaoConcluida em atendimento de falha nao e permitido", ()
     Erros.AtividadeNaoConcluidaExigeSemDadosFalhaError
   );
 });
+
+// modoApontamentoSgo/pacoteOfflineUrlSgo (integracao SGO, 2026-08-11): a
+// decisao de como o colaborador vai acessar o SGO (online via SSO, ou
+// offline via pacote PWA ja confirmado) e' tomada ao criar a jornada, nunca
+// depois - ver app.js (clique de "Iniciar jornada") e criarBlocoOrdensServico.
+test("MotorJornada novo sem modo/pacote informado usa null (jornada antiga/compatibilidade)", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  assert.equal(motor.jornada.modoApontamentoSgo, null);
+  assert.equal(motor.jornada.pacoteOfflineUrlSgo, null);
+});
+
+test("MotorJornada novo propaga modoApontamentoSgo 'online' para a jornada", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345", modoApontamentoSgo: "online" });
+  assert.equal(motor.jornada.modoApontamentoSgo, "online");
+  assert.equal(motor.jornada.pacoteOfflineUrlSgo, null);
+});
+
+test("MotorJornada novo propaga modoApontamentoSgo 'offline' e a URL do pacote", () => {
+  const motor = new MotorJornada({
+    colaboradorMatricula: "12345",
+    modoApontamentoSgo: "offline",
+    pacoteOfflineUrlSgo: "https://api-sgo-mrs.onrender.com/pacote/abc123",
+  });
+  assert.equal(motor.jornada.modoApontamentoSgo, "offline");
+  assert.equal(motor.jornada.pacoteOfflineUrlSgo, "https://api-sgo-mrs.onrender.com/pacote/abc123");
+});
+
+test("MotorJornada.aPartirDe preserva modoApontamentoSgo/pacoteOfflineUrlSgo ja gravados", () => {
+  const original = new MotorJornada({
+    colaboradorMatricula: "12345",
+    modoApontamentoSgo: "offline",
+    pacoteOfflineUrlSgo: "https://api-sgo-mrs.onrender.com/pacote/xyz789",
+  });
+  original.iniciarJornada(dt(8, 0));
+
+  const recuperado = MotorJornada.aPartirDe(original.jornada);
+  assert.equal(recuperado.jornada.modoApontamentoSgo, "offline");
+  assert.equal(recuperado.jornada.pacoteOfflineUrlSgo, "https://api-sgo-mrs.onrender.com/pacote/xyz789");
+});

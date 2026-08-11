@@ -33,6 +33,7 @@ import * as FotoFalha from "./fotoFalha.js";
 import * as ContinuacoesFalha from "./continuacoesFalha.js";
 import * as EstruturaCodigos from "./estruturaCodigos.js";
 import * as IntegracaoSgo from "./integracaoSgo.js";
+import { URL_APP_SGO } from "./configSgo.js";
 
 const els = {
   matricula: document.getElementById("matricula"),
@@ -51,6 +52,11 @@ const els = {
   simDataHora: document.getElementById("simDataHora"),
   simAplicarData: document.getElementById("simAplicarData"),
   simReiniciar: document.getElementById("simReiniciar"),
+  modoSgoOnline: document.getElementById("modoSgoOnline"),
+  modoSgoOffline: document.getElementById("modoSgoOffline"),
+  blocoOfflineSgo: document.getElementById("blocoOfflineSgo"),
+  linkAbrirSgoOffline: document.getElementById("linkAbrirSgoOffline"),
+  pacoteOfflineUrl: document.getElementById("pacoteOfflineUrl"),
 };
 
 let motor = null;
@@ -457,45 +463,76 @@ function tentarValidarLoginSgo(matricula, senha) {
   });
 }
 
-// Bloco de OS (ADR-0025) - texto livre, múltiplas OS por atividade,
-// exclusão individual soft-delete (a OS some da lista visível mas nunca é
-// removida do registro, ver motorJornada.js::excluirOrdemServico). Desde a
-// integracao com o SGO (2026-08-07), tambem oferece abrir o apontamento de
-// OS direto no SGO (nova aba, ja autenticado) quando ha uma sessaoSgo
-// valida - a entrada manual de numero de OS continua sempre disponivel
-// como alternativa/complemento (nunca removida: e o unico caminho quando
-// nao ha sessao do SGO, ex.: sem conexao no momento).
+// Bloco de apontamento de OS (ADR-0025 -> revisado 2026-08-11): o SGO e'
+// quem aponta a execucao de OS (com evidencia/foto), o Workforce so mede HH
+// (regra de ouro 2/3, decisao do responsavel do produto em 2026-08-11) - por
+// isso o Workforce nunca mais pede numero de OS digitado. O modo escolhido
+// em "Iniciar jornada" (motor.jornada.modoApontamentoSgo, ver
+// obterModoSgoSelecionado) decide qual link abrir aqui. Entradas antigas em
+// atividade.ordensServico (de jornadas iniciadas antes desta versao)
+// continuam exibidas/excluiveis por compatibilidade, mas nada novo entra
+// nessa lista a partir de agora.
 function criarBlocoOrdensServico(atividade) {
   const bloco = document.createElement("div");
   bloco.className = "bloco-ordens-servico";
 
-  const linkSgo = IntegracaoSgo.linkApontamentoSgo(sessaoSgo);
-  const avisoSgo = document.createElement("p");
-  avisoSgo.className = "aviso-piloto";
-  if (linkSgo) {
-    avisoSgo.textContent = `Sessão do SGO ativa (${sessaoSgo.nome || sessaoSgo.username}).`;
-    bloco.appendChild(avisoSgo);
-    bloco.appendChild(
-      botao(
-        "Abrir apontamento de OS no SGO",
-        () => {
-          window.open(linkSgo, "_blank", "noopener");
-          // Revisao de seguranca 2026-08-07: o sid e' de uso curto (5 min,
-          // ver TTL_HORAS_SID_SSO em api.py) e viaja na URL - depois de
-          // aberto uma vez, descarta da memoria do Workforce em vez de
-          // deixar disponivel pra reabrir/reusar (aparelho compartilhado).
-          // O formulario manual de OS abaixo continua disponivel; abrir o
-          // SGO de novo exige "Iniciar jornada" de novo (novo login).
-          sessaoSgo = { ...sessaoSgo, sid: null };
-          render();
-        },
-        { destaque: true }
-      )
-    );
+  const aviso = document.createElement("p");
+  aviso.className = "aviso-piloto";
+  const modo = motor.jornada.modoApontamentoSgo;
+
+  if (modo === "offline") {
+    const linkOffline = motor.jornada.pacoteOfflineUrlSgo;
+    if (linkOffline) {
+      aviso.textContent = "Modo Offline - abre o pacote PWA do SGO confirmado no início desta jornada.";
+      bloco.appendChild(aviso);
+      bloco.appendChild(
+        botao(
+          "Abrir apontamento de OS no SGO (offline)",
+          () => window.open(linkOffline, "_blank", "noopener"),
+          { destaque: true }
+        )
+      );
+    } else {
+      // Nao deveria acontecer (o clique de "Iniciar jornada" exige o link
+      // antes de liberar o modo Offline) - defensivo contra dado antigo/
+      // corrompido, nunca trava o resto da atividade.
+      aviso.textContent =
+        "Modo Offline selecionado, mas nenhum link de pacote PWA foi confirmado nesta jornada.";
+      bloco.appendChild(aviso);
+    }
+  } else if (modo === "online") {
+    const linkSgo = IntegracaoSgo.linkApontamentoSgo(sessaoSgo);
+    if (linkSgo) {
+      aviso.textContent = `Sessão do SGO ativa (${sessaoSgo.nome || sessaoSgo.username}).`;
+      bloco.appendChild(aviso);
+      bloco.appendChild(
+        botao(
+          "Abrir apontamento de OS no SGO",
+          () => {
+            window.open(linkSgo, "_blank", "noopener");
+            // Revisao de seguranca 2026-08-07: o sid e' de uso curto (5 min,
+            // ver TTL_HORAS_SID_SSO em api.py) e viaja na URL - depois de
+            // aberto uma vez, descarta da memoria do Workforce em vez de
+            // deixar disponivel pra reabrir/reusar (aparelho compartilhado).
+            // Abrir o SGO de novo exige "Iniciar jornada" de novo (novo login).
+            sessaoSgo = { ...sessaoSgo, sid: null };
+            render();
+          },
+          { destaque: true }
+        )
+      );
+    } else {
+      aviso.textContent =
+        "Sessão do SGO ainda não confirmada (sem conexão agora, senha incorreta, ou aguardando validar) - o botão de apontamento aparece assim que validar.";
+      bloco.appendChild(aviso);
+    }
   } else {
-    avisoSgo.textContent =
-      "Sem sessão ativa do SGO (sem conexão agora, senha não informada, ou integração ainda não configurada) - registre o número da OS manualmente abaixo.";
-    bloco.appendChild(avisoSgo);
+    // Jornada recuperada de antes desta funcionalidade existir (sem modo
+    // definido) - ultimo recurso, sem link de SSO nem pacote offline.
+    aviso.textContent =
+      "Modo de apontamento do SGO não definido para esta jornada (iniciada antes desta versão do app).";
+    bloco.appendChild(aviso);
+    bloco.appendChild(botao("Abrir o SGO", () => window.open(URL_APP_SGO, "_blank", "noopener")));
   }
 
   const ativas = atividade.ordensServico.filter((ordem) => !ordem.excluida);
@@ -514,26 +551,6 @@ function criarBlocoOrdensServico(atividade) {
     }
     bloco.appendChild(lista);
   }
-
-  const label = document.createElement("label");
-  label.className = "campo";
-  const span = document.createElement("span");
-  span.textContent = "Número da OS";
-  const input = document.createElement("input");
-  input.type = "text";
-  label.append(span, input);
-  bloco.appendChild(label);
-
-  bloco.appendChild(
-    botao("Adicionar OS", () => {
-      const numero = input.value.trim();
-      if (!numero) {
-        mostrarAviso("Informe o número da OS antes de adicionar.");
-        return;
-      }
-      executar(() => motor.adicionarOrdemServico(RelogioSimulado.agora(), numero));
-    })
-  );
 
   return bloco;
 }
@@ -827,13 +844,36 @@ function render() {
   if (!motor || motor.jornada.estado === "NAO_INICIADA") {
     els.status.textContent = "Nenhuma jornada em andamento.";
     els.matricula.disabled = false;
+    travarCamposModoSgo(false);
     els.botoes.appendChild(
       botao(
         "Iniciar jornada",
         async () => {
-          if (!prepararMotorComMatricula()) return;
+          const modoSgo = obterModoSgoSelecionado();
+          if (!modoSgo) {
+            mostrarAviso(
+              "Escolha como vai apontar as OS no SGO hoje (Online ou Offline) antes de iniciar a jornada."
+            );
+            return;
+          }
+          let pacoteOfflineUrlSgo = null;
+          if (modoSgo === "offline") {
+            pacoteOfflineUrlSgo = els.pacoteOfflineUrl.value.trim();
+            if (!pacoteOfflineUrlSgo) {
+              mostrarAviso(
+                "Cole o link da Rota PWA do SGO (aberto com internet) antes de iniciar a jornada no modo Offline."
+              );
+              return;
+            }
+          }
+          if (!prepararMotorComMatricula({ modoApontamentoSgo: modoSgo, pacoteOfflineUrlSgo })) return;
           const matricula = motor.jornada.colaboradorMatricula;
-          tentarValidarLoginSgo(matricula, els.senhaSgo.value);
+          // So tenta o SSO online quando o modo escolhido e' "online" - no
+          // modo offline o colaborador ja logou manualmente no SGO pra
+          // gerar o pacote, sessaoSgo/sid nao tem uso nenhum ali.
+          if (modoSgo === "online") {
+            tentarValidarLoginSgo(matricula, els.senhaSgo.value);
+          }
           const pendente = await ContinuacoesFalha.buscarPendente(matricula);
           if (pendente) {
             const sucesso = await executarComGpsObrigatorio(() => {
@@ -857,6 +897,7 @@ function render() {
   }
 
   els.matricula.disabled = true;
+  travarCamposModoSgo(true);
 
   if (motor.jornada.estado === "ENCERRADA") {
     els.status.textContent = `Jornada encerrada as ${formatoHora(motor.jornada.fim)}.`;
@@ -879,6 +920,10 @@ function render() {
           // aparelho antes.
           sessaoSgo = null;
           if (els.senhaSgo) els.senhaSgo.value = "";
+          if (els.modoSgoOnline) els.modoSgoOnline.checked = false;
+          if (els.modoSgoOffline) els.modoSgoOffline.checked = false;
+          if (els.pacoteOfflineUrl) els.pacoteOfflineUrl.value = "";
+          if (els.blocoOfflineSgo) els.blocoOfflineSgo.hidden = true;
           limparMensagem();
           render();
         },
@@ -1073,16 +1118,51 @@ async function executarComGpsObrigatorio(transicao) {
 // motor para uma jornada nao iniciada. Chamado no clique de "Iniciar
 // jornada" - nao no carregamento da pagina - para sempre usar o valor mais
 // recente do campo de matricula.
-function prepararMotorComMatricula() {
+function prepararMotorComMatricula({ modoApontamentoSgo = null, pacoteOfflineUrlSgo = null } = {}) {
   const matricula = els.matricula.value.trim();
   if (!matricula) {
     mostrarAviso("Informe a matricula antes de iniciar a jornada.");
     return false;
   }
   if (!motor || motor.jornada.estado === "NAO_INICIADA") {
-    motor = new MotorJornada({ colaboradorMatricula: matricula });
+    motor = new MotorJornada({ colaboradorMatricula: matricula, modoApontamentoSgo, pacoteOfflineUrlSgo });
   }
   return true;
+}
+
+// Alterna a visibilidade do bloco de confirmacao do pacote offline (SGO,
+// 2026-08-11) conforme o modo escolhido - "Offline" exige o link da Rota
+// PWA confirmado antes de "Iniciar jornada" liberar (ver o clique do botao
+// abaixo). O link "Abrir SGO para gerar a Rota PWA" nao leva sid nenhum de
+// proposito: o colaborador ainda nao tem sessaoSgo neste momento (so e
+// validada no clique de "Iniciar jornada"), e gerar o pacote e' uma tela
+// interativa do proprio SGO (escolher raio de atuacao) que exige login
+// manual la mesmo.
+function configurarModoSgo() {
+  if (!els.modoSgoOnline || !els.modoSgoOffline) return;
+  if (els.linkAbrirSgoOffline) els.linkAbrirSgoOffline.href = URL_APP_SGO || "#";
+  const atualizarVisibilidade = () => {
+    els.blocoOfflineSgo.hidden = !els.modoSgoOffline.checked;
+  };
+  els.modoSgoOnline.addEventListener("change", atualizarVisibilidade);
+  els.modoSgoOffline.addEventListener("change", atualizarVisibilidade);
+  atualizarVisibilidade();
+}
+
+function obterModoSgoSelecionado() {
+  if (els.modoSgoOffline && els.modoSgoOffline.checked) return "offline";
+  if (els.modoSgoOnline && els.modoSgoOnline.checked) return "online";
+  return null;
+}
+
+// Trava a mudanca de modo/link depois que a jornada ja comecou - mesmo
+// espirito de els.matricula.disabled em render() (nao faz sentido trocar de
+// modo no meio do turno, o pacote offline ja teria sido aberto com base na
+// escolha feita no inicio).
+function travarCamposModoSgo(travado) {
+  if (els.modoSgoOnline) els.modoSgoOnline.disabled = travado;
+  if (els.modoSgoOffline) els.modoSgoOffline.disabled = travado;
+  if (els.pacoteOfflineUrl) els.pacoteOfflineUrl.disabled = travado;
 }
 
 // Liga os controles do painel "Simulador de tempo (somente teste)". So
@@ -1164,5 +1244,6 @@ async function iniciar() {
 }
 
 configurarSimulador();
+configurarModoSgo();
 configurarCapturaAoVoltarParaPrimeiroPlano();
 iniciar();

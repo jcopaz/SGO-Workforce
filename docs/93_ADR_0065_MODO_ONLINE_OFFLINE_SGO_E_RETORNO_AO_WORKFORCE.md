@@ -1,0 +1,195 @@
+# ADR-0065 | Modo Online/Offline de apontamento no SGO, retorno ao Workforce e fim do número de OS digitado (EE17)
+
+## Contexto
+
+Depois do login integrado (ADR-0062) e do teste real do fluxo em
+2026-08-11 (login do painel corrigido para o ambiente dev do SGO, ver
+`docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md`), o responsável do produto
+testou o EE17 na prática e trouxe três problemas reais, discutidos e
+decididos na mesma sessão:
+
+1. **O SGO ainda pedia matrícula/senha ao abrir via EE17.** Hipótese mais
+   provável: o TTL do `sid` (5 minutos, decisão de segurança da ADR-0062)
+   expira entre o login no início da jornada e o momento em que o
+   colaborador de fato chega numa Atividade, soma-se ao cold start do
+   Render gratuito (~50s). Não corrigido nesta rodada (é o TTL de
+   segurança, não um bug) - registrado como contexto que motivou o resto
+   desta ADR: garantir acesso ao SGO **antes** de precisar dele, não só
+   confiar no SSO no momento do clique.
+2. **Separação de responsabilidade**: "O SGO é para ele apontar a
+   execução de Ordens de Serviço, o Workforce é para apontar a
+   produtividade em HH" - decisão explícita do responsável do produto.
+   Consequência direta: o formulário manual de "Número da OS" do
+   Workforce (ADR-0025) não faz mais sentido como fonte primária - a
+   ideia original de usá-lo como fallback também foi descartada depois de
+   uma segunda ponderação ("imagina digitar manualmente OS por OS" num
+   turno com 50 OS - não escalava).
+3. **Acesso ao SGO precisa ser garantido, não best-effort.** Se o
+   colaborador não tem conexão, não conseguiu logar no SGO, ou não gerou
+   o pacote PWA offline antecipadamente, ele não deveria chegar numa
+   Atividade sem ter como apontar a OS. Proposta do próprio responsável do
+   produto: perguntar **antes** de "Iniciar jornada" se o apontamento vai
+   ser Online ou Offline, e no caso Offline, tornar obrigatória a geração
+   do pacote PWA do SGO (mecanismo que já existe: `/publicar_pacote` +
+   `/pacote/{id}`, tela "Publicar Rota PWA" dentro de
+   `_render_apontamento`/`bloco_roteirizacao_interativo` no `app.py` do
+   SGO) antes de liberar o resto da jornada.
+
+Também ficou definido, depois de checar o código real da tabela `baixas`
+do SGO: os campos `data_inicio`/`hora_inicio`/`data_fim`/`hora_fim` de lá
+são **digitados manualmente** pelo técnico no formulário do SGO
+(`app.py`, campos `iniHHMM`/`fimHHMM`) - nunca timestamps de evento reais.
+Por isso o HH produtivo do Workforce **nunca** deve derivar desses campos
+(regra de ouro 2/3) - e, por decisão do responsável do produto ("a
+agilidade que é de lançar as evidências não destoa do tempo de
+produtividade intencional"), o tempo gasto apontando no SGO **conta**
+como parte do tempo produtivo da Atividade, sem exigir pausa - o relógio
+do Workforce nunca soube (nem precisa saber) que o colaborador saiu da
+aba.
+
+## Decisão
+
+### 1. Pergunta obrigatória Online/Offline antes de "Iniciar jornada"
+
+`interface_campo/index.html` ganhou um `<fieldset>` com duas opções
+(`modoSgoOnline`/`modoSgoOffline`), entre o campo "Senha do SGO" e o
+status da tela. O clique em "Iniciar jornada" (`app.js`) agora:
+
+- Bloqueia com aviso se nenhum modo foi escolhido.
+- Modo **Online**: comportamento igual ao já existente (senha do SGO
+  opcional, `tentarValidarLoginSgo` best-effort em paralelo, nunca
+  bloqueia a jornada) - preserva offline-first.
+- Modo **Offline**: exige o campo novo "Link da Rota PWA do SGO"
+  preenchido - bloqueia "Iniciar jornada" com aviso até o colaborador
+  colar o link. O bloco `#blocoOfflineSgo` (oculto por padrão, mostrado
+  via `change` nos radios) traz a instrução ("abra o SGO agora, com
+  internet, publique a Rota PWA, abra 1x") e um link direto pra
+  `URL_APP_SGO` (sem `?sid=` - o colaborador ainda não tem `sessaoSgo`
+  neste momento, login pra gerar o pacote é feito manualmente lá).
+
+Os dois campos ficam travados (`travarCamposModoSgo`) assim que a jornada
+está aberta - trocar de modo no meio do turno não faz sentido (o pacote
+offline já teria sido gerado com base na escolha inicial).
+
+### 2. Modelo de dados: `modoApontamentoSgo`/`pacoteOfflineUrlSgo` na Jornada
+
+Dois campos novos em `entidades.js::novaJornada` (propagados por
+`MotorJornada`), persistidos como qualquer outro campo da Jornada (mesmo
+IndexedDB, sem migração de versão - `structured clone` não exige schema).
+**Deliberadamente não entram em `sincronizacao.js::paraPayloadSincronizacao`**
+- são só a referência de qual link abrir no EE17, nunca alimentam o
+cálculo de HH nem o backend (`workforce_api`). Jornadas recuperadas de
+antes desta versão (`modoApontamentoSgo` ausente) caem num fallback
+defensivo: tenta a sessão online se existir, senão mostra um link puro
+pro SGO sem SSO.
+
+### 3. Fim do número de OS digitado no Workforce (EE17)
+
+`criarBlocoOrdensServico` (`app.js`) não tem mais o campo "Número da OS" +
+botão "Adicionar OS". Em vez disso, mostra **um botão**, decidido pelo
+`modoApontamentoSgo` da jornada:
+
+- **Online**: abre `URL_APP_SGO/?sid=...` (SSO existente, ADR-0062),
+  igual a antes.
+- **Offline**: abre `motor.jornada.pacoteOfflineUrlSgo` diretamente -
+  como já foi aberto 1x online antes de "Iniciar jornada" (passo 1), o
+  navegador já cacheou o pacote via service worker e funciona sem rede.
+
+A lista de OS já registradas (`atividade.ordensServico`) continua sendo
+exibida/excluível por compatibilidade com jornadas antigas, mas nada novo
+entra ali a partir de agora - o registro de execução de OS passa a viver
+inteiramente no SGO.
+
+### 4. Botão "Voltar ao Workforce" na tela de apontamento do SGO
+
+`app.py` (staged em `Documents/Integração SGOWorkforce/`, nunca editado
+direto no Gestão_OS) ganhou um `st.link_button("↩️ Voltar ao Workforce", ...)`
+no topo de `_render_apontamento`, apontando para
+`st.secrets.get("URL_APP_WORKFORCE", "https://sgoworkforce.mrslogistica.workers.dev")`.
+Link estático, sem nenhum estado compartilhado entre os dois apps -
+"voltar" continua sendo só trocar de aba, mas agora com um botão visível
+lembrando o caminho de volta, em vez de depender do colaborador lembrar
+sozinho.
+
+### 5. HH produtivo inclui o tempo no SGO, sem exigir pausa (decisão de negócio, sem código)
+
+Confirmado com o responsável do produto: não há nenhuma trava/aviso pra
+sugerir pausa antes de abrir o SGO. O relógio da Atividade no Workforce
+segue contando entre o EE17 e o próximo evento que o colaborador registrar
+lá - inclui o tempo gasto apontando/anexando evidência no SGO, por
+decisão consciente (ver Contexto).
+
+## Consequências e riscos aceitos
+
+- **TTL de 5 minutos do `sid` continua sem solução própria** - o modo
+  Offline é o caminho de contorno pra quem sabe que vai demorar, mas o
+  modo Online ainda pode expirar entre o login e o clique em EE17. Não
+  endereçado nesta rodada (aumentar o TTL reabriria a discussão de
+  segurança da ADR-0062).
+- **Confirmação do link do pacote offline é manual (1 clique por turno)** -
+  tecnicamente não dá pra automatizar: cada publicação gera um `id` novo
+  em `/pacote/{id}` e o cache do service worker é do domínio do SGO, fora
+  do alcance do Workforce.
+- **Pacote PWA é um recorte por raio/GPS no momento da geração** - OS fora
+  do raio escolhido na hora de publicar não entram no pacote offline;
+  ainda depende do colaborador escolher um raio adequado.
+- **Nenhuma mudança na tabela `baixas`/api.py além do botão de link** -
+  decisão consciente de não construir consulta de status de OS
+  (`GET /baixas/...`) nesta rodada, depois de descartada a ideia de puxar
+  número/status de OS de volta pro Workforce (contrariaria a separação de
+  responsabilidade decidida no Contexto).
+- **Nada testado em celular real** - mesma ressalva de sempre (sandbox sem
+  Chromium/Playwright). Em especial: comportamento do link "Abrir SGO
+  para gerar a Rota PWA" e do botão "Voltar ao Workforce" quando o
+  Workforce está instalado como PWA (pode abrir o navegador do sistema em
+  vez de uma aba, mesma ressalva já registrada na ADR-0062).
+
+## Validação realizada
+
+- `node --check` em todos os arquivos de `interface_campo/js/` e
+  `service-worker.js`: OK.
+- `node --test tests/js`: 150 passed (4 testes novos em
+  `motorJornada.test.mjs` cobrindo `modoApontamentoSgo`/
+  `pacoteOfflineUrlSgo` - default `null`, propagação via `MotorJornada`,
+  e preservação em `MotorJornada.aPartirDe`).
+- `python -m py_compile` no `app.py` staged
+  (`Documents/Integração SGOWorkforce/app.py`): OK.
+- `CACHE_VERSAO` "v26" → "v27" (`interface_campo/service-worker.js`),
+  rodapé "Versão v27" (`interface_campo/index.html`).
+
+## Validação NÃO realizada
+
+- Teste ponta a ponta real em celular (escolher modo, gerar/abrir o
+  pacote PWA, EE17 abrindo o link certo online e offline, botão "Voltar
+  ao Workforce") - depende do responsável do produto, usando o ambiente
+  dev do SGO já disponível para teste.
+- Promoção de `app.py`/`api.py` para o branch `dev` do Gestão_OS e
+  configuração de `URL_APP_WORKFORCE` no Render/Streamlit Cloud - fica a
+  critério do responsável do produto, mesmo processo já descrito na
+  ADR-0062 e no `LEIA-ME.md` da pasta de staging.
+
+## Arquivos afetados
+
+- `interface_campo/index.html` (pergunta Online/Offline, bloco de
+  confirmação do pacote offline, versão v27).
+- `interface_campo/js/app.js` (`obterModoSgoSelecionado`,
+  `travarCamposModoSgo`, `configurarModoSgo`, clique de "Iniciar jornada",
+  `criarBlocoOrdensServico` reescrito).
+- `interface_campo/js/entidades.js` (`novaJornada` com os dois campos
+  novos).
+- `interface_campo/js/motorJornada.js` (`MotorJornada` propaga os campos
+  novos).
+- `interface_campo/css/estilo.css` (`fieldset.campo`, `.opcao-radio`,
+  `.botao` agora funciona também como link de bloco).
+- `interface_campo/service-worker.js` (`CACHE_VERSAO` v27).
+- `tests/js/motorJornada.test.mjs` (4 testes novos).
+- Fora deste repositório: `app.py` do SGO
+  (`Documents/Integração SGOWorkforce/app.py`, novo - cópia de
+  `origin/dev` com o botão "Voltar ao Workforce"), `LEIA-ME.md` da mesma
+  pasta atualizado.
+
+## Data e responsáveis
+
+- Data de registro: 2026-08-11.
+- Registrado por: Claude Code, a pedido do responsável pelo produto
+  (j.copaz@hotmail.com).

@@ -86,7 +86,15 @@ export function novoDadosFalha() {
   };
 }
 
-export function novaJornada({ colaboradorMatricula }) {
+// modoApontamentoSgo/pacoteOfflineUrlSgo (integracao SGO, 2026-08-11): decisao
+// tomada ANTES de "Iniciar jornada" (nunca digitada depois, ver app.js) sobre
+// como o colaborador vai acessar o SGO pra apontar OS - "online" (SSO via
+// ?sid=, mesmo mecanismo ja existente) ou "offline" (pacote PWA do SGO,
+// gerado e aberto 1x online pelo proprio colaborador antes de sair do
+// sinal - a URL fica guardada aqui pra abrir offline depois, no EE17). Nao
+// afeta HH (nunca entra em sincronizacao.js::paraPayloadSincronizacao) - e
+// so a referencia de qual link abrir quando a atividade começar.
+export function novaJornada({ colaboradorMatricula, modoApontamentoSgo = null, pacoteOfflineUrlSgo = null }) {
   return {
     id: gerarId(),
     colaboradorMatricula,
@@ -95,6 +103,8 @@ export function novaJornada({ colaboradorMatricula }) {
     estado: "NAO_INICIADA",
     atividades: [],
     eventosSecundarios: [],
+    modoApontamentoSgo,
+    pacoteOfflineUrlSgo,
   };
 }
 

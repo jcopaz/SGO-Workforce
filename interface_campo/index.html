@@ -69,6 +69,31 @@
     <input id="senhaSgo" type="password" placeholder="So necessario para abrir OS direto no SGO" autocomplete="off" />
   </label>
 
+  <fieldset id="modoSgoFieldset" class="campo">
+    <legend>Como vai apontar as OS no SGO hoje?</legend>
+    <label class="opcao-radio">
+      <input type="radio" name="modoSgo" id="modoSgoOnline" value="online" />
+      <span>Online (SGO abre com internet ao iniciar a atividade)</span>
+    </label>
+    <label class="opcao-radio">
+      <input type="radio" name="modoSgo" id="modoSgoOffline" value="offline" />
+      <span>Offline (vou usar o pacote PWA do SGO, sem internet)</span>
+    </label>
+  </fieldset>
+
+  <div id="blocoOfflineSgo" class="campo" hidden>
+    <p class="aviso-piloto">
+      Antes de iniciar a jornada, com internet: abra o SGO, toque em
+      "Publicar Rota PWA" e depois "Abrir Rota no Celular" uma vez. Depois
+      cole aqui o link que abriu.
+    </p>
+    <a id="linkAbrirSgoOffline" class="botao" href="#" target="_blank" rel="noopener">Abrir SGO para gerar a Rota PWA</a>
+    <label class="campo">
+      <span>Link da Rota PWA do SGO</span>
+      <input id="pacoteOfflineUrl" type="url" placeholder="Cole aqui o link aberto no SGO" autocomplete="off" />
+    </label>
+  </div>
+
   <p id="status" class="status">Carregando...</p>
   <p id="statusSincronizacao" class="status-sincronizacao"></p>
 
@@ -86,7 +111,7 @@
        CACHE_VERSAO de service-worker.js, atualizado junto dela. Se o que
        aparece na tela for menor que o ultimo commit, e cache antigo, nao
        bug novo. -->
-  <p class="rodape-versao">Versão v26</p>
+  <p class="rodape-versao">Versão v27</p>
 </footer>
 
 <script type="module" src="js/app.js"></script>

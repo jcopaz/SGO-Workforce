@@ -1,5 +1,19 @@
 # Changelog
 
+## [2026-08-11] Modo Online/Offline de apontamento no SGO e fim do número de OS digitado (ADR-0065)
+
+Ver `docs/93_ADR_0065_MODO_ONLINE_OFFLINE_SGO_E_RETORNO_AO_WORKFORCE.md`.
+Antes de "Iniciar jornada", o colaborador agora escolhe se vai apontar as
+OS no SGO Online (SSO existente, ADR-0062) ou Offline (pacote PWA do SGO,
+gerado e aberto 1x online, link confirmado antes de liberar a jornada).
+O EE17 não pede mais número de OS digitado - abre direto o link certo
+(sid online ou pacote offline) conforme o modo escolhido; decisão do
+responsável do produto: "o SGO aponta a execução de OS, o Workforce só
+mede HH", e o tempo gasto apontando no SGO conta normalmente como tempo
+produtivo, sem exigir pausa. `app.py` do SGO (staged em
+`Documents/Integração SGOWorkforce/`) ganhou um botão "Voltar ao
+Workforce". `CACHE_VERSAO` v27.
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do

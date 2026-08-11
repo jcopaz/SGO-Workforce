@@ -143,6 +143,31 @@ body {
   resize: vertical;
 }
 
+fieldset.campo {
+  border: 1px solid var(--cor-borda);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+fieldset.campo legend {
+  font-weight: 600;
+  padding: 0 0.3rem;
+}
+
+.opcao-radio {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  margin: 0.4rem 0;
+}
+
+.opcao-radio input {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
 .status {
   font-size: 1.05rem;
   font-weight: 600;
@@ -226,6 +251,8 @@ body {
 }
 
 .botao {
+  display: block;
+  width: 100%;
   font-size: 1.05rem;
   padding: 1rem;
   border-radius: 0.75rem;
@@ -233,6 +260,9 @@ body {
   background: white;
   color: var(--cor-texto);
   cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 .botao:active {

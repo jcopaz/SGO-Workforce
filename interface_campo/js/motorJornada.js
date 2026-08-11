@@ -123,14 +123,14 @@ export function identificarEstadoAtivo(jornada) {
 }
 
 export class MotorJornada {
-  constructor({ colaboradorMatricula = null, jornada = null } = {}) {
+  constructor({ colaboradorMatricula = null, jornada = null, modoApontamentoSgo = null, pacoteOfflineUrlSgo = null } = {}) {
     if (jornada) {
       this.jornada = jornada;
     } else {
       if (!colaboradorMatricula) {
         throw new TypeError("colaboradorMatricula e obrigatorio ao criar uma jornada nova.");
       }
-      this.jornada = novaJornada({ colaboradorMatricula });
+      this.jornada = novaJornada({ colaboradorMatricula, modoApontamentoSgo, pacoteOfflineUrlSgo });
     }
     this._atividadeAtiva = null;
     this._pausaAtiva = null;
