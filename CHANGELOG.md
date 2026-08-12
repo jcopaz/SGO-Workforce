@@ -38,6 +38,11 @@ anima GIF, não vídeo). Resultado: 6,78 MB (100 frames, 480x480) contra os
 17,4 MB do GIF anterior - mesmo caminho de arquivo
 (`painel/assets/logo_sgo_workforce.gif`), zero mudança de código.
 
+Ícone da aba do painel (`page_icon`) fechado com um frame real extraído
+desse mesmo GIF (selo completo com bordas fechadas, triângulos MRS e "SGO
+Workforce" - texto faz parte do lockup, não separável), substituindo o
+desenho provisório do relógio.
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do

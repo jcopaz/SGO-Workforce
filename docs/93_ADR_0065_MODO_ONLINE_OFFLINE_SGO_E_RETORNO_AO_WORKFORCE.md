@@ -198,6 +198,30 @@ produto exportar uma imagem estática dele (print/frame do vídeo) -
 `interface_campo/icons/icone.svg` (favicon/PWA da interface de campo)
 segue com o mesmo desenho de relógio por ora, mesma pendência.
 
+### 6.2. Logo definitivo na sidebar do painel + favicon fechado com frame real (mesmo dia)
+
+`logo_SGO.mp4` convertido pra GIF pelo responsável do produto (única
+forma de manter animação **acima do menu de navegação** no `st.logo` -
+`st.navigation` sempre ancora qualquer outro componente abaixo do menu,
+já testado e documentado em `painel/app.py`; `st.logo` só anima GIF, não
+vídeo). Resultado: 6,78 MB (100 frames, 480x480) contra os 17,4 MB do GIF
+anterior - mesmo caminho de arquivo
+(`painel/assets/logo_sgo_workforce.gif`), zero mudança de código.
+
+Isso também resolveu a pendência do item 6.1: extraído um frame do meio
+da animação (`Pillow`, `Image.seek`) mostrando o selo completo (bordas
+arredondadas fechando nos quatro cantos, triângulos MRS, texto "SGO
+Workforce" dentro do mesmo selo - não é um ícone separável do texto, o
+lockup é uma peça só) e usado pra substituir o `icone_workforce.png`
+provisório (`page_icon` do painel). Ressalva: como o texto faz parte do
+mesmo selo, num favicon reduzido a 16-32px o texto vira textura
+ilegível - o formato/cor do selo continua reconhecível, mas não dá pra
+ler "SGO Workforce" nesse tamanho. `interface_campo/icons/icone.svg`
+(favicon/PWA da interface de campo) segue com o desenho de relógio
+antigo - não trocado nesta rodada por afetar o ícone instalado na tela
+inicial de quem já tem o PWA instalado, mudança mais visível/persistente
+que a aba do painel.
+
 ## Consequências e riscos aceitos
 
 - **TTL de 5 minutos do `sid` continua sem solução própria** - o modo
