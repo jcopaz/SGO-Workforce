@@ -976,6 +976,7 @@ function render() {
           document
             .querySelectorAll(".opcao-cartao.selecionada")
             .forEach((el) => el.classList.remove("selecionada"));
+          atualizarEstadoBotaoIniciar();
           etapaPreJornada = "login";
           limparMensagem();
           render();
@@ -1191,6 +1192,26 @@ function prepararMotorComMatricula({ modoApontamentoSgo = null, pacoteOfflineUrl
 // validada no clique de "Iniciar jornada"), e gerar o pacote e' uma tela
 // interativa do proprio SGO (escolher raio de atuacao) que exige login
 // manual la mesmo.
+// "So avanca quando colar o link" (pedido do responsavel do produto,
+// 2026-08-12): em vez de deixar clicar em "Iniciar jornada" e mostrar um
+// aviso depois (comportamento antigo), o botao fica desabilitado de
+// verdade ate a escolha estar completa - nenhum modo selecionado, ou modo
+// Offline sem link ainda colado. Chamada a cada mudanca de modo E a cada
+// tecla digitada/colada no campo do link (evento "input").
+function atualizarEstadoBotaoIniciar() {
+  if (!els.btnIniciarJornada) return;
+  const modo = obterModoSgoSelecionado();
+  if (!modo) {
+    els.btnIniciarJornada.disabled = true;
+    return;
+  }
+  if (modo === "offline") {
+    els.btnIniciarJornada.disabled = !els.pacoteOfflineUrl.value.trim();
+    return;
+  }
+  els.btnIniciarJornada.disabled = false;
+}
+
 function configurarModoSgo() {
   if (!els.modoSgoOnline || !els.modoSgoOffline) return;
   if (els.linkAbrirSgoOffline) els.linkAbrirSgoOffline.href = URL_APP_SGO || "#";
@@ -1203,9 +1224,13 @@ function configurarModoSgo() {
     const cartaoOffline = els.modoSgoOffline.closest(".opcao-cartao");
     if (cartaoOnline) cartaoOnline.classList.toggle("selecionada", els.modoSgoOnline.checked);
     if (cartaoOffline) cartaoOffline.classList.toggle("selecionada", els.modoSgoOffline.checked);
+    atualizarEstadoBotaoIniciar();
   };
   els.modoSgoOnline.addEventListener("change", atualizarVisibilidade);
   els.modoSgoOffline.addEventListener("change", atualizarVisibilidade);
+  if (els.pacoteOfflineUrl) {
+    els.pacoteOfflineUrl.addEventListener("input", atualizarEstadoBotaoIniciar);
+  }
   atualizarVisibilidade();
 }
 

@@ -43,6 +43,15 @@ desse mesmo GIF (selo completo com bordas fechadas, triângulos MRS e "SGO
 Workforce" - texto faz parte do lockup, não separável), substituindo o
 desenho provisório do relógio.
 
+Favicon/ícone PWA da interface de campo trocado também (`icons/icone-192.png`/
+`icone-512.png`, mesmo frame do logo real - `icons/icone.svg` removido,
+`CACHE_VERSAO` v30). Cards de aviso estáticos removidos das telas de Login
+e Pergunta (texto explicativo que não mudava com o estado); instrução do
+modo Offline virou lista de 3 passos com ícone em vez de parágrafo único.
+Botão "Iniciar jornada" agora fica desabilitado de verdade até a escolha
+estar completa (nenhum modo, ou Offline sem link) - antes só avisava
+depois do clique.
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do

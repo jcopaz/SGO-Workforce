@@ -222,6 +222,31 @@ antigo - não trocado nesta rodada por afetar o ícone instalado na tela
 inicial de quem já tem o PWA instalado, mudança mais visível/persistente
 que a aba do painel.
 
+### 6.3. Favicon/ícone PWA da interface de campo trocado + fluxo em telas simplificado (mesmo dia)
+
+Pedido explícito de trocar também o ícone da interface de campo (pendência
+do item 6.2). Gerados `icons/icone-192.png` e `icons/icone-512.png` (mesmo
+frame/recorte do favicon do painel, quadrado, LANCZOS) a partir de
+`logo_SGO.gif` - substituem `icons/icone.svg` (removido, sem mais
+referência em `manifest.webmanifest`/`index.html`/`service-worker.js`).
+`CACHE_VERSAO` v29 → v30.
+
+**Cards de aviso estáticos removidos** das Etapas 1 e 2 (o parágrafo longo
+de GPS obrigatório no Login, e o parágrafo dos 23 códigos do Relatório na
+Pergunta) - pedido do responsável do produto pra deixar as telas mais
+limpas, sem texto explicativo que não muda com o estado. O bloco de
+instrução do modo Offline foi mantido (conteúdo necessário pra operar),
+mas trocado de parágrafo único pra uma lista curta de 3 passos com ícone
+(`.lista-passos`), mais rápida de escanear.
+
+**"Só avança quando colar o link"**: o botão "Iniciar jornada" agora fica
+genuinamente desabilitado (`disabled`, com estilo próprio em CSS) até a
+escolha estar completa - nenhum modo selecionado, ou modo Offline sem
+link ainda preenchido (`atualizarEstadoBotaoIniciar`, recalculada a cada
+mudança de modo e a cada tecla/colagem no campo do link). Substitui o
+comportamento anterior (clicável, com aviso só depois do clique) por
+feedback visual imediato.
+
 ## Consequências e riscos aceitos
 
 - **TTL de 5 minutos do `sid` continua sem solução própria** - o modo

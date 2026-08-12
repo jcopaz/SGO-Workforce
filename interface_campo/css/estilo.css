@@ -98,6 +98,30 @@ body {
   box-shadow: 0 6px 20px rgba(15, 76, 129, 0.2);
 }
 
+/* Passo a passo do modo Offline - substitui o antigo paragrafo de aviso
+   por uma lista curta com icone, mais visual/rapida de escanear. */
+.lista-passos {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lista-passos li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.passo-icone {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .simulador-aviso {
   color: var(--cor-aviso);
   background: var(--cor-aviso-fundo);
@@ -326,6 +350,17 @@ fieldset.campo legend {
   color: white;
   border-color: var(--cor-primaria-escura);
   font-weight: 600;
+}
+
+.botao:disabled {
+  background: #e2e6ea;
+  color: #94a0ab;
+  border-color: #e2e6ea;
+  cursor: not-allowed;
+}
+
+.botao:disabled:active {
+  transform: none;
 }
 
 .seletor-motivo {
