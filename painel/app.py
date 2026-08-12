@@ -24,8 +24,10 @@ import streamlit as st
 from estilo import aplicar_estilo_sgo
 from login import exigir_login, mostrar_usuario_logado
 
+_ICONE_ABA = Path(__file__).resolve().parent / "assets" / "icone_workforce.png"
 st.set_page_config(
     page_title="SGO Workforce | Painel (piloto)",
+    page_icon=str(_ICONE_ABA) if _ICONE_ABA.exists() else "🕐",
     layout="wide",
     initial_sidebar_state="expanded",
 )

@@ -84,15 +84,17 @@
       operacao.
     </p>
 
-    <fieldset id="modoSgoFieldset" class="campo">
+    <fieldset id="modoSgoFieldset" class="campo modo-sgo-fieldset">
       <legend>Como vai apontar as OS no SGO hoje?</legend>
-      <label class="opcao-radio">
+      <label class="opcao-cartao" for="modoSgoOnline">
         <input type="radio" name="modoSgo" id="modoSgoOnline" value="online" />
-        <span>Online (SGO abre com internet ao iniciar a atividade)</span>
+        <span class="opcao-cartao-titulo">🌐 Online</span>
+        <span class="opcao-cartao-texto">SGO abre com internet ao iniciar a atividade</span>
       </label>
-      <label class="opcao-radio">
+      <label class="opcao-cartao" for="modoSgoOffline">
         <input type="radio" name="modoSgo" id="modoSgoOffline" value="offline" />
-        <span>Offline (vou usar o pacote PWA do SGO, sem internet)</span>
+        <span class="opcao-cartao-titulo">📴 Offline</span>
+        <span class="opcao-cartao-texto">Vou usar o pacote PWA do SGO, sem internet</span>
       </label>
     </fieldset>
 
@@ -130,7 +132,7 @@
        CACHE_VERSAO de service-worker.js, atualizado junto dela. Se o que
        aparece na tela for menor que o ultimo commit, e cache antigo, nao
        bug novo. -->
-  <p class="rodape-versao">Versão v28</p>
+  <p class="rodape-versao">Versão v29</p>
 </footer>
 
 <script type="module" src="js/app.js"></script>

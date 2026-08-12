@@ -20,6 +20,15 @@ logo animado do Workforce (`interface_campo/assets/logo-workforce.mp4`,
 via `<video>` - 6x mais leve que a versão em GIF já existente no
 repositório, decodificação por hardware). `CACHE_VERSAO` v28.
 
+Ainda no mesmo dia: logo definitivo gerado via Gemini Nano Banana (prompt
+conectado à identidade visual da MRS Logística) substituiu o vídeo
+provisório (`CACHE_VERSAO` v29); cartões clicáveis (Online/Offline) no
+lugar dos radio buttons simples; ícone novo na aba do painel Streamlit
+(`page_icon`, nunca configurado antes) - provisoriamente reaproveitando o
+desenho do relógio já existente, até haver um frame estático real do logo
+novo (vídeo não serve como favicon, sem `ffmpeg` neste ambiente pra
+extrair um frame).
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do

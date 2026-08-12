@@ -971,6 +971,11 @@ function render() {
           if (els.modoSgoOffline) els.modoSgoOffline.checked = false;
           if (els.pacoteOfflineUrl) els.pacoteOfflineUrl.value = "";
           if (els.blocoOfflineSgo) els.blocoOfflineSgo.hidden = true;
+          // checked = false via JS nao dispara "change" - tira o realce
+          // visual dos dois cartoes manualmente (ver configurarModoSgo).
+          document
+            .querySelectorAll(".opcao-cartao.selecionada")
+            .forEach((el) => el.classList.remove("selecionada"));
           etapaPreJornada = "login";
           limparMensagem();
           render();
@@ -1191,6 +1196,13 @@ function configurarModoSgo() {
   if (els.linkAbrirSgoOffline) els.linkAbrirSgoOffline.href = URL_APP_SGO || "#";
   const atualizarVisibilidade = () => {
     els.blocoOfflineSgo.hidden = !els.modoSgoOffline.checked;
+    // Realce visual do cartao selecionado (.opcao-cartao.selecionada, CSS) -
+    // o <input> em si fica quase invisivel de proposito (ver estilo.css),
+    // entao a selecao so aparece de verdade com essa classe no <label> pai.
+    const cartaoOnline = els.modoSgoOnline.closest(".opcao-cartao");
+    const cartaoOffline = els.modoSgoOffline.closest(".opcao-cartao");
+    if (cartaoOnline) cartaoOnline.classList.toggle("selecionada", els.modoSgoOnline.checked);
+    if (cartaoOffline) cartaoOffline.classList.toggle("selecionada", els.modoSgoOffline.checked);
   };
   els.modoSgoOnline.addEventListener("change", atualizarVisibilidade);
   els.modoSgoOffline.addEventListener("change", atualizarVisibilidade);

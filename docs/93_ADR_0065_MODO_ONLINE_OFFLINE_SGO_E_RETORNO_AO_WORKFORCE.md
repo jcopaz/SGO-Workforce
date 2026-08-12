@@ -164,6 +164,40 @@ falhando por rede instável não pode derrubar o cache do resto do app
 tela de login só perde a animação até a próxima visita online, nada mais
 quebra. `CACHE_VERSAO` v27 → v28.
 
+### 6.1. Logo definitivo gerado (Nano Banana), cartões Online/Offline e ícone do painel (mesmo dia)
+
+Logo definitivo (`logo_SGO.mp4`, 2,47 MB, mesmo formato/duração do
+anterior) gerado pelo responsável do produto via Gemini Nano Banana, a
+partir de um prompt desenhado nesta sessão conectando a identidade visual
+da MRS Logística (azul-marinho + amarelo, linguagem de triângulo/seta
+apontando pra frente, sem reproduzir o wordmark "M R S" literalmente) com
+os dois domínios do produto (relógio = tempo/HH do Workforce, seta =
+execução de OS do SGO). Substituiu `logo-workforce.mp4` (mesmo caminho,
+conteúdo trocado - `CACHE_VERSAO` v28 → v29, senão quem já visitou o app
+ficaria com o vídeo antigo em cache).
+
+**Cartões Online/Offline** (`#modoSgoFieldset`): trocados de radio button
+simples para cartões clicáveis (`.opcao-cartao`) - alvo de toque maior,
+realce visual (borda azul + fundo claro) no cartão selecionado via classe
+`.selecionada`, alternada por JS a cada evento `change` dos radios
+(`configurarModoSgo`, `app.js`). O `<input>` real continua no DOM, só
+visualmente reduzido (nunca `display:none`) - mantém acessível por
+teclado/leitor de tela através do `<label for="...">`.
+
+**Ícone da aba do painel Streamlit** (`page_icon`, nunca configurado
+antes - painel rodava com o ícone genérico do Streamlit): **limitação
+técnica registrada aqui** - `page_icon` do Streamlit e `<link rel="icon">`
+exigem imagem estática (PNG/ICO/SVG), nunca vídeo, e este ambiente não
+tem `ffmpeg`/biblioteca de vídeo instalada pra extrair um frame do
+`logo_SGO.mp4`. Solução provisória: reproduzido programaticamente (Pillow,
+`ImageDraw`) o mesmo desenho do ícone de relógio já existente
+(`interface_campo/icons/icone.svg`) em `painel/assets/icone_workforce.png`,
+usado como `page_icon` novo (`painel/app.py`). **Pendente**: trocar esse
+PNG por um frame real do `logo_SGO.mp4` assim que o responsável do
+produto exportar uma imagem estática dele (print/frame do vídeo) -
+`interface_campo/icons/icone.svg` (favicon/PWA da interface de campo)
+segue com o mesmo desenho de relógio por ora, mesma pendência.
+
 ## Consequências e riscos aceitos
 
 - **TTL de 5 minutos do `sid` continua sem solução própria** - o modo

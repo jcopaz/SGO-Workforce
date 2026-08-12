@@ -175,18 +175,49 @@ fieldset.campo legend {
   padding: 0 0.3rem;
 }
 
-.opcao-radio {
+.modo-sgo-fieldset {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  margin: 0.4rem 0;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.opcao-radio input {
-  width: 1.2rem;
-  height: 1.2rem;
+/* Cartao selecionavel (Online/Offline) - o <input> real fica visualmente
+   reduzido a quase nada (nunca display:none, pra continuar acessivel por
+   teclado/leitor de tela via o <label for="...">), quem representa a
+   selecao visualmente e' a classe "selecionada" alternada por JS
+   (configurarModoSgo, app.js) a cada "change" do radio. */
+.opcao-cartao {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 2px solid var(--cor-borda);
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.opcao-cartao input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.opcao-cartao-titulo {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.opcao-cartao-texto {
+  font-size: 0.85rem;
+  color: #4a5a68;
+}
+
+.opcao-cartao.selecionada {
+  border-color: var(--cor-primaria);
+  background: #eaf1f8;
 }
 
 .status {
