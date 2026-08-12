@@ -258,6 +258,44 @@ fluxo). E: **HTTP 404 num contrato de API é sinal de ambiente/deploy
 errado, não de credencial errada** - vale checar isso antes de suspeitar
 de senha/chave.
 
+### 2026-08-12 | `hidden` parava de esconder elementos com classe `display:flex` (Etapa 1/2 apareciam juntas)
+
+**Causa raiz**: `.campo` e `.etapa-tela` (`interface_campo/css/estilo.css`)
+definem `display: flex` explicitamente. O atributo HTML `hidden` também
+aplica `display: none`, mas via regra do navegador (user-agent
+stylesheet) com a mesma especificidade CSS (0,1,0) de uma classe -
+quando duas regras empatam em especificidade, o CSS do próprio site
+vence a do navegador. Resultado: qualquer elemento com `hidden` **e**
+uma dessas classes continuava visível. Sintoma real relatado pelo
+responsável do produto: a tela de "Pergunta" (Online/Offline,
+`#etapaPergunta.etapa-tela`) e o bloco de instrução do modo Offline
+(`#blocoOfflineSgo.campo`) apareciam **junto** com a tela de Login,
+mesmo com `hidden` sendo alternado corretamente via JS
+(`mostrarEtapaPreJornada`) - o problema nunca foi a lógica de estado,
+sempre foi essa colisão de CSS.
+
+**Como não foi confundido com cache/deploy**: o usuário testou em aba
+anônima (elimina cache do navegador) e o commit no Cloudflare foi
+confirmado como o mais recente (mensagem do commit conferida contra o
+histórico do Git) - só depois de descartar as duas hipóteses óbvias
+(cache, deploy atrasado) é que a causa real (CSS) foi investigada.
+
+**Correção**: uma regra única e genérica no topo do CSS,
+`[hidden] { display: none !important; }`, em vez de corrigir classe por
+classe - cobre qualquer elemento `hidden` do app, presente ou futuro,
+sem precisar lembrar dessa colisão toda vez que uma nova classe com
+`display` explícito for criada. `CACHE_VERSAO` v32 → v33.
+
+**Lição**: `hidden` e uma classe com `display` explícito têm a mesma
+especificidade CSS - o navegador não dá prioridade nenhuma ao atributo
+semântico `hidden` por padrão. Qualquer componente que alterna
+visibilidade via `.hidden = true/false` no JS precisa de uma regra
+`[hidden] { display: none !important; }` (ou seletor mais específico
+tipo `.classe[hidden]`) garantida no CSS desde o início - não é algo que
+aparece nos testes automatizados (não renderizam CSS de verdade), só em
+teste visual real, e só quando dois elementos "escondidos" coincidem na
+mesma tela o suficiente pra notar.
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem

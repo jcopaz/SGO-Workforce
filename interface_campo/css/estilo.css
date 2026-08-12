@@ -17,6 +17,18 @@
   box-sizing: border-box;
 }
 
+/* [hidden] tem a MESMA especificidade que uma classe (.campo, .etapa-tela
+   etc.) - sem isso aqui, qualquer classe que define "display" explicito
+   (display:flex) vence o display:none padrao do navegador pro atributo
+   hidden, e o elemento continua visivel mesmo "escondido". Bug real visto
+   em producao (2026-08-12): #etapaPergunta e #blocoOfflineSgo apareciam
+   junto com a tela de Login por causa exatamente disso. Regra unica e
+   generica aqui em vez de corrigir classe por classe - cobre qualquer
+   elemento hidden no app, presente ou futuro. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

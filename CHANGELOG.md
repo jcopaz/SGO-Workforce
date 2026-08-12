@@ -64,6 +64,15 @@ Decisão consciente do responsável do produto (contraria a premissa
 offline-first, mas confirmado que o colaborador sempre tem sinal no
 início do turno, e que produção do SGO não sofre o cold-start do Render
 gratuito usado em dev). `CACHE_VERSAO` v32.
+
+**Bug real corrigido no dia seguinte (2026-08-12)**: `.campo`/`.etapa-tela`
+definem `display:flex`, que empata em especificidade CSS com o
+`display:none` padrão do atributo `hidden` - o CSS do site vencia o
+empate, então a tela de Pergunta e o bloco de instrução Offline
+apareciam junto com o Login mesmo com `hidden` correto no JS. Corrigido
+com uma regra única `[hidden] { display: none !important; }`. Ver
+`docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md`. `CACHE_VERSAO` v33.
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do
