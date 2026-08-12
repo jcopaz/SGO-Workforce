@@ -247,6 +247,19 @@ mudança de modo e a cada tecla/colagem no campo do link). Substitui o
 comportamento anterior (clicável, com aviso só depois do clique) por
 feedback visual imediato.
 
+### 6.4. Rótulos da Etapa 1 (Login) alinhados com o login real do SGO (mesmo dia)
+
+Pedido do responsável do produto, revisando o resultado ao vivo: a Etapa 1
+deveria parecer o mesmo login do SGO, já que valida contra a mesma base
+(`/auth/validar`). Conferido o formulário real do SGO
+(`app.py`, região 2.3 "Etapa 1 — Login Padrão"): `st.text_input("Matrícula / Usuário")`
++ `st.text_input("Senha")`. Rótulos da interface de campo alinhados
+exatamente - "Matricula" → "Matrícula / Usuário", "Senha do SGO
+(opcional)" → "Senha" (sem qualificação nem texto de ajuda específico do
+SGO). Comportamento não mudou: senha continua opcional de verdade
+(offline-first preservado, "Continuar" só exige a matrícula) - só o texto
+ficou mais direto. `CACHE_VERSAO` v30 → v31.
+
 ## Consequências e riscos aceitos
 
 - **TTL de 5 minutos do `sid` continua sem solução própria** - o modo

@@ -52,6 +52,10 @@ Botão "Iniciar jornada" agora fica desabilitado de verdade até a escolha
 estar completa (nenhum modo, ou Offline sem link) - antes só avisava
 depois do clique.
 
+Rótulos da tela de Login alinhados com o login real do SGO ("Matrícula /
+Usuário" + "Senha", sem qualificação de "opcional") - senha continua
+opcional na prática, só o texto ficou igual ao do SGO. `CACHE_VERSAO` v31.
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do
