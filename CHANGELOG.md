@@ -29,6 +29,15 @@ desenho do relógio já existente, até haver um frame estático real do logo
 novo (vídeo não serve como favicon, sem `ffmpeg` neste ambiente pra
 extrair um frame).
 
+Logo animado da sidebar do painel (`st.logo`) também trocado pelo logo
+definitivo - o responsável do produto converteu `logo_SGO.mp4` pra GIF
+(única forma de manter animação **acima do menu de navegação**, o único
+slot que `st.navigation` permite - `st.sidebar.video` sempre cai abaixo
+do menu, já testado e documentado em `painel/app.py`, e `st.logo` só
+anima GIF, não vídeo). Resultado: 6,78 MB (100 frames, 480x480) contra os
+17,4 MB do GIF anterior - mesmo caminho de arquivo
+(`painel/assets/logo_sgo_workforce.gif`), zero mudança de código.
+
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do
