@@ -260,6 +260,33 @@ SGO). Comportamento não mudou: senha continua opcional de verdade
 (offline-first preservado, "Continuar" só exige a matrícula) - só o texto
 ficou mais direto. `CACHE_VERSAO` v30 → v31.
 
+### 6.5. Login da Etapa 1 vira validação real e obrigatória (mesmo dia, supera o item 6.4)
+
+Decisão revista pelo responsável do produto, perguntada explicitamente
+antes de codificar por contrariar a premissa offline-first (regra de ouro
+7): "Continuar" agora **exige matrícula e senha preenchidas E valida de
+verdade contra `/auth/validar`** antes de liberar a Etapa 2 - sem
+credencial correta (ou sem conseguir falar com o SGO), o colaborador fica
+preso na Etapa 1, com a mensagem de erro específica que o backend
+devolveu (senha incorreta, sem conexão, etc.). Botão mostra "Validando..."
+e fica desabilitado durante a chamada.
+
+Decisão consciente do responsável do produto após eu apontar o risco (o
+modo Offline existe justamente pra quem vai perder sinal - se a validação
+travar por causa de rede, também travaria quem mais precisa do modo
+Offline): confirmado que a premissa real é que o colaborador **sempre tem
+sinal no início do turno** (só perde depois, já em campo), e que o
+ambiente de **produção** do SGO não tem o problema de cold start do
+Render gratuito usado no ambiente de dev deste piloto (esse nunca
+"dorme"). Com isso, bloquear na Etapa 1 deixou de ser um risco real.
+
+Fica sem mudança o segundo ponto de validação, já existente, dentro de
+`aoClicarIniciarJornada` (Etapa 2, modo Online) - ele roda de novo com a
+mesma senha (ainda no campo, não é apagada entre etapas) só pra renovar o
+`sid` com TTL fresco de 5 minutos a partir do momento real de uso, não do
+login lá atrás na Etapa 1 (mesma ressalva de TTL já registrada no item
+"Consequências" abaixo).
+
 ## Consequências e riscos aceitos
 
 - **TTL de 5 minutos do `sid` continua sem solução própria** - o modo

@@ -56,6 +56,14 @@ Rótulos da tela de Login alinhados com o login real do SGO ("Matrícula /
 Usuário" + "Senha", sem qualificação de "opcional") - senha continua
 opcional na prática, só o texto ficou igual ao do SGO. `CACHE_VERSAO` v31.
 
+Decisão revista no mesmo dia: a Etapa 1 (Login) agora **exige e valida de
+verdade** matrícula/senha contra `/auth/validar` antes de liberar a Etapa
+2 - matrícula e senha passam a ser obrigatórias, e login incorreto ou sem
+conexão trava o colaborador na tela de Login com o erro específico.
+Decisão consciente do responsável do produto (contraria a premissa
+offline-first, mas confirmado que o colaborador sempre tem sinal no
+início do turno, e que produção do SGO não sofre o cold-start do Render
+gratuito usado em dev). `CACHE_VERSAO` v32.
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 
 Ver `docs/92_ADR_0064_MELHORIAS_MAPA_GRAFICOS_TABELA_RESUMO.md`. Popup do

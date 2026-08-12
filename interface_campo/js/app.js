@@ -903,12 +903,36 @@ function mostrarEtapaPreJornada() {
 
 function configurarEtapasPreJornada() {
   if (els.btnContinuarLogin) {
-    els.btnContinuarLogin.addEventListener("click", () => {
-      if (!els.matricula.value.trim()) {
+    els.btnContinuarLogin.addEventListener("click", async () => {
+      const matricula = els.matricula.value.trim();
+      if (!matricula) {
         mostrarAviso("Informe a matricula antes de continuar.");
         return;
       }
+      const senha = els.senhaSgo.value;
+      if (!senha) {
+        mostrarAviso("Informe a senha antes de continuar.");
+        return;
+      }
       limparMensagem();
+      // Login real contra o SGO agora bloqueia a Etapa 1 (pedido do
+      // responsavel do produto, 2026-08-12) - diferente do resto do app,
+      // que e' offline-first de proposito: aqui a premissa e' que o
+      // colaborador sempre tem sinal no inicio do turno (ambiente de
+      // producao do SGO nunca "dorme", ao contrario do Render gratuito de
+      // dev usado neste piloto). Reautentica de novo em
+      // aoClicarIniciarJornada (Etapa 2) so' pra renovar o sid com TTL
+      // fresco - essa validacao aqui e' so' o gate de acesso.
+      const textoOriginal = els.btnContinuarLogin.textContent;
+      els.btnContinuarLogin.disabled = true;
+      els.btnContinuarLogin.textContent = "Validando...";
+      const resultado = await IntegracaoSgo.validarLoginSgo(matricula, senha);
+      els.btnContinuarLogin.disabled = false;
+      els.btnContinuarLogin.textContent = textoOriginal;
+      if (!resultado.ok) {
+        mostrarErro(new Error(resultado.mensagem));
+        return;
+      }
       etapaPreJornada = "pergunta";
       mostrarEtapaPreJornada();
     });
