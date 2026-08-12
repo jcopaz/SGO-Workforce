@@ -77,6 +77,27 @@ body {
   padding: 0.35rem 0;
 }
 
+/* Etapas 1 (Login) e 2 (Pergunta Online/Offline) do fluxo pre-jornada -
+   telas exclusivas, uma visivel por vez (ver mostrarEtapaPreJornada em
+   app.js). Depois de "Iniciar jornada" nenhuma das duas aparece mais. */
+.etapa-tela {
+  display: flex;
+  flex-direction: column;
+}
+
+.logo-login-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0 1.25rem;
+}
+
+.logo-login {
+  width: 100%;
+  max-width: 200px;
+  border-radius: 1.25rem;
+  box-shadow: 0 6px 20px rgba(15, 76, 129, 0.2);
+}
+
 .simulador-aviso {
   color: var(--cor-aviso);
   background: var(--cor-aviso-fundo);

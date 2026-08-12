@@ -57,8 +57,18 @@ const els = {
   blocoOfflineSgo: document.getElementById("blocoOfflineSgo"),
   linkAbrirSgoOffline: document.getElementById("linkAbrirSgoOffline"),
   pacoteOfflineUrl: document.getElementById("pacoteOfflineUrl"),
+  etapaLogin: document.getElementById("etapaLogin"),
+  etapaPergunta: document.getElementById("etapaPergunta"),
+  btnContinuarLogin: document.getElementById("btnContinuarLogin"),
+  btnVoltarEtapaLogin: document.getElementById("btnVoltarEtapaLogin"),
+  btnIniciarJornada: document.getElementById("btnIniciarJornada"),
 };
 
+// Controla qual das duas telas (Login/Pergunta) aparece antes de existir
+// jornada - so' relevante enquanto !motor (ver mostrarEtapaPreJornada,
+// chamada de dentro de render()). Depois de "Iniciar jornada" quem manda e'
+// motor.jornada.estado, como sempre foi.
+let etapaPreJornada = "login";
 let motor = null;
 // { ok: boolean|null, mensagem: string } | null - null antes de qualquer
 // tentativa de sincronizacao nesta sessao do app. ok:null == "em andamento".
@@ -834,6 +844,87 @@ function renderFaixaSimulacao() {
   }
 }
 
+// Extraido do antigo botao "Iniciar jornada" (criado a cada render()) pra um
+// listener estatico (configurarEtapasPreJornada) - mesma logica, so' que
+// agora vive na Etapa 2 (pergunta) do fluxo em telas, nao mais junto com o
+// login na mesma tela.
+async function aoClicarIniciarJornada() {
+  const modoSgo = obterModoSgoSelecionado();
+  if (!modoSgo) {
+    mostrarAviso(
+      "Escolha como vai apontar as OS no SGO hoje (Online ou Offline) antes de iniciar a jornada."
+    );
+    return;
+  }
+  let pacoteOfflineUrlSgo = null;
+  if (modoSgo === "offline") {
+    pacoteOfflineUrlSgo = els.pacoteOfflineUrl.value.trim();
+    if (!pacoteOfflineUrlSgo) {
+      mostrarAviso(
+        "Cole o link da Rota PWA do SGO (aberto com internet) antes de iniciar a jornada no modo Offline."
+      );
+      return;
+    }
+  }
+  if (!prepararMotorComMatricula({ modoApontamentoSgo: modoSgo, pacoteOfflineUrlSgo })) return;
+  const matricula = motor.jornada.colaboradorMatricula;
+  // So tenta o SSO online quando o modo escolhido e' "online" - no modo
+  // offline o colaborador ja logou manualmente no SGO pra gerar o pacote,
+  // sessaoSgo/sid nao tem uso nenhum ali.
+  if (modoSgo === "online") {
+    tentarValidarLoginSgo(matricula, els.senhaSgo.value);
+  }
+  const pendente = await ContinuacoesFalha.buscarPendente(matricula);
+  if (pendente) {
+    const sucesso = await executarComGpsObrigatorio(() => {
+      motor.iniciarJornada(RelogioSimulado.agora());
+      motor.iniciarAtendimentoFalha(RelogioSimulado.agora());
+      motor.registrarDadosFalha(pendente.dados);
+    });
+    if (!sucesso) return;
+    mostrarAviso(
+      "Havia um atendimento de falha em aberto para você - retomado automaticamente com os dados já preenchidos."
+    );
+    ContinuacoesFalha.marcarConsumida(pendente.id);
+  } else {
+    await executarComGpsObrigatorio(() => motor.iniciarJornada(RelogioSimulado.agora()));
+  }
+}
+
+// Etapas 1 (Login) e 2 (Pergunta Online/Offline) sao telas exclusivas -
+// nunca as duas visiveis ao mesmo tempo. So' importa enquanto !motor (ver
+// render()); depois de "Iniciar jornada" as duas ficam ocultas pra sempre
+// (ate a proxima jornada).
+function mostrarEtapaPreJornada() {
+  if (!els.etapaLogin || !els.etapaPergunta) return;
+  els.etapaLogin.hidden = etapaPreJornada !== "login";
+  els.etapaPergunta.hidden = etapaPreJornada !== "pergunta";
+}
+
+function configurarEtapasPreJornada() {
+  if (els.btnContinuarLogin) {
+    els.btnContinuarLogin.addEventListener("click", () => {
+      if (!els.matricula.value.trim()) {
+        mostrarAviso("Informe a matricula antes de continuar.");
+        return;
+      }
+      limparMensagem();
+      etapaPreJornada = "pergunta";
+      mostrarEtapaPreJornada();
+    });
+  }
+  if (els.btnVoltarEtapaLogin) {
+    els.btnVoltarEtapaLogin.addEventListener("click", () => {
+      limparMensagem();
+      etapaPreJornada = "login";
+      mostrarEtapaPreJornada();
+    });
+  }
+  if (els.btnIniciarJornada) {
+    els.btnIniciarJornada.addEventListener("click", aoClicarIniciarJornada);
+  }
+}
+
 function render() {
   sincronizarEstadoCapturaPeriodica();
   els.botoes.replaceChildren();
@@ -842,60 +933,16 @@ function render() {
   renderStatusSincronizacao();
 
   if (!motor || motor.jornada.estado === "NAO_INICIADA") {
-    els.status.textContent = "Nenhuma jornada em andamento.";
+    els.status.hidden = true;
     els.matricula.disabled = false;
     travarCamposModoSgo(false);
-    els.botoes.appendChild(
-      botao(
-        "Iniciar jornada",
-        async () => {
-          const modoSgo = obterModoSgoSelecionado();
-          if (!modoSgo) {
-            mostrarAviso(
-              "Escolha como vai apontar as OS no SGO hoje (Online ou Offline) antes de iniciar a jornada."
-            );
-            return;
-          }
-          let pacoteOfflineUrlSgo = null;
-          if (modoSgo === "offline") {
-            pacoteOfflineUrlSgo = els.pacoteOfflineUrl.value.trim();
-            if (!pacoteOfflineUrlSgo) {
-              mostrarAviso(
-                "Cole o link da Rota PWA do SGO (aberto com internet) antes de iniciar a jornada no modo Offline."
-              );
-              return;
-            }
-          }
-          if (!prepararMotorComMatricula({ modoApontamentoSgo: modoSgo, pacoteOfflineUrlSgo })) return;
-          const matricula = motor.jornada.colaboradorMatricula;
-          // So tenta o SSO online quando o modo escolhido e' "online" - no
-          // modo offline o colaborador ja logou manualmente no SGO pra
-          // gerar o pacote, sessaoSgo/sid nao tem uso nenhum ali.
-          if (modoSgo === "online") {
-            tentarValidarLoginSgo(matricula, els.senhaSgo.value);
-          }
-          const pendente = await ContinuacoesFalha.buscarPendente(matricula);
-          if (pendente) {
-            const sucesso = await executarComGpsObrigatorio(() => {
-              motor.iniciarJornada(RelogioSimulado.agora());
-              motor.iniciarAtendimentoFalha(RelogioSimulado.agora());
-              motor.registrarDadosFalha(pendente.dados);
-            });
-            if (!sucesso) return;
-            mostrarAviso(
-              "Havia um atendimento de falha em aberto para você - retomado automaticamente com os dados já preenchidos."
-            );
-            ContinuacoesFalha.marcarConsumida(pendente.id);
-          } else {
-            await executarComGpsObrigatorio(() => motor.iniciarJornada(RelogioSimulado.agora()));
-          }
-        },
-        { destaque: true }
-      )
-    );
+    mostrarEtapaPreJornada();
     return;
   }
 
+  els.status.hidden = false;
+  if (els.etapaLogin) els.etapaLogin.hidden = true;
+  if (els.etapaPergunta) els.etapaPergunta.hidden = true;
   els.matricula.disabled = true;
   travarCamposModoSgo(true);
 
@@ -924,6 +971,7 @@ function render() {
           if (els.modoSgoOffline) els.modoSgoOffline.checked = false;
           if (els.pacoteOfflineUrl) els.pacoteOfflineUrl.value = "";
           if (els.blocoOfflineSgo) els.blocoOfflineSgo.hidden = true;
+          etapaPreJornada = "login";
           limparMensagem();
           render();
         },
@@ -1245,5 +1293,6 @@ async function iniciar() {
 
 configurarSimulador();
 configurarModoSgo();
+configurarEtapasPreJornada();
 configurarCapturaAoVoltarParaPrimeiroPlano();
 iniciar();

@@ -12,7 +12,13 @@ responsável do produto: "o SGO aponta a execução de OS, o Workforce só
 mede HH", e o tempo gasto apontando no SGO conta normalmente como tempo
 produtivo, sem exigir pausa. `app.py` do SGO (staged em
 `Documents/Integração SGOWorkforce/`) ganhou um botão "Voltar ao
-Workforce". `CACHE_VERSAO` v27.
+Workforce" na tela online **e** no pacote PWA offline.
+
+No mesmo dia, tela inicial reestruturada em telas exclusivas (Login →
+Pergunta Online/Offline → App, em vez de tudo numa rolagem só), com o
+logo animado do Workforce (`interface_campo/assets/logo-workforce.mp4`,
+via `<video>` - 6x mais leve que a versão em GIF já existente no
+repositório, decodificação por hardware). `CACHE_VERSAO` v28.
 
 ## [2026-08-07] Melhorias de mapa, gráficos e tabela resumo no mapa operacional (ADR-0064)
 

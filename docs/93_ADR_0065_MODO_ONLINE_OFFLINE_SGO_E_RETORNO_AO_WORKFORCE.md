@@ -132,6 +132,38 @@ segue contando entre o EE17 e o próximo evento que o colaborador registrar
 lá - inclui o tempo gasto apontando/anexando evidência no SGO, por
 decisão consciente (ver Contexto).
 
+### 6. Fluxo em telas (Login → Pergunta → App) com logo animado, no mesmo dia
+
+Pedido do responsável do produto, ainda em 2026-08-11: a tela inicial
+tinha matrícula, senha, a pergunta Online/Offline e o simulador de tempo
+todos juntos, numa rolagem só - "cara de formulário de debug, não de
+app". Reestruturado em telas exclusivas (nunca duas visíveis ao mesmo
+tempo, controladas por `etapaPreJornada` em `app.js`):
+
+1. **Login** (`#etapaLogin`) - logo animado do Workforce, matrícula, senha
+   do SGO, botão "Continuar".
+2. **Pergunta** (`#etapaPergunta`) - a escolha Online/Offline (item 1
+   desta ADR), com botão "Voltar" pra etapa 1.
+3. **App** - a tela de jornada/atividade já existente, sem mudança de
+   comportamento.
+
+Logo: existiam dois arquivos prontos no repositório
+(`Logo - SGO Workforce 1x1.mp4`, 2,87 MB, e o mesmo conteúdo já
+convertido pra GIF, 17,4 MB - GIF não tem compressão inter-quadro de
+verdade, herda o problema de qualquer conversão nova). Decisão: usar o
+MP4 direto via `<video autoplay loop muted playsinline>` em vez de
+qualquer GIF - decodificação por hardware (GPU), 6x mais leve que a
+versão GIF, alinhado com a filosofia offline-first/dados móveis do
+projeto (regra de ouro 7). Arquivo copiado pra
+`interface_campo/assets/logo-workforce.mp4`.
+
+O vídeo (2,8 MB) é cacheado no service worker **fora** do `cache.addAll`
+do app shell - `cache.addAll` é tudo-ou-nada, e um arquivo desse tamanho
+falhando por rede instável não pode derrubar o cache do resto do app
+(crítico pro offline-first). Cacheado à parte, best-effort: se falhar, a
+tela de login só perde a animação até a próxima visita online, nada mais
+quebra. `CACHE_VERSAO` v27 → v28.
+
 ## Consequências e riscos aceitos
 
 - **TTL de 5 minutos do `sid` continua sem solução própria** - o modo
@@ -183,18 +215,23 @@ decisão consciente (ver Contexto).
 
 ## Arquivos afetados
 
-- `interface_campo/index.html` (pergunta Online/Offline, bloco de
-  confirmação do pacote offline, versão v27).
+- `interface_campo/index.html` (fluxo em telas `#etapaLogin`/
+  `#etapaPergunta`, vídeo do logo, bloco de confirmação do pacote offline,
+  versão v28).
 - `interface_campo/js/app.js` (`obterModoSgoSelecionado`,
-  `travarCamposModoSgo`, `configurarModoSgo`, clique de "Iniciar jornada",
+  `travarCamposModoSgo`, `configurarModoSgo`, `mostrarEtapaPreJornada`,
+  `configurarEtapasPreJornada`, `aoClicarIniciarJornada` extraído,
   `criarBlocoOrdensServico` reescrito).
 - `interface_campo/js/entidades.js` (`novaJornada` com os dois campos
   novos).
 - `interface_campo/js/motorJornada.js` (`MotorJornada` propaga os campos
   novos).
 - `interface_campo/css/estilo.css` (`fieldset.campo`, `.opcao-radio`,
-  `.botao` agora funciona também como link de bloco).
-- `interface_campo/service-worker.js` (`CACHE_VERSAO` v27).
+  `.etapa-tela`, `.logo-login`, `.botao` agora funciona também como link
+  de bloco).
+- `interface_campo/service-worker.js` (`CACHE_VERSAO` v28, cache
+  best-effort do vídeo do logo).
+- `interface_campo/assets/logo-workforce.mp4` (novo, 2,87 MB).
 - `tests/js/motorJornada.test.mjs` (4 testes novos).
 - Fora deste repositório: `app.py` do SGO
   (`Documents/Integração SGOWorkforce/app.py`, novo - cópia de

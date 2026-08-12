@@ -20,81 +20,100 @@
 <main class="conteudo">
   <p id="faixaSimulacao" class="faixa-simulacao" hidden></p>
 
-  <p class="aviso-piloto">
-    Piloto tecnico do SGO Workforce. GPS obrigatorio para iniciar/encerrar
-    jornada, atividade, pausa e evento secundario, com captura periodica
-    em segundo plano (1 pulso/minuto) enquanto o app estiver em primeiro
-    plano durante a jornada aberta - a captura pausa se o app for
-    minimizado (limitacao do navegador, ver ADR-0048), retomando um pulso
-    extra assim que o colaborador volta pro app. Tudo offline - so
-    sincroniza junto com a jornada. Os 23 codigos do Relatorio de
-    Atividades Diarias
-    de Manutencao (Relatorio 1) ja tem tela propria (atividade planejada,
-    pausa, deslocamento/espera/apoio, atendimento de falha) e
-    classificacao produtiva/produtiva nao rentavel/improdutiva validada
-    com a operacao. Informe a senha do SGO (opcional) para abrir o
-    apontamento de OS direto no SGO ao iniciar uma atividade - sem senha,
-    ou sem conexao no momento, o numero da OS continua sendo registrado
-    manualmente aqui mesmo.
-  </p>
-
-  <details class="simulador">
-    <summary>Simulador de tempo (somente teste)</summary>
-    <p class="simulador-aviso">
-      Ferramenta de teste para adiantar o relogio usado pelo app, e assim
-      testar jornadas de varios dias sem esperar o tempo real passar.
-      <strong>Nunca deve ser usada em operacao real.</strong>
-    </p>
-    <p id="simuladorStatus" class="simulador-status"></p>
-    <div class="simulador-botoes">
-      <button id="simAvancar15m" type="button" class="botao">+15 min</button>
-      <button id="simAvancar1h" type="button" class="botao">+1 hora</button>
-      <button id="simAvancar8h" type="button" class="botao">+8 horas</button>
-      <button id="simAvancar1d" type="button" class="botao">+1 dia</button>
+  <!-- ETAPA 1: Login (matricula + senha do SGO) - primeira coisa que o
+       colaborador ve, antes de qualquer pergunta ou tela de jornada. -->
+  <section id="etapaLogin" class="etapa-tela">
+    <div class="logo-login-wrap">
+      <video class="logo-login" autoplay loop muted playsinline aria-label="SGO Workforce">
+        <source src="assets/logo-workforce.mp4" type="video/mp4" />
+      </video>
     </div>
-    <label class="campo">
-      <span>Definir data e hora exata</span>
-      <input id="simDataHora" type="datetime-local" />
-    </label>
-    <button id="simAplicarData" type="button" class="botao">Aplicar data/hora</button>
-    <button id="simReiniciar" type="button" class="botao">Voltar para tempo real</button>
-  </details>
 
-  <label class="campo">
-    <span>Matricula</span>
-    <input id="matricula" type="text" inputmode="numeric" placeholder="Ex.: 12345" autocomplete="off" />
-  </label>
-  <label class="campo">
-    <span>Senha do SGO (opcional)</span>
-    <input id="senhaSgo" type="password" placeholder="So necessario para abrir OS direto no SGO" autocomplete="off" />
-  </label>
-
-  <fieldset id="modoSgoFieldset" class="campo">
-    <legend>Como vai apontar as OS no SGO hoje?</legend>
-    <label class="opcao-radio">
-      <input type="radio" name="modoSgo" id="modoSgoOnline" value="online" />
-      <span>Online (SGO abre com internet ao iniciar a atividade)</span>
-    </label>
-    <label class="opcao-radio">
-      <input type="radio" name="modoSgo" id="modoSgoOffline" value="offline" />
-      <span>Offline (vou usar o pacote PWA do SGO, sem internet)</span>
-    </label>
-  </fieldset>
-
-  <div id="blocoOfflineSgo" class="campo" hidden>
     <p class="aviso-piloto">
-      Antes de iniciar a jornada, com internet: abra o SGO, toque em
-      "Publicar Rota PWA" e depois "Abrir Rota no Celular" uma vez. Depois
-      cole aqui o link que abriu.
+      Piloto tecnico do SGO Workforce. GPS obrigatorio para iniciar/encerrar
+      jornada, atividade, pausa e evento secundario, com captura periodica
+      em segundo plano (1 pulso/minuto) enquanto o app estiver em primeiro
+      plano durante a jornada aberta - a captura pausa se o app for
+      minimizado (limitacao do navegador, ver ADR-0048), retomando um pulso
+      extra assim que o colaborador volta pro app. Tudo offline - so
+      sincroniza junto com a jornada.
     </p>
-    <a id="linkAbrirSgoOffline" class="botao" href="#" target="_blank" rel="noopener">Abrir SGO para gerar a Rota PWA</a>
-    <label class="campo">
-      <span>Link da Rota PWA do SGO</span>
-      <input id="pacoteOfflineUrl" type="url" placeholder="Cole aqui o link aberto no SGO" autocomplete="off" />
-    </label>
-  </div>
 
-  <p id="status" class="status">Carregando...</p>
+    <label class="campo">
+      <span>Matricula</span>
+      <input id="matricula" type="text" inputmode="numeric" placeholder="Ex.: 12345" autocomplete="off" />
+    </label>
+    <label class="campo">
+      <span>Senha do SGO (opcional)</span>
+      <input id="senhaSgo" type="password" placeholder="So necessario para abrir OS direto no SGO" autocomplete="off" />
+    </label>
+
+    <button id="btnContinuarLogin" type="button" class="botao botao-destaque">Continuar</button>
+
+    <details class="simulador">
+      <summary>Simulador de tempo (somente teste)</summary>
+      <p class="simulador-aviso">
+        Ferramenta de teste para adiantar o relogio usado pelo app, e assim
+        testar jornadas de varios dias sem esperar o tempo real passar.
+        <strong>Nunca deve ser usada em operacao real.</strong>
+      </p>
+      <p id="simuladorStatus" class="simulador-status"></p>
+      <div class="simulador-botoes">
+        <button id="simAvancar15m" type="button" class="botao">+15 min</button>
+        <button id="simAvancar1h" type="button" class="botao">+1 hora</button>
+        <button id="simAvancar8h" type="button" class="botao">+8 horas</button>
+        <button id="simAvancar1d" type="button" class="botao">+1 dia</button>
+      </div>
+      <label class="campo">
+        <span>Definir data e hora exata</span>
+        <input id="simDataHora" type="datetime-local" />
+      </label>
+      <button id="simAplicarData" type="button" class="botao">Aplicar data/hora</button>
+      <button id="simReiniciar" type="button" class="botao">Voltar para tempo real</button>
+    </details>
+  </section>
+
+  <!-- ETAPA 2: pergunta Online/Offline (SGO, ADR-0065) - só aparece depois
+       de "Continuar" na Etapa 1, nunca junto com o login. -->
+  <section id="etapaPergunta" class="etapa-tela" hidden>
+    <p class="aviso-piloto">
+      Os 23 codigos do Relatorio de Atividades Diarias de Manutencao
+      (Relatorio 1) ja tem tela propria (atividade planejada, pausa,
+      deslocamento/espera/apoio, atendimento de falha) e classificacao
+      produtiva/produtiva nao rentavel/improdutiva validada com a
+      operacao.
+    </p>
+
+    <fieldset id="modoSgoFieldset" class="campo">
+      <legend>Como vai apontar as OS no SGO hoje?</legend>
+      <label class="opcao-radio">
+        <input type="radio" name="modoSgo" id="modoSgoOnline" value="online" />
+        <span>Online (SGO abre com internet ao iniciar a atividade)</span>
+      </label>
+      <label class="opcao-radio">
+        <input type="radio" name="modoSgo" id="modoSgoOffline" value="offline" />
+        <span>Offline (vou usar o pacote PWA do SGO, sem internet)</span>
+      </label>
+    </fieldset>
+
+    <div id="blocoOfflineSgo" class="campo" hidden>
+      <p class="aviso-piloto">
+        Antes de iniciar a jornada, com internet: abra o SGO, toque em
+        "Publicar Rota PWA" e depois "Abrir Rota no Celular" uma vez. Depois
+        cole aqui o link que abriu.
+      </p>
+      <a id="linkAbrirSgoOffline" class="botao" href="#" target="_blank" rel="noopener">Abrir SGO para gerar a Rota PWA</a>
+      <label class="campo">
+        <span>Link da Rota PWA do SGO</span>
+        <input id="pacoteOfflineUrl" type="url" placeholder="Cole aqui o link aberto no SGO" autocomplete="off" />
+      </label>
+    </div>
+
+    <button id="btnIniciarJornada" type="button" class="botao botao-destaque">Iniciar jornada</button>
+    <button id="btnVoltarEtapaLogin" type="button" class="botao">Voltar</button>
+  </section>
+
+  <p id="status" class="status" hidden>Carregando...</p>
   <p id="statusSincronizacao" class="status-sincronizacao"></p>
 
   <div id="mensagem" class="mensagem" role="alert" aria-live="polite"></div>
@@ -111,7 +130,7 @@
        CACHE_VERSAO de service-worker.js, atualizado junto dela. Se o que
        aparece na tela for menor que o ultimo commit, e cache antigo, nao
        bug novo. -->
-  <p class="rodape-versao">Versão v27</p>
+  <p class="rodape-versao">Versão v28</p>
 </footer>
 
 <script type="module" src="js/app.js"></script>

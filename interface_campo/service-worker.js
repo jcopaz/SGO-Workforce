@@ -5,7 +5,11 @@
 // nenhuma chamada de rede (nao ha API real ainda - ver
 // docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
 
-const CACHE_VERSAO = "sgo-workforce-shell-v27";
+const CACHE_VERSAO = "sgo-workforce-shell-v28";
+// Deliberadamente SEM "./assets/logo-workforce.mp4" aqui - cache.addAll e'
+// tudo ou nada, e o video (~2,8MB) e' grande demais pra arriscar derrubar
+// o app shell inteiro se a rede cair no meio do download. Cacheado a parte,
+// best-effort, no proprio handler de "install" abaixo.
 const ARQUIVOS_APP_SHELL = [
   "./",
   "./index.html",
@@ -34,7 +38,16 @@ const ARQUIVOS_APP_SHELL = [
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(
-    caches.open(CACHE_VERSAO).then((cache) => cache.addAll(ARQUIVOS_APP_SHELL))
+    caches.open(CACHE_VERSAO).then((cache) =>
+      cache.addAll(ARQUIVOS_APP_SHELL).then(() =>
+        // Video do logo da tela de login (~2,8MB) e' best-effort - se
+        // falhar (rede instavel, arquivo grande), nunca pode derrubar o
+        // cache do resto do app shell, que E' critico pro offline-first
+        // (regra de ouro 7). Sem ele em cache, a tela de login so perde a
+        // animacao ate a proxima visita online - nada mais quebra.
+        cache.add("./assets/logo-workforce.mp4").catch(() => {})
+      )
+    )
   );
   self.skipWaiting();
 });
