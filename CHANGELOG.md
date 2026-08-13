@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-08-12] Equipe da jornada com replicação de HH (ADR-0068)
+
+Ver `docs/96_ADR_0068_EQUIPE_DA_JORNADA_COM_REPLICACAO_DE_HH.md`. Nova
+seção "Equipe (opcional)" na Etapa 2, logo após a pergunta Online/Offline
+- seleção de colaboradores cadastrados no SGO (`GET /usuarios` novo no
+`api.py`, staged) que participaram junto da jornada. Diferente da aba
+Equipe do ADR-0063 (por atividade, texto livre, nunca afeta HH), esta
+**replica o HH de verdade**: ao encerrar a jornada, o app gera uma
+jornada-espelho por colega selecionado (mesmos timestamps/eventos,
+`colaboradorMatricula` trocada) e sincroniza cada uma.
+
+Decisão tomada com dois riscos levantados e aceitos conscientemente pelo
+responsável do produto antes de codificar: HH pode duplicar se o colega
+também logar por conta própria no mesmo período; e o HH do colega passa
+a existir "por declaração" do dono da jornada, sem captura própria de
+evento/GPS (contraria a regra de ouro 2/3 em espírito, exceção aceita
+pra este caso). A marca de auditoria (`espelhoDe`) fica só local
+(IndexedDB) - não persiste no backend/painel nesta rodada (exigiria
+mudança no domínio Python também, registrado como pendência). 158 testes
+JS passando (8 novos). `CACHE_VERSAO` v34.
+
 ## [2026-08-12] Mapa Operacional escondia pulsos de jornada que atravessa a meia-noite (ADR-0067)
 
 Ver `docs/95_ADR_0067_MAPA_JORNADA_ATRAVESSA_MEIA_NOITE.md`. Bug real

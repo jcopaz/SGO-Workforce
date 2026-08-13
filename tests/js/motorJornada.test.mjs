@@ -12,6 +12,7 @@ import { MotorJornada } from "../../interface_campo/js/motorJornada.js";
 import * as calculo from "../../interface_campo/js/calculo.js";
 import * as Erros from "../../interface_campo/js/erros.js";
 import { ResultadoAtividade, TipoEventoSecundario } from "../../interface_campo/js/enums.js";
+import { gerarJornadaEspelho } from "../../interface_campo/js/entidades.js";
 
 function dt(hora, minuto, dia = 1) {
   return new Date(2026, 0, dia, hora, minuto, 0, 0);
@@ -909,4 +910,54 @@ test("MotorJornada.aPartirDe preserva modoApontamentoSgo/pacoteOfflineUrlSgo ja 
   const recuperado = MotorJornada.aPartirDe(original.jornada);
   assert.equal(recuperado.jornada.modoApontamentoSgo, "offline");
   assert.equal(recuperado.jornada.pacoteOfflineUrlSgo, "https://api-sgo-mrs.onrender.com/pacote/xyz789");
+});
+
+// equipeJornada/espelhoDe/gerarJornadaEspelho (2026-08-12): "Equipe da
+// jornada" com replicacao de HH - decisao consciente do responsavel do
+// produto apos eu apontar os riscos (HH por declaracao, sem captura
+// propria de evento do colega - ver docs/96_ADR_0068...md).
+test("MotorJornada novo sem equipeJornada informada usa lista vazia", () => {
+  const motor = new MotorJornada({ colaboradorMatricula: "12345" });
+  assert.deepEqual(motor.jornada.equipeJornada, []);
+  assert.equal(motor.jornada.espelhoDe, null);
+});
+
+test("MotorJornada novo propaga equipeJornada informada", () => {
+  const equipe = [{ matricula: "11111", nome: "Fulano" }];
+  const motor = new MotorJornada({ colaboradorMatricula: "12345", equipeJornada: equipe });
+  assert.deepEqual(motor.jornada.equipeJornada, equipe);
+});
+
+test("gerarJornadaEspelho clona a jornada com id novo e matricula do colega", () => {
+  const original = new MotorJornada({
+    colaboradorMatricula: "12345",
+    equipeJornada: [{ matricula: "11111", nome: "Fulano" }],
+  });
+  original.iniciarJornada(dt(8, 0));
+  original.iniciarAtividade(dt(8, 10));
+  original.encerrarAtividade(dt(9, 0));
+  original.encerrarJornada(dt(9, 10));
+
+  const espelho = gerarJornadaEspelho(original.jornada, "11111");
+
+  assert.notEqual(espelho.id, original.jornada.id);
+  assert.equal(espelho.colaboradorMatricula, "11111");
+  assert.equal(espelho.espelhoDe, "12345");
+  assert.deepEqual(espelho.equipeJornada, []);
+  // Mesmos timestamps/eventos - e' um clone fiel, so' troca dono.
+  assert.equal(espelho.inicio.getTime(), original.jornada.inicio.getTime());
+  assert.equal(espelho.fim.getTime(), original.jornada.fim.getTime());
+  assert.equal(espelho.atividades.length, original.jornada.atividades.length);
+  assert.equal(espelho.atividades[0].id, original.jornada.atividades[0].id);
+});
+
+test("gerarJornadaEspelho nao compartilha referencia com a jornada original (clone de verdade)", () => {
+  const original = new MotorJornada({ colaboradorMatricula: "12345" });
+  original.iniciarJornada(dt(8, 0));
+  original.iniciarAtividade(dt(8, 10));
+
+  const espelho = gerarJornadaEspelho(original.jornada, "11111");
+  espelho.atividades[0].resultado = "MEXIDO_NO_ESPELHO";
+
+  assert.notEqual(original.jornada.atividades[0].resultado, "MEXIDO_NO_ESPELHO");
 });

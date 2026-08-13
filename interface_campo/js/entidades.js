@@ -94,7 +94,34 @@ export function novoDadosFalha() {
 // sinal - a URL fica guardada aqui pra abrir offline depois, no EE17). Nao
 // afeta HH (nunca entra em sincronizacao.js::paraPayloadSincronizacao) - e
 // so a referencia de qual link abrir quando a atividade começar.
-export function novaJornada({ colaboradorMatricula, modoApontamentoSgo = null, pacoteOfflineUrlSgo = null }) {
+// equipeJornada/espelhoDe (2026-08-12): "Equipe da jornada" - quem mais
+// participou, escolhido logo apos a pergunta Online/Offline (nao mais
+// digitado por atividade como a aba Equipe do ADR-0063). Diferente daquela,
+// AQUI o HH e' replicado de verdade: ao encerrar, o app gera uma jornada
+// "espelho" por colega (mesmos timestamps/eventos, colaboradorMatricula
+// trocada) e sincroniza cada uma - ver app.js::gerarJornadasEspelho.
+// `equipeJornada` so' existe na jornada REAL (a do dono, quem logou); uma
+// jornada espelho SEMPRE nasce com equipeJornada=[] (nunca re-espelha) e
+// `espelhoDe` preenchido com a matricula de quem originou - marca de
+// auditoria LOCAL (fica no IndexedDB do aparelho), pra pelo menos ali
+// sempre dar pra distinguir "HH capturado por evento real" de "HH
+// replicado por declaracao de colega" (regra de ouro 2/3 do CLAUDE.md).
+// LIMITACAO CONHECIDA: `espelhoDe`/`equipeJornada` NAO entram no payload
+// de sincronizacao (mesmo motivo de modoApontamentoSgo - o backend
+// (`workforce_storage.serializacao.jornada_de_dict`) so' reconhece campos
+// fixos do dataclass Jornada em Python, ignoraria esses dois sem
+// persistir) - uma vez sincronizada, a jornada espelho fica
+// indistinguivel de uma jornada real no backend/painel. Persistir essa
+// marca de verdade no servidor exigiria mudanca no dominio Python
+// tambem (workforce_core.entities.Jornada + serializacao + repositorio),
+// fora do escopo desta rodada - ver ADR-0068.
+export function novaJornada({
+  colaboradorMatricula,
+  modoApontamentoSgo = null,
+  pacoteOfflineUrlSgo = null,
+  equipeJornada = [],
+  espelhoDe = null,
+}) {
   return {
     id: gerarId(),
     colaboradorMatricula,
@@ -105,6 +132,32 @@ export function novaJornada({ colaboradorMatricula, modoApontamentoSgo = null, p
     eventosSecundarios: [],
     modoApontamentoSgo,
     pacoteOfflineUrlSgo,
+    equipeJornada,
+    espelhoDe,
+  };
+}
+
+// Gera uma jornada "espelho" pra um colega da equipe, a partir da jornada
+// JA ENCERRADA do dono (2026-08-12, decisao explicita do responsavel do
+// produto apos eu apontar os riscos: HH replicado sem captura propria de
+// GPS/evento do colega - aceito conscientemente). Clona tudo (atividades,
+// pausas, eventos secundarios, com os MESMOS ids e timestamps - seguro
+// porque cada Jornada e' um documento JSONB proprio no backend, sem
+// unicidade de id entre jornadas diferentes) e troca so' o que precisa:
+// id novo (senao colide com a jornada original na hora de sincronizar),
+// colaboradorMatricula do colega, `espelhoDe` marcando a origem, e
+// `equipeJornada` zerada (uma jornada espelho nunca gera outro espelho).
+// Chamada uma vez por colega em app.js, so' quando a jornada original ja
+// esta ENCERRADA (nunca no meio do turno - ver docstring de
+// gerarJornadasEspelho em app.js).
+export function gerarJornadaEspelho(jornadaOriginal, matriculaColega) {
+  const clone = structuredClone(jornadaOriginal);
+  return {
+    ...clone,
+    id: gerarId(),
+    colaboradorMatricula: matriculaColega,
+    equipeJornada: [],
+    espelhoDe: jornadaOriginal.colaboradorMatricula,
   };
 }
 

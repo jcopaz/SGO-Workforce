@@ -23,7 +23,7 @@ import {
   listarPulsosPendentes,
   marcarPulsosSincronizados,
 } from "./armazenamento.js";
-import { novoPulsoGps } from "./entidades.js";
+import { novoPulsoGps, gerarJornadaEspelho } from "./entidades.js";
 import * as RelogioSimulado from "./relogioSimulado.js";
 import * as Sincronizacao from "./sincronizacao.js";
 import * as CatalogoMotivos from "./catalogoMotivos.js";
@@ -62,6 +62,8 @@ const els = {
   btnContinuarLogin: document.getElementById("btnContinuarLogin"),
   btnVoltarEtapaLogin: document.getElementById("btnVoltarEtapaLogin"),
   btnIniciarJornada: document.getElementById("btnIniciarJornada"),
+  listaEquipeJornada: document.getElementById("listaEquipeJornada"),
+  avisoEquipeJornada: document.getElementById("avisoEquipeJornada"),
 };
 
 // Controla qual das duas telas (Login/Pergunta) aparece antes de existir
@@ -103,6 +105,12 @@ let idIntervaloCapturaPeriodica = null;
 // normal do Workforce (offline-first: iniciar jornada/atividade nunca
 // depende disto, so o atalho pro SGO depende).
 let sessaoSgo = null;
+// Colaboradores cadastrados no SGO (matricula+nome), buscados 1x logo apos
+// o login validar com sucesso na Etapa 1 (ver carregarEquipeSgo) - usados
+// pra popular a selecao de "Equipe da jornada" na Etapa 2. Best-effort:
+// [] enquanto nao carregou ou se a busca falhar (sem sinal, etc.) - a
+// secao de Equipe fica vazia/com aviso, nunca trava o resto do fluxo.
+let colaboradoresSgo = [];
 // Valores sentinela (nunca colidem com um codigo EE real, que e sempre
 // "EE" + 2 digitos) para os dois pontos de entrada especiais do bloco
 // Execucao - nao sao codigos soltos no motor de dominio, sao o que
@@ -674,6 +682,26 @@ function dispararSincronizacao() {
   sincronizarPulsosPendentes(jornadaNoMomento.id);
 }
 
+// Gera e sincroniza uma jornada "espelho" por colega da Equipe da jornada
+// (2026-08-12) - so' chamada UMA VEZ, logo apos "Encerrar jornada" ter sido
+// aplicado com sucesso (motor.jornada.estado === "ENCERRADA"), nunca no
+// meio do turno (a jornada precisa estar completa/imutavel antes de
+// clonar). Best-effort e fire-and-forget, mesmo espirito de
+// dispararSincronizacao - Sincronizacao.sincronizar() ja nunca lanca.
+//
+// LIMITACAO CONHECIDA (sem fila de reenvio, ver ADR-0068): se nao houver
+// conexao no momento do encerramento, os espelhos dos colegas se perdem -
+// diferente da jornada do proprio dono (que sincroniza de novo a cada
+// tentativa futura) e dos pulsos (fila local dedicada), o espelho so'
+// tenta 1 vez, aqui, e nunca mais.
+function gerarESincronizarEspelhosDeEquipe() {
+  if (!motor || !motor.jornada.equipeJornada || motor.jornada.equipeJornada.length === 0) return;
+  for (const membro of motor.jornada.equipeJornada) {
+    const jornadaEspelho = gerarJornadaEspelho(motor.jornada, membro.matricula);
+    Sincronizacao.sincronizar(jornadaEspelho);
+  }
+}
+
 // Grava localmente uma leitura de GPS como pulso de auditoria - chamada
 // tanto pela captura periodica de fundo quanto pela trava de "GPS
 // obrigatorio" (executarComGpsObrigatorio), que reaproveita a leitura em
@@ -866,7 +894,8 @@ async function aoClicarIniciarJornada() {
       return;
     }
   }
-  if (!prepararMotorComMatricula({ modoApontamentoSgo: modoSgo, pacoteOfflineUrlSgo })) return;
+  const equipeJornada = obterEquipeJornadaSelecionada();
+  if (!prepararMotorComMatricula({ modoApontamentoSgo: modoSgo, pacoteOfflineUrlSgo, equipeJornada })) return;
   const matricula = motor.jornada.colaboradorMatricula;
   // So tenta o SSO online quando o modo escolhido e' "online" - no modo
   // offline o colaborador ja logou manualmente no SGO pra gerar o pacote,
@@ -901,6 +930,65 @@ function mostrarEtapaPreJornada() {
   els.etapaPergunta.hidden = etapaPreJornada !== "pergunta";
 }
 
+// "Equipe da jornada" (2026-08-12) - lista de colaboradores cadastrados no
+// SGO, buscada 1x apos o login da Etapa 1 validar, renderizada como
+// checkboxes na Etapa 2 (logo apos a pergunta Online/Offline). Nunca inclui
+// o proprio colaborador logado (nao faz sentido "replicar HH pra si
+// mesmo"). Best-effort: se a busca falhar, mostra aviso e a secao fica
+// vazia - Equipe e' sempre opcional, nunca bloqueia "Iniciar jornada".
+async function carregarEquipeSgo(matriculaLogada) {
+  if (!els.listaEquipeJornada) return;
+  const resultado = await IntegracaoSgo.listarColaboradoresSgo();
+  if (!resultado.ok) {
+    colaboradoresSgo = [];
+    if (els.avisoEquipeJornada) {
+      els.avisoEquipeJornada.textContent =
+        "Não foi possível carregar a lista de colaboradores do SGO agora - Equipe fica indisponível nesta jornada.";
+      els.avisoEquipeJornada.hidden = false;
+    }
+    els.listaEquipeJornada.replaceChildren();
+    return;
+  }
+  colaboradoresSgo = resultado.colaboradores.filter((c) => c.username !== matriculaLogada);
+  if (els.avisoEquipeJornada) els.avisoEquipeJornada.hidden = true;
+  renderizarListaEquipe();
+}
+
+function renderizarListaEquipe() {
+  if (!els.listaEquipeJornada) return;
+  els.listaEquipeJornada.replaceChildren();
+  if (colaboradoresSgo.length === 0) {
+    const vazio = document.createElement("p");
+    vazio.className = "aviso-piloto";
+    vazio.textContent = "Nenhum colaborador disponível pra selecionar.";
+    els.listaEquipeJornada.appendChild(vazio);
+    return;
+  }
+  for (const colaborador of colaboradoresSgo) {
+    const rotulo = document.createElement("label");
+    rotulo.className = "opcao-checkbox";
+    const entrada = document.createElement("input");
+    entrada.type = "checkbox";
+    entrada.value = colaborador.username;
+    entrada.dataset.nome = colaborador.nome || colaborador.username;
+    const texto = document.createElement("span");
+    texto.textContent = colaborador.nome ? `${colaborador.nome} (${colaborador.username})` : colaborador.username;
+    rotulo.append(entrada, texto);
+    els.listaEquipeJornada.appendChild(rotulo);
+  }
+}
+
+// Le os checkboxes marcados em #listaEquipeJornada - devolve o formato
+// esperado por entidades.js::novaJornada ({ matricula, nome }[]).
+function obterEquipeJornadaSelecionada() {
+  if (!els.listaEquipeJornada) return [];
+  const marcados = els.listaEquipeJornada.querySelectorAll("input[type=checkbox]:checked");
+  return Array.from(marcados).map((entrada) => ({
+    matricula: entrada.value,
+    nome: entrada.dataset.nome || entrada.value,
+  }));
+}
+
 function configurarEtapasPreJornada() {
   if (els.btnContinuarLogin) {
     els.btnContinuarLogin.addEventListener("click", async () => {
@@ -933,6 +1021,10 @@ function configurarEtapasPreJornada() {
         mostrarErro(new Error(resultado.mensagem));
         return;
       }
+      // Best-effort, nao aguardado (fire-and-forget) - buscar a lista de
+      // colaboradores nunca pode atrasar o avanco pra Etapa 2. Se falhar
+      // ou demorar, a secao de Equipe so' aparece vazia/com aviso.
+      carregarEquipeSgo(matricula);
       etapaPreJornada = "pergunta";
       mostrarEtapaPreJornada();
     });
@@ -1001,6 +1093,11 @@ function render() {
             .querySelectorAll(".opcao-cartao.selecionada")
             .forEach((el) => el.classList.remove("selecionada"));
           atualizarEstadoBotaoIniciar();
+          // Equipe e' por colaborador logado tambem (mesmo motivo da senha
+          // do SGO acima) - a lista some ate o proximo login recarregar.
+          colaboradoresSgo = [];
+          if (els.listaEquipeJornada) els.listaEquipeJornada.replaceChildren();
+          if (els.avisoEquipeJornada) els.avisoEquipeJornada.hidden = true;
           etapaPreJornada = "login";
           limparMensagem();
           render();
@@ -1138,9 +1235,12 @@ function render() {
       )
     );
     els.botoes.appendChild(
-      botao("Encerrar jornada", () =>
-        executarComGpsObrigatorio(() => motor.encerrarJornada(RelogioSimulado.agora()))
-      )
+      botao("Encerrar jornada", async () => {
+        const sucesso = await executarComGpsObrigatorio(() => motor.encerrarJornada(RelogioSimulado.agora()));
+        if (sucesso && motor && motor.jornada.estado === "ENCERRADA") {
+          gerarESincronizarEspelhosDeEquipe();
+        }
+      })
     );
   }
 
@@ -1196,14 +1296,23 @@ async function executarComGpsObrigatorio(transicao) {
 // motor para uma jornada nao iniciada. Chamado no clique de "Iniciar
 // jornada" - nao no carregamento da pagina - para sempre usar o valor mais
 // recente do campo de matricula.
-function prepararMotorComMatricula({ modoApontamentoSgo = null, pacoteOfflineUrlSgo = null } = {}) {
+function prepararMotorComMatricula({
+  modoApontamentoSgo = null,
+  pacoteOfflineUrlSgo = null,
+  equipeJornada = [],
+} = {}) {
   const matricula = els.matricula.value.trim();
   if (!matricula) {
     mostrarAviso("Informe a matricula antes de iniciar a jornada.");
     return false;
   }
   if (!motor || motor.jornada.estado === "NAO_INICIADA") {
-    motor = new MotorJornada({ colaboradorMatricula: matricula, modoApontamentoSgo, pacoteOfflineUrlSgo });
+    motor = new MotorJornada({
+      colaboradorMatricula: matricula,
+      modoApontamentoSgo,
+      pacoteOfflineUrlSgo,
+      equipeJornada,
+    });
   }
   return true;
 }

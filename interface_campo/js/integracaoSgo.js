@@ -70,6 +70,42 @@ export async function validarLoginSgo(matricula, senha, opcoes = {}) {
   };
 }
 
+// Lista colaboradores cadastrados no SGO (matricula + nome), pra popular a
+// selecao de "Equipe da jornada" (2026-08-12) - em vez de digitar a
+// matricula do colega de memoria (texto livre), o colaborador escolhe de
+// uma lista real. Best-effort, mesmo espirito de validarLoginSgo: falha de
+// rede nunca trava o app, so' esconde a secao de Equipe (ela e' sempre
+// opcional). Usa a MESMA chave de integracao de validarLoginSgo - nao
+// exige senha de ninguem, GET /usuarios (api.py) so' verifica a chave.
+export async function listarColaboradoresSgo(opcoes = {}) {
+  const { fetchImpl = fetch, configurada = integracaoSgoConfigurada() } = opcoes;
+
+  if (!configurada) {
+    return { ok: false, mensagem: "Integracao com o SGO nao configurada.", colaboradores: [] };
+  }
+
+  let resposta;
+  try {
+    resposta = await fetchImpl(`${URL_API_SGO}/usuarios`, {
+      method: "GET",
+      headers: { "x-api-key": CHAVE_API_SGO },
+    });
+  } catch (erro) {
+    return { ok: false, mensagem: "Sem conexao com o SGO.", colaboradores: [] };
+  }
+
+  if (!resposta.ok) {
+    return {
+      ok: false,
+      mensagem: `SGO recusou a listagem de colaboradores (HTTP ${resposta.status}).`,
+      colaboradores: [],
+    };
+  }
+
+  const dados = await resposta.json();
+  return { ok: true, mensagem: "", colaboradores: dados };
+}
+
 // URL para abrir o SGO ja autenticado (nova aba - nunca substitui a aba do
 // Workforce, que continua com a Atividade em andamento; "voltar" e' so
 // trocar de aba). `sessao` e' o retorno de validarLoginSgo com ok:true.

@@ -256,6 +256,33 @@ fieldset.campo legend {
   background: #eaf1f8;
 }
 
+/* Lista de Equipe da jornada (2026-08-12) - checkboxes de colaboradores
+   cadastrados no SGO, renderizados via JS (carregarEquipeSgo/app.js).
+   Rolagem propria pra nao esticar a tela quando o quadro tem muita
+   gente - mesmo espirito de outras listas longas do projeto. */
+.lista-equipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.opcao-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.opcao-checkbox input {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+}
+
 .status {
   font-size: 1.05rem;
   font-weight: 600;

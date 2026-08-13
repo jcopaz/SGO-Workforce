@@ -9,7 +9,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { CHAVE_API_SGO, URL_API_SGO, URL_APP_SGO } from "../../interface_campo/js/configSgo.js";
-import { validarLoginSgo, linkApontamentoSgo } from "../../interface_campo/js/integracaoSgo.js";
+import {
+  validarLoginSgo,
+  linkApontamentoSgo,
+  listarColaboradoresSgo,
+} from "../../interface_campo/js/integracaoSgo.js";
 
 test("validarLoginSgo com configurada:false nao tenta chamar fetch", async () => {
   let chamado = false;
@@ -138,6 +142,67 @@ test("validarLoginSgo com sucesso envia username/senha no corpo e a chave no hea
   assert.equal(cabecalhoChave, CHAVE_API_SGO);
   assert.equal(corpoEnviado.get("username"), "12345");
   assert.equal(corpoEnviado.get("senha"), "minhasenha");
+});
+
+// listarColaboradoresSgo (2026-08-12, "Equipe da jornada") - GET /usuarios.
+test("listarColaboradoresSgo com configurada:false nao tenta chamar fetch", async () => {
+  let chamado = false;
+  const fetchFalso = async () => {
+    chamado = true;
+    return { ok: true };
+  };
+
+  const resultado = await listarColaboradoresSgo({ fetchImpl: fetchFalso, configurada: false });
+
+  assert.equal(chamado, false);
+  assert.equal(resultado.ok, false);
+  assert.deepEqual(resultado.colaboradores, []);
+});
+
+test("listarColaboradoresSgo nunca lanca quando o fetch falha (offline)", async () => {
+  const fetchQueFalha = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  const resultado = await listarColaboradoresSgo({ fetchImpl: fetchQueFalha, configurada: true });
+
+  assert.equal(resultado.ok, false);
+  assert.deepEqual(resultado.colaboradores, []);
+});
+
+test("listarColaboradoresSgo com HTTP de erro devolve ok:false com o status", async () => {
+  const fetchErro = async () => ({ status: 500, ok: false });
+
+  const resultado = await listarColaboradoresSgo({ fetchImpl: fetchErro, configurada: true });
+
+  assert.equal(resultado.ok, false);
+  assert.match(resultado.mensagem, /500/);
+  assert.deepEqual(resultado.colaboradores, []);
+});
+
+test("listarColaboradoresSgo com sucesso envia a chave no header e devolve a lista", async () => {
+  let urlChamada = null;
+  let cabecalhoChave = null;
+  const fetchOk = async (url, opcoesFetch) => {
+    urlChamada = url;
+    cabecalhoChave = opcoesFetch.headers["x-api-key"];
+    return {
+      ok: true,
+      status: 200,
+      json: async () => [
+        { username: "11111", nome: "Fulano" },
+        { username: "22222", nome: "Ciclano" },
+      ],
+    };
+  };
+
+  const resultado = await listarColaboradoresSgo({ fetchImpl: fetchOk, configurada: true });
+
+  assert.equal(resultado.ok, true);
+  assert.equal(resultado.colaboradores.length, 2);
+  assert.equal(resultado.colaboradores[0].username, "11111");
+  assert.equal(urlChamada, `${URL_API_SGO}/usuarios`);
+  assert.equal(cabecalhoChave, CHAVE_API_SGO);
 });
 
 test("linkApontamentoSgo sem sessao (null) devolve null", () => {
