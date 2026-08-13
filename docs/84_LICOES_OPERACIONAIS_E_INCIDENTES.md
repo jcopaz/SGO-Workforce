@@ -398,6 +398,40 @@ real do usuário (quanto tempo ele demora entre os dois cliques), não do
 código. Prefira validar/buscar credenciais de vida curta no ponto de
 uso, não no ponto mais conveniente de programar.
 
+### 2026-08-13 | `exp` float quebrava a validação do sid de SSO desde o primeiro dia
+
+**Causa raiz**: em `gerar_token_sessao` (`api.py`/`app.py` do SGO, fora
+deste repositório), `exp = int(time.time()) + ttl_horas * 3600` - com
+`ttl_horas` fracionário (`TTL_HORAS_SID_SSO = 5/60`, os 5 minutos do
+sid de SSO), `int + float` vira `float` em Python. O token gravava
+`exp` como `"...940.0"`. Do lado de `validar_token_sessao`,
+`int("...940.0")` **sempre** lança `ValueError` - engolido em silêncio
+pelo `except Exception: return None` da função. O sid de SSO nunca
+validou, desde a ADR-0062 (2026-08-07) - qualquer TTL fracionário
+disparava o bug, o uso original de `gerar_token_sessao` (reconexão de
+câmera, `ttl_horas=12`, inteiro) nunca tinha revelado o problema.
+
+**Como foi encontrado**: a correção anterior (ADR-0069, "buscar o sid
+na hora do clique", motivada por uma teoria de TTL expirando) **não
+resolveu o bug relatado** - o responsável do produto testou de novo com
+jornada e atividade iniciadas com 3 segundos de diferença (token
+impossível de ter expirado) e o SSO continuou falhando. Foi essa
+segunda rodada de teste, contradizendo a explicação anterior, que forçou
+reler `gerar_token_sessao`/`validar_token_sessao` linha a linha em vez
+de aceitar a primeira hipótese plausível.
+
+**Correção**: `exp = int(time.time() + ttl_horas * 3600)` - `int()` em
+volta da soma inteira, não só de `time.time()`. Ver ADR-0069 (seção de
+correção 2026-08-13).
+
+**Lição**: `int(a) + b` só é `int` se `b` também for - com `b` fracionário
+(aqui, `ttl_horas * 3600`), o resultado vira `float` silenciosamente,
+sem erro nenhum na hora de gerar, só na hora de validar (e mesmo aí,
+engolido por um `except` genérico). E: **quando uma correção não resolve
+o sintoma relatado, a explicação anterior pode estar simplesmente
+errada** - vale desconfiar da própria hipótese e reler o código do zero,
+em vez de assumir que "só falta mais um ajuste" na mesma teoria.
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem

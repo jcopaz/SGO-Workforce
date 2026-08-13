@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-08-13] Corrige bug real: `exp` float quebrava o sid de SSO desde o primeiro dia
+
+Ver `docs/97_ADR_0069_SID_SSO_VALIDADO_NA_HORA_DO_CLIQUE.md` (seção de
+correção 2026-08-13) e `docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md`. A
+correção anterior (buscar o sid na hora do clique) não resolveu o bug
+relatado - investigação encontrou a causa raiz de verdade em
+`gerar_token_sessao` (`api.py`/`app.py` do SGO, fora deste repositório):
+`exp = int(time.time()) + ttl_horas * 3600` vira `float` com TTL
+fracionário (`5/60`, os 5 minutos do sid), e `int()` sobre essa string
+**sempre** falha do lado de `validar_token_sessao` - o SSO nunca validou
+desde o primeiro dia (ADR-0062), não era timing nem segredo divergente.
+Corrigido para `exp = int(time.time() + ttl_horas * 3600)` nas duas
+cópias staged (`Documents/Integração SGOWorkforce/`) - **ainda precisa
+ser subido pro branch `dev` do Gestão_OS pra valer**.
+
 ## [2026-08-12] SSO do EE17 caía na tela de login do SGO mesmo com senha confirmada (ADR-0069)
 
 Ver `docs/97_ADR_0069_SID_SSO_VALIDADO_NA_HORA_DO_CLIQUE.md`. Bug real
