@@ -370,6 +370,34 @@ solução que não precisa "agora" (`.get(um_dia_só, [])`) - a capacidade
 já existia havia semanas (ADR-0051), só não estava sendo usada por
 inteiro nesta tela especificamente.
 
+### 2026-08-12 | SSO do EE17 caía na tela de login do SGO mesmo com senha já confirmada
+
+**Causa raiz**: o `sid` de SSO (TTL de 5 minutos, decisão de segurança
+da ADR-0062) era obtido uma única vez, no clique de "Iniciar jornada" -
+guardado em memória (`sessaoSgo`) pro resto da sessão. Entre esse clique
+e o colaborador de fato chegar numa Atividade e clicar em "Abrir
+apontamento de OS no SGO" (caminhar até o local, preparar equipamento)
+podia passar mais de 5 minutos com facilidade - o token guardado
+expirava antes de ser usado, e o SGO recusava (corretamente) o token
+vencido, mostrando a tela de login normal dele.
+
+**Como foi encontrado**: relatado pelo responsável do produto testando
+o fluxo completo ao vivo - "já está sendo colocado a senha na primeira
+tela do SGOWorkforce" apontou direto pro sintoma (login pedido de novo
+apesar de já confirmado antes).
+
+**Correção**: o `sid` passa a ser buscado **na hora do clique** em
+"Abrir apontamento de OS no SGO", não mais antecipado - sempre até 5
+minutos de vida a partir do uso real. Ver ADR-0069.
+
+**Lição**: um token de vida curta (decisão de segurança correta) só
+funciona se for buscado o mais perto possível do momento de uso -
+buscar antecipadamente "pra já ter pronto" parece uma otimização, mas
+na prática cria uma corrida contra o TTL que depende do comportamento
+real do usuário (quanto tempo ele demora entre os dois cliques), não do
+código. Prefira validar/buscar credenciais de vida curta no ponto de
+uso, não no ponto mais conveniente de programar.
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem

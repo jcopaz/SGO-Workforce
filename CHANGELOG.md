@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-08-12] SSO do EE17 caía na tela de login do SGO mesmo com senha confirmada (ADR-0069)
+
+Ver `docs/97_ADR_0069_SID_SSO_VALIDADO_NA_HORA_DO_CLIQUE.md`. Bug real
+relatado: o token de SSO (`sid`, TTL de 5 min por segurança) era buscado
+uma vez em "Iniciar jornada" e podia expirar antes do colaborador
+chegar numa Atividade e clicar em "Abrir apontamento de OS no SGO" -
+caía na tela de login do SGO mesmo com a senha já confirmada na Etapa 1.
+Corrigido: o `sid` agora é buscado **na hora do clique**, reaproveitando
+a senha já digitada (sem pedir de novo) - sempre até 5 minutos de vida a
+partir do uso real, TTL de segurança inalterado. `sessaoSgo`/
+`tentarValidarLoginSgo` removidos (sem uso depois da mudança).
+`CACHE_VERSAO` v35.
+
 ## [2026-08-12] Equipe da jornada com replicação de HH (ADR-0068)
 
 Ver `docs/96_ADR_0068_EQUIPE_DA_JORNADA_COM_REPLICACAO_DE_HH.md`. Nova

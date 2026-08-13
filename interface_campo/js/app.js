@@ -97,14 +97,6 @@ let mostrarTransferenciaFalha = false;
 // tanto "Iniciar jornada" quanto a recuperacao de jornada aberta em
 // iniciar(), sem duplicar a logica em cada botao.
 let idIntervaloCapturaPeriodica = null;
-// Sessao validada contra o SGO (login real do colaborador, ver
-// tentarValidarLoginSgo/integracaoSgo.js) - null enquanto nao houver login
-// validado com sucesso (sem senha digitada, senha errada, sem conexao, ou
-// integracao ainda nao configurada). So habilita o botao "Abrir apontamento
-// de OS no SGO" em criarBlocoOrdensServico - nunca bloqueia nada do fluxo
-// normal do Workforce (offline-first: iniciar jornada/atividade nunca
-// depende disto, so o atalho pro SGO depende).
-let sessaoSgo = null;
 // Colaboradores cadastrados no SGO (matricula+nome), buscados 1x logo apos
 // o login validar com sucesso na Etapa 1 (ver carregarEquipeSgo) - usados
 // pra popular a selecao de "Equipe da jornada" na Etapa 2. Best-effort:
@@ -460,27 +452,6 @@ function criarFormularioTransferenciaFalha(atividade) {
   return bloco;
 }
 
-// Valida a senha do SGO digitada (opcional) contra /auth/validar - best
-// effort, dispara em paralelo ao "Iniciar jornada" (nunca await'ada por
-// quem chama, nunca atrasa nem bloqueia o inicio da jornada). Sem senha
-// digitada, nao tenta nada (colaborador que nao usa a integracao com o SGO
-// no dia nao gasta uma chamada de rede a toa). Resultado (sucesso ou
-// falha) so afeta se o botao "Abrir apontamento de OS no SGO" aparece mais
-// tarde, em criarBlocoOrdensServico - nunca o resto do fluxo.
-function tentarValidarLoginSgo(matricula, senha) {
-  if (!senha) return;
-  IntegracaoSgo.validarLoginSgo(matricula, senha).then((resultado) => {
-    if (resultado.ok) {
-      sessaoSgo = resultado;
-      render();
-    }
-    // Falha (senha errada, sem conexao, integracao nao configurada): fica
-    // silenciosa aqui de proposito - criarBlocoOrdensServico ja explica o
-    // estado "sem sessao do SGO" quando isso importar de verdade (quando o
-    // colaborador chegar numa Atividade e o bloco de OS for renderizado).
-  });
-}
-
 // Bloco de apontamento de OS (ADR-0025 -> revisado 2026-08-11): o SGO e'
 // quem aponta a execucao de OS (com evidencia/foto), o Workforce so mede HH
 // (regra de ouro 2/3, decisao do responsavel do produto em 2026-08-11) - por
@@ -519,31 +490,41 @@ function criarBlocoOrdensServico(atividade) {
       bloco.appendChild(aviso);
     }
   } else if (modo === "online") {
-    const linkSgo = IntegracaoSgo.linkApontamentoSgo(sessaoSgo);
-    if (linkSgo) {
-      aviso.textContent = `Sessão do SGO ativa (${sessaoSgo.nome || sessaoSgo.username}).`;
-      bloco.appendChild(aviso);
-      bloco.appendChild(
-        botao(
-          "Abrir apontamento de OS no SGO",
-          () => {
-            window.open(linkSgo, "_blank", "noopener");
-            // Revisao de seguranca 2026-08-07: o sid e' de uso curto (5 min,
-            // ver TTL_HORAS_SID_SSO em api.py) e viaja na URL - depois de
-            // aberto uma vez, descarta da memoria do Workforce em vez de
-            // deixar disponivel pra reabrir/reusar (aparelho compartilhado).
-            // Abrir o SGO de novo exige "Iniciar jornada" de novo (novo login).
-            sessaoSgo = { ...sessaoSgo, sid: null };
-            render();
-          },
-          { destaque: true }
-        )
-      );
-    } else {
-      aviso.textContent =
-        "Sessão do SGO ainda não confirmada (sem conexão agora, senha incorreta, ou aguardando validar) - o botão de apontamento aparece assim que validar.";
-      bloco.appendChild(aviso);
-    }
+    // Validacao do SGO buscada NA HORA DO CLIQUE (2026-08-12, corrige bug
+    // real: antes o sid era buscado uma vez em "Iniciar jornada" e podia
+    // expirar - TTL de so 5 min, ver TTL_HORAS_SID_SSO em api.py - antes
+    // do colaborador chegar numa Atividade de verdade, caindo na tela de
+    // login do SGO mesmo com a senha ja confirmada na Etapa 1. Reusa a
+    // senha ja digitada la (els.senhaSgo.value, nunca apagada durante a
+    // jornada) - o colaborador nao digita de novo.
+    aviso.textContent = "Modo Online - toque para abrir o SGO já autenticado.";
+    bloco.appendChild(aviso);
+    const botaoAbrirSgo = botao(
+      "Abrir apontamento de OS no SGO",
+      async () => {
+        const textoOriginal = botaoAbrirSgo.textContent;
+        botaoAbrirSgo.disabled = true;
+        botaoAbrirSgo.textContent = "Conectando ao SGO...";
+        const matricula = motor.jornada.colaboradorMatricula;
+        const resultado = await IntegracaoSgo.validarLoginSgo(matricula, els.senhaSgo.value);
+        botaoAbrirSgo.disabled = false;
+        botaoAbrirSgo.textContent = textoOriginal;
+        const link = resultado.ok ? IntegracaoSgo.linkApontamentoSgo(resultado) : null;
+        if (!link) {
+          mostrarErro(
+            new Error(resultado.mensagem || "Não foi possível confirmar sua sessão no SGO agora.")
+          );
+          return;
+        }
+        // Revisao de seguranca 2026-08-07: o sid e' de uso curto (5 min) e
+        // viaja na URL - nunca guardado depois de aberto (nada a descartar
+        // aqui, diferente da versao anterior, porque nao fica em memoria
+        // entre um clique e outro - cada clique busca um sid novo).
+        window.open(link, "_blank", "noopener");
+      },
+      { destaque: true }
+    );
+    bloco.appendChild(botaoAbrirSgo);
   } else {
     // Jornada recuperada de antes desta funcionalidade existir (sem modo
     // definido) - ultimo recurso, sem link de SSO nem pacote offline.
@@ -897,12 +878,13 @@ async function aoClicarIniciarJornada() {
   const equipeJornada = obterEquipeJornadaSelecionada();
   if (!prepararMotorComMatricula({ modoApontamentoSgo: modoSgo, pacoteOfflineUrlSgo, equipeJornada })) return;
   const matricula = motor.jornada.colaboradorMatricula;
-  // So tenta o SSO online quando o modo escolhido e' "online" - no modo
-  // offline o colaborador ja logou manualmente no SGO pra gerar o pacote,
-  // sessaoSgo/sid nao tem uso nenhum ali.
-  if (modoSgo === "online") {
-    tentarValidarLoginSgo(matricula, els.senhaSgo.value);
-  }
+  // Nao busca mais o sid do SGO aqui (removido em 2026-08-12 - bug real
+  // relatado: o sid tem TTL curto de 5 min, ver TTL_HORAS_SID_SSO em
+  // api.py, e podia expirar entre "Iniciar jornada" e o colaborador de
+  // fato chegar numa Atividade e clicar em "Abrir apontamento de OS no
+  // SGO", caindo na tela de login do SGO mesmo com a senha ja confirmada
+  // aqui. Agora a validacao/sid e' buscada na hora exata do clique, em
+  // criarBlocoOrdensServico - sempre fresca, nunca expira antes de usar.
   const pendente = await ContinuacoesFalha.buscarPendente(matricula);
   if (pendente) {
     const sucesso = await executarComGpsObrigatorio(() => {
@@ -1077,11 +1059,11 @@ function render() {
         () => {
           motor = null;
           mostrarTransferenciaFalha = false;
-          // Sessao do SGO e' por colaborador (o proximo "Iniciar jornada"
+          // Senha do SGO e' por colaborador (o proximo "Iniciar jornada"
           // pode ser outra matricula, aparelho compartilhado) - nunca
-          // carrega a sessao (nem a senha digitada) de quem usou o
-          // aparelho antes.
-          sessaoSgo = null;
+          // carrega a senha digitada de quem usou o aparelho antes (a
+          // validacao em si e' sempre feita na hora, nunca guardada em
+          // memoria entre um clique e outro - ver criarBlocoOrdensServico).
           if (els.senhaSgo) els.senhaSgo.value = "";
           if (els.modoSgoOnline) els.modoSgoOnline.checked = false;
           if (els.modoSgoOffline) els.modoSgoOffline.checked = false;
@@ -1321,10 +1303,9 @@ function prepararMotorComMatricula({
 // 2026-08-11) conforme o modo escolhido - "Offline" exige o link da Rota
 // PWA confirmado antes de "Iniciar jornada" liberar (ver o clique do botao
 // abaixo). O link "Abrir SGO para gerar a Rota PWA" nao leva sid nenhum de
-// proposito: o colaborador ainda nao tem sessaoSgo neste momento (so e
-// validada no clique de "Iniciar jornada"), e gerar o pacote e' uma tela
-// interativa do proprio SGO (escolher raio de atuacao) que exige login
-// manual la mesmo.
+// proposito: gerar o pacote e' uma tela interativa do proprio SGO
+// (escolher raio de atuacao) que exige login manual la mesmo, nao um
+// atalho autenticado como o do modo Online (ver criarBlocoOrdensServico).
 // "So avanca quando colar o link" (pedido do responsavel do produto,
 // 2026-08-12): em vez de deixar clicar em "Iniciar jornada" e mostrar um
 // aviso depois (comportamento antigo), o botao fica desabilitado de
