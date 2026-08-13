@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-08-12] Mapa Operacional escondia pulsos de jornada que atravessa a meia-noite (ADR-0067)
+
+Ver `docs/95_ADR_0067_MAPA_JORNADA_ATRAVESSA_MEIA_NOITE.md`. Bug real
+relatado com caso reproduzível: jornada iniciada 06/08 19:49:32 e
+encerrada 07/08 - mapa e linha do tempo só mostravam o dia 06, pulsos
+depois da meia-noite de Brasília exigiam trocar a data manualmente pra
+aparecer. Causa: filtro de data única (`filtrar_pulsos_por_periodo`) e
+linha do tempo recortada por `.get(um_dia, [])`, mesmo a função de
+fatiamento (`fatiar_linha_do_tempo_por_dia`, ADR-0051) já suportando
+vários dias desde sempre. Corrigido: filtro do mapa virou intervalo de
+datas com default = início/fim reais da jornada (aparece inteira sem
+ação do usuário); linha do tempo sempre mostra a jornada completa,
+independente do filtro do mapa. 436 testes Python passando (1 novo
+reproduzindo o bug).
+
 ## [2026-08-12] Lapidação de UI do painel (ADR-0066)
 
 Ver `docs/94_ADR_0066_LAPIDACAO_UI_PAINEL.md`. Auditoria completa das 6

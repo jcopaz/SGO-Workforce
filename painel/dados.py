@@ -544,21 +544,28 @@ def obter_url_foto_falha(url_base: str, token: str, caminho: str) -> str:
 
 
 def filtrar_pulsos_por_periodo(
-    pulsos: List[PulsoGps], data: date, hora_inicial: time, hora_final: time
+    pulsos: List[PulsoGps], data_inicio: date, data_fim: date, hora_inicial: time, hora_final: time
 ) -> List[PulsoGps]:
-    """Filtro de data + faixa de horario do mapa operacional (pedido do
-    responsavel pelo produto em 2026-08-04, ver ADR-0047).
+    """Filtro de periodo (data inicio/fim) + faixa de horario do mapa
+    operacional (pedido do responsavel pelo produto em 2026-08-04, ver
+    ADR-0047; ampliado de data unica para intervalo em 2026-08-12, ADR-0067
+    - uma jornada que atravessa a meia-noite de Brasilia sumia do mapa
+    depois das 00h01 do dia seguinte, ja que o filtro so aceitava 1 dia).
 
     Converte cada timestamp para o horario de Brasilia
     (`workforce_core.fuso_horario.para_horario_brasil`) antes de comparar
     - filtrar pela data/hora UTC crua faria um pulso das 23h de Brasilia
     (ja virou o dia seguinte em UTC) sumir do filtro do dia certo.
-    Inclusivo nos dois limites de horario (`hora_inicial <= X <= hora_final`).
+    Inclusivo nos limites de data (`data_inicio <= X <= data_fim`) e de
+    horario (`hora_inicial <= X <= hora_final`, aplicado a CADA dia do
+    intervalo - util para recortar "so o turno da manha" ao longo de
+    varios dias, por exemplo). `data_inicio == data_fim` reproduz o
+    comportamento antigo de dia unico.
     """
     resultado = []
     for pulso in pulsos:
         momento_brasil = para_horario_brasil(pulso.timestamp_dispositivo)
-        if momento_brasil.date() != data:
+        if not (data_inicio <= momento_brasil.date() <= data_fim):
             continue
         if not (hora_inicial <= momento_brasil.time() <= hora_final):
             continue

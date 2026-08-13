@@ -59,6 +59,24 @@ def _sanitizar_selectbox_state(chave: str, opcoes_validas) -> None:
         st.session_state[chave] = opcoes_validas[0] if opcoes_validas else None
 
 
+def _sanitizar_periodo_state(chave: str, minimo, maximo) -> None:
+    """Mesma ideia de _sanitizar_selectbox_state, para o date_input de
+    intervalo do filtro de pulsos: se o valor salvo (de uma jornada
+    escolhida antes) cair fora do intervalo real da jornada atual, volta
+    para o intervalo completo em vez de deixar o widget quebrar - mesmo
+    padrao ja usado em painel/telas/dashboard.py."""
+    if chave in st.session_state:
+        valor = st.session_state[chave]
+        fora_do_intervalo = not (
+            isinstance(valor, tuple)
+            and len(valor) == 2
+            and minimo <= valor[0] <= maximo
+            and minimo <= valor[1] <= maximo
+        )
+        if fora_do_intervalo:
+            st.session_state[chave] = (minimo, maximo)
+
+
 # Cache das chamadas ao backend (ADR-0049, pedido do responsavel pelo
 # produto em 2026-08-04 - fluidez, Streamlit reexecuta o script inteiro a
 # cada slider/filtro mexido). Sem isso, ajustar qualquer um dos 7 widgets
@@ -204,6 +222,17 @@ rotulos_por_pulso = {
 marco_inicio = min(pulsos, key=lambda p: p.timestamp_dispositivo)
 marco_fim = max(pulsos, key=lambda p: p.timestamp_dispositivo)
 
+# Intervalo de datas (nao mais 1 dia so) - bug real relatado pelo
+# responsavel do produto em 2026-08-12 (ADR-0067): uma jornada iniciada a
+# noite e encerrada no dia seguinte sumia do mapa depois da meia-noite de
+# Brasilia, exigindo trocar a data manualmente pra ver o resto dos
+# pulsos. Intervalo default = inicio/fim REAIS da jornada (marco_inicio/
+# marco_fim), entao a jornada inteira aparece sem nenhuma acao do usuario
+# - o filtro continua disponivel pra quem quiser recortar.
+data_inicio_padrao = para_horario_brasil(marco_inicio.timestamp_dispositivo).date()
+data_fim_padrao = para_horario_brasil(marco_fim.timestamp_dispositivo).date()
+_sanitizar_periodo_state("painel_mapa_filtro_periodo", data_inicio_padrao, data_fim_padrao)
+
 col_atividade, col_data, col_hora_ini, col_hora_fim = st.columns(4)
 with col_atividade:
     opcoes_atividade = ["Todas as atividades"] + sorted(set(rotulos_por_pulso.values()))
@@ -211,10 +240,12 @@ with col_atividade:
         "Atividade", options=opcoes_atividade, key="painel_mapa_filtro_atividade"
     )
 with col_data:
-    data_filtro = st.date_input(
-        "Data dos pulsos",
-        value=para_horario_brasil(marco_inicio.timestamp_dispositivo).date(),
-        key="painel_mapa_filtro_data",
+    intervalo_datas_filtro = st.date_input(
+        "Período dos pulsos",
+        value=(data_inicio_padrao, data_fim_padrao),
+        min_value=data_inicio_padrao,
+        max_value=data_fim_padrao,
+        key="painel_mapa_filtro_periodo",
     )
 with col_hora_ini:
     hora_inicial = st.time_input(
@@ -225,7 +256,17 @@ with col_hora_fim:
         "Horário final", value=time(23, 59, 59), key="painel_mapa_filtro_hora_final"
     )
 
-pulsos_filtrados = filtrar_pulsos_por_periodo(pulsos, data_filtro, hora_inicial, hora_final)
+# st.date_input com intervalo pode devolver so 1 data enquanto o usuario
+# ainda esta escolhendo o fim do periodo - mesma defesa ja usada em
+# painel/telas/dashboard.py.
+if isinstance(intervalo_datas_filtro, tuple) and len(intervalo_datas_filtro) == 2:
+    data_inicio_filtro, data_fim_filtro = intervalo_datas_filtro
+else:
+    data_inicio_filtro, data_fim_filtro = data_inicio_padrao, data_fim_padrao
+
+pulsos_filtrados = filtrar_pulsos_por_periodo(
+    pulsos, data_inicio_filtro, data_fim_filtro, hora_inicial, hora_final
+)
 if atividade_selecionada != "Todas as atividades":
     pulsos_filtrados = [
         pulso for pulso in pulsos_filtrados if rotulos_por_pulso[pulso.id] == atividade_selecionada
@@ -285,12 +326,17 @@ mapa = construir_mapa(
     marco_fim=marco_fim,
 )
 
-# Linha do tempo do dia selecionado (ADR-0051, pedido do responsavel pelo
-# produto em 2026-08-04) - ao lado do mapa, sempre a mesma data escolhida
-# no filtro "Data dos pulsos" acima (nunca a faixa de horario, que so
-# afeta os pulsos/trajetoria do mapa - a linha do tempo mostra o dia
-# inteiro pra manter o contexto de antes/depois).
-segmentos_do_dia = fatiar_linha_do_tempo_por_dia(linha_do_tempo(jornada_selecionada)).get(data_filtro, [])
+# Linha do tempo da JORNADA INTEIRA (ADR-0051, ampliado no ADR-0067) - ao
+# lado do mapa, sempre todos os dias da jornada selecionada, nunca so o
+# dia escolhido no filtro "Período dos pulsos" acima (que so afeta os
+# pulsos/trajetoria do mapa em si). Antes so mostrava 1 dia por vez -
+# uma jornada que atravessa a meia-noite ficava com a linha do tempo
+# cortada ao meio sem o usuario notar, exigindo trocar a data pra ver o
+# resto (bug real relatado pelo responsavel do produto em 2026-08-12).
+# grafico_linha_do_tempo ja aceita varios dias de uma vez (mesma funcao
+# usada em painel/telas/dashboard.py pra mostrar todos os dias do
+# colaborador) - so faltava nao recortar o dict aqui.
+segmentos_por_dia = fatiar_linha_do_tempo_por_dia(linha_do_tempo(jornada_selecionada))
 
 col_mapa, col_linha_tempo = st.columns([2, 1])
 with col_mapa:
@@ -303,10 +349,10 @@ with col_mapa:
         # mapa nunca deveria reexecutar o script inteiro (ADR-0049, fluidez).
     )
 with col_linha_tempo:
-    st.caption(f"Linha do tempo - {data_filtro.strftime('%d/%m/%Y')}")
-    if segmentos_do_dia:
+    st.caption("Linha do tempo - jornada completa")
+    if segmentos_por_dia:
         components.html(
-            renderizar_embutido(grafico_linha_do_tempo({data_filtro: segmentos_do_dia})),
+            renderizar_embutido(grafico_linha_do_tempo(segmentos_por_dia)),
             height=560,
             scrolling=False,
         )
@@ -314,24 +360,24 @@ with col_linha_tempo:
         # 2026-08-07) - o grafico acima nao usa a legenda nativa do ECharts
         # de proposito (series sinteticas por posicao, ver docstring de
         # grafico_linha_do_tempo), entao a legenda e' montada aqui a partir
-        # dos rotulos distintos que aparecem no dia selecionado.
+        # dos rotulos distintos que aparecem na jornada inteira.
         chips = "".join(
             f'<span style="display:inline-flex;align-items:center;margin:2px 10px 2px 0;'
             f'font-size:12px;color:#475569;">'
             f'<span style="width:10px;height:10px;border-radius:2px;background:{cor};'
             f'margin-right:4px;flex-shrink:0;"></span>{html.escape(rotulo)}</span>'
-            for rotulo, cor in legenda_linha_do_tempo({data_filtro: segmentos_do_dia}, catalogo)
+            for rotulo, cor in legenda_linha_do_tempo(segmentos_por_dia, catalogo)
         )
         st.markdown(f'<div style="line-height:1.8;">{chips}</div>', unsafe_allow_html=True)
     else:
-        st.info("Nenhum apontamento registrado nesta jornada no dia selecionado.")
+        st.info("Nenhum apontamento registrado nesta jornada.")
 
 
 # Tabela resumo da jornada (pedido do responsavel do produto em
 # 2026-08-07): Atividade/Evento, inicio, termino, localizacao de
 # inicio/encerramento. Usa a JORNADA INTEIRA e os pulsos COMPLETOS (nao
-# `pulsos_filtrados`/`data_filtro`) - mesmo espirito da linha do tempo
-# acima (o resumo e da jornada toda, o filtro do mapa e' so pro mapa).
+# `pulsos_filtrados`) - mesmo espirito da linha do tempo acima (o resumo
+# e' da jornada toda, o filtro de periodo/horario e' so pro mapa).
 st.caption("Resumo da jornada")
 
 

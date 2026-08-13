@@ -341,6 +341,35 @@ uma decisão de segurança/arquitetura tomada e aplicada nas telas
 (Configurações, aqui) pra confirmar que também foi aplicada lá, em vez
 de assumir que "decisão tomada" significa "decisão em todo lugar".
 
+### 2026-08-12 | Mapa Operacional escondia pulsos de jornada que atravessa a meia-noite
+
+**Causa raiz**: o filtro "Data dos pulsos" do Mapa Operacional era uma
+data única (não intervalo), e `dados.filtrar_pulsos_por_periodo`
+comparava `momento_brasil.date() != data` - qualquer pulso de um dia
+calendário diferente do selecionado desaparecia do mapa, mesmo sendo da
+mesma jornada contínua. A linha do tempo ao lado tinha o mesmo problema,
+mas por um motivo mais sutil: `fatiar_linha_do_tempo_por_dia` já
+devolvia todos os dias da jornada (existe desde o ADR-0051 exatamente
+pra isso), e o gráfico já sabia desenhar múltiplos dias - a tela é que
+descartava tudo com `.get(data_filtro, [])` antes de chegar no gráfico.
+
+**Como foi encontrado**: relatado pelo responsável do produto com um
+caso real e reproduzível - matrícula fictícia `7777777`, jornada iniciada
+06/08/2026 19:49:32 e encerrada 07/08, pulsos depois da meia-noite só
+apareciam trocando a data manualmente.
+
+**Correção**: filtro do mapa virou intervalo de datas com default =
+início/fim reais da jornada (jornada inteira aparece sem ação nenhuma do
+usuário); linha do tempo passou a sempre mostrar a jornada inteira,
+independente do filtro do mapa. Ver ADR-0067.
+
+**Lição**: quando uma função "de apoio" (`fatiar_linha_do_tempo_por_dia`)
+já resolve um problema (jornada que atravessa dias) de propósito, vale
+conferir se quem CHAMA essa função não está descartando a parte da
+solução que não precisa "agora" (`.get(um_dia_só, [])`) - a capacidade
+já existia havia semanas (ADR-0051), só não estava sendo usada por
+inteiro nesta tela especificamente.
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem

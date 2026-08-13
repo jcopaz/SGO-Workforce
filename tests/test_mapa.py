@@ -310,7 +310,9 @@ def test_filtrar_pulsos_por_periodo_faixa_do_dia_inteiro_nao_filtra_nada(tmp_pat
     pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
     data_jornada = pulsos[0].timestamp_dispositivo.date()
 
-    filtrados = filtrar_pulsos_por_periodo(pulsos, data_jornada, time(0, 0), time(23, 59, 59))
+    filtrados = filtrar_pulsos_por_periodo(
+        pulsos, data_jornada, data_jornada, time(0, 0), time(23, 59, 59)
+    )
     assert filtrados == pulsos
 
 
@@ -319,7 +321,9 @@ def test_filtrar_pulsos_por_periodo_data_diferente_devolve_vazio(tmp_path):
     jornada = jornadas[0]
     pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
 
-    filtrados = filtrar_pulsos_por_periodo(pulsos, date(1999, 1, 1), time(0, 0), time(23, 59, 59))
+    filtrados = filtrar_pulsos_por_periodo(
+        pulsos, date(1999, 1, 1), date(1999, 1, 1), time(0, 0), time(23, 59, 59)
+    )
     assert filtrados == []
 
 
@@ -330,7 +334,7 @@ def test_filtrar_pulsos_por_periodo_estreita_por_horario(tmp_path):
     data_jornada = pulsos[0].timestamp_dispositivo.date()
     inicio = pulsos[0].timestamp_dispositivo.time()
 
-    filtrados = filtrar_pulsos_por_periodo(pulsos, data_jornada, inicio, inicio)
+    filtrados = filtrar_pulsos_por_periodo(pulsos, data_jornada, data_jornada, inicio, inicio)
     assert filtrados == [pulsos[0]]
 
 
@@ -348,9 +352,41 @@ def test_filtrar_pulsos_por_periodo_converte_utc_para_horario_de_brasilia():
     )
 
     filtrados = filtrar_pulsos_por_periodo(
-        [pulso_23h_brasilia], date(2026, 8, 4), time(22, 0), time(23, 59, 59)
+        [pulso_23h_brasilia], date(2026, 8, 4), date(2026, 8, 4), time(22, 0), time(23, 59, 59)
     )
     assert filtrados == [pulso_23h_brasilia]
+
+
+def test_filtrar_pulsos_por_periodo_intervalo_de_datas_cobre_jornada_que_atravessa_meia_noite():
+    # Bug real relatado pelo responsavel do produto em 2026-08-12 (ADR-0067):
+    # jornada iniciada as 19h49 de um dia e encerrada no dia seguinte -
+    # antes deste teste, o filtro so aceitava 1 dia e os pulsos depois da
+    # meia-noite de Brasilia sumiam do mapa sem o usuario mudar a data.
+    pulso_dia_1 = PulsoGps(
+        jornada_id=uuid4(),
+        colaborador_matricula="7777777",
+        latitude=-23.5,
+        longitude=-46.6,
+        precisao_metros=10.0,
+        timestamp_dispositivo=datetime(2026, 8, 6, 22, 49, tzinfo=timezone.utc),  # 19h49 Brasilia
+    )
+    pulso_dia_2 = PulsoGps(
+        jornada_id=uuid4(),
+        colaborador_matricula="7777777",
+        latitude=-23.5,
+        longitude=-46.6,
+        precisao_metros=10.0,
+        timestamp_dispositivo=datetime(2026, 8, 7, 6, 0, tzinfo=timezone.utc),  # 03h Brasilia do dia seguinte
+    )
+
+    filtrados = filtrar_pulsos_por_periodo(
+        [pulso_dia_1, pulso_dia_2],
+        date(2026, 8, 6),
+        date(2026, 8, 7),
+        time(0, 0),
+        time(23, 59, 59),
+    )
+    assert filtrados == [pulso_dia_1, pulso_dia_2]
 
 
 # ----------------------------------------------------------------------
