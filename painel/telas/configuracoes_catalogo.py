@@ -40,26 +40,20 @@ st.warning(
 
 st.title("SGO Workforce | Catálogo de motivos (piloto)")
 
-# Mesmas chaves de session_state da pagina principal (painel/app.py) -
-# Streamlit compartilha st.session_state entre paginas da mesma sessao,
-# entao quem ja configurou a API la nao precisa preencher de novo aqui.
-if "painel_api_url" not in st.session_state:
-    st.session_state.painel_api_url = _obter_secret_seguro("SYNC_API_URL")
-if "painel_api_token" not in st.session_state:
-    st.session_state.painel_api_token = _obter_secret_seguro("SYNC_TOKEN")
-
-url_api = st.text_input(
-    "URL do backend (ex.: https://sgo-workforce.onrender.com)",
-    key="painel_api_url",
-)
-token_api = st.text_input(
-    "Token de sincronização (SYNC_TOKEN)",
-    key="painel_api_token",
-    type="password",
-)
+# Fonte de dados fixa em API (nuvem, ADR-0041) - mesmo padrao das demais
+# telas: credenciais vem so de st.secrets, nunca digitadas/visiveis na
+# tela. Esta pagina antes mostrava URL e token do backend em campos de
+# texto editaveis - contradizia a decisao de seguranca ja tomada nas
+# outras telas; corrigido junto da lapidacao geral do painel, 2026-08-12.
+url_api = _obter_secret_seguro("SYNC_API_URL")
+token_api = _obter_secret_seguro("SYNC_TOKEN")
 
 if not url_api or not token_api:
-    st.warning("Informe a URL do backend e o token de sincronização para continuar.")
+    st.error(
+        "Backend não configurado. Defina os secrets `SYNC_API_URL` e "
+        "`SYNC_TOKEN` (Streamlit Cloud: Settings → Secrets) para o "
+        "painel funcionar."
+    )
     st.stop()
 
 url_base = url_api.rstrip("/")

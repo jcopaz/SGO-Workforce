@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-08-12] Lapidação de UI do painel (ADR-0066)
+
+Ver `docs/94_ADR_0066_LAPIDACAO_UI_PAINEL.md`. Auditoria completa das 6
+telas do painel a pedido do responsável do produto ("algumas abas estão
+poluídas, gráficos bizarros"). Achados reais, não só estética: **duas
+telas (Capacidade PCM, Exportações) pediam um caminho de pasta no disco
+que nunca funcionou no Streamlit Cloud** - migradas pra buscar dados via
+API, mesmo padrão das outras 3 telas; **Configurações mostrava URL e
+token do backend em campos de texto editáveis** - trocado por
+`st.secrets`, mesmo padrão de segurança das demais telas. Ver
+`docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md` para as duas entradas de
+incidente.
+
+Ajustes de hierarquia/tema: Dashboard (9 seções sempre expandidas → 4
+abas por tema) e Falhas (5 seções → 2 abas) - nada some, só não fica tudo
+visível na primeira rolagem. Mapa Operacional: 3 sliders de calibração
+interna movidos pra um expander recolhido. Cartões de KPI reestilizados
+de escuro pra claro (combinando com o fundo do conteúdo principal, que
+nunca foi escurecido - só a sidebar é escura de propósito). 435 testes
+Python passando, sem quebra.
+
 ## [2026-08-11] Modo Online/Offline de apontamento no SGO e fim do número de OS digitado (ADR-0065)
 
 Ver `docs/93_ADR_0065_MODO_ONLINE_OFFLINE_SGO_E_RETORNO_AO_WORKFORCE.md`.

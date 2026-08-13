@@ -18,14 +18,23 @@ _RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_RAIZ_PROJETO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import requests
 import streamlit as st
 
-from dados import carregar_jornadas, formatar_horas, montar_resumo
+from dados import carregar_jornadas_via_api, formatar_horas, montar_resumo
 from workforce_core.catalogo import catalogo_relatorio_1_manutencao
 from workforce_core.pcm import (
     mapeamento_categoria_bucket_relatorio_1_manutencao,
     simular_cenario_relatorio_1_manutencao,
 )
+
+
+def _obter_secret_seguro(chave: str, default: str = "") -> str:
+    try:
+        return st.secrets.get(chave, default)
+    except Exception:
+        return default
+
 
 st.warning(
     "Piloto tecnico. Os buckets de perda e o mapeamento categoria -> bucket "
@@ -38,20 +47,36 @@ st.warning(
 
 st.title("SGO Workforce | Capacidade PCM (piloto)")
 
-if "painel_diretorio_jornadas" not in st.session_state:
-    st.session_state.painel_diretorio_jornadas = str(_RAIZ_PROJETO / "dados_locais" / "jornadas")
+# Fonte de dados fixa em API (nuvem, ADR-0041) - mesmo padrao das demais
+# telas (dashboard/falhas/mapa); esta tela ainda pedia um diretorio local
+# ("Informe o diretório de jornadas") que nunca funcionou no Streamlit
+# Cloud (sem disco persistente la) - corrigido junto da lapidacao geral do
+# painel, 2026-08-12.
+url_api = _obter_secret_seguro("SYNC_API_URL")
+token_api = _obter_secret_seguro("SYNC_TOKEN")
 
-diretorio_jornadas = st.text_input("Diretorio de jornadas persistidas", key="painel_diretorio_jornadas")
-if not diretorio_jornadas:
-    st.warning("Informe o diretorio de jornadas para continuar.")
+if not url_api or not token_api:
+    st.error(
+        "Backend não configurado. Defina os secrets `SYNC_API_URL` e "
+        "`SYNC_TOKEN` (Streamlit Cloud: Settings → Secrets) para o "
+        "painel funcionar."
+    )
     st.stop()
 
-jornadas, com_erro = carregar_jornadas(diretorio_jornadas)
+try:
+    jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar dados do backend: {exc}")
+    st.stop()
+
 if com_erro:
-    st.error(f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem apagar.")
+    st.error(
+        f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura "
+        f"inválida, ignorada(s): {', '.join(com_erro)}"
+    )
 
 if not jornadas:
-    st.info("Nenhuma jornada encontrada nesse diretorio.")
+    st.info("Nenhuma jornada encerrada no backend ainda.")
     st.stop()
 
 catalogo = catalogo_relatorio_1_manutencao()

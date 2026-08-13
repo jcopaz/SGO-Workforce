@@ -306,7 +306,16 @@ with c6:
         unsafe_allow_html=True,
     )
 
-with st.expander("Indicadores", expanded=True):
+# Abas em vez de 9 expanders sempre abertos (lapidacao de UI, 2026-08-12):
+# a tela virou uma rolagem so, sem hierarquia - tudo "igualmente
+# importante" porque tudo ficava visivel ao mesmo tempo. Agrupado por
+# tema (visao geral / por colaborador / tendencias / fluxo), so uma aba
+# renderiza os graficos por vez.
+aba_visao_geral, aba_colaborador, aba_tendencias, aba_fluxo = st.tabs(
+    ["📊 Visão geral", "👤 Por colaborador", "📈 Tendências", "🔀 Fluxo"]
+)
+
+with aba_visao_geral:
     col_gauge, col_performance = st.columns(2)
     with col_gauge:
         if fracao_utilizacao_hh is None:
@@ -327,20 +336,7 @@ with st.expander("Indicadores", expanded=True):
             "quando essa fonte existir."
         )
 
-with st.expander("Produtividade por colaborador", expanded=True):
-    st.caption(
-        "Utilização HH individual - quem está convertendo mais período de "
-        "trabalho em manutenção rentável (EE17/EE21), no mesmo filtro de "
-        "colaborador/período acima."
-    )
-    utilizacao_por_colaborador = utilizacao_hh_por_colaborador(jornadas_filtradas)
-    components.html(
-        renderizar_embutido(grafico_utilizacao_por_colaborador(utilizacao_por_colaborador)),
-        height=530,
-        scrolling=False,
-    )
-
-with st.expander("Distribuição de HH por categoria", expanded=True):
+    st.divider()
     # Barra em largura cheia (nao em coluna): ate 19 categorias com
     # rotulo rotacionado precisam de largura de verdade - espremer num
     # meio de tela reabriria o mesmo risco de rotulo cortado que motivou
@@ -359,51 +355,32 @@ with st.expander("Distribuição de HH por categoria", expanded=True):
         scrolling=False,
     )
 
-with st.expander("Evolução diária de HH", expanded=True):
+with aba_colaborador:
+    st.caption(
+        "Utilização HH individual - quem está convertendo mais período de "
+        "trabalho em manutenção rentável (EE17/EE21), no mesmo filtro de "
+        "colaborador/período acima."
+    )
+    utilizacao_por_colaborador = utilizacao_hh_por_colaborador(jornadas_filtradas)
     components.html(
-        renderizar_embutido(grafico_evolucao_diaria(linhas_filtradas)),
-        height=480,
+        renderizar_embutido(grafico_utilizacao_por_colaborador(utilizacao_por_colaborador)),
+        height=530,
         scrolling=False,
     )
 
-with st.expander("Duração média x frequência por motivo", expanded=True):
-    dados_motivo = contagem_e_duracao_media_por_motivo(linhas_filtradas)
-    if not dados_motivo:
-        st.info("Nenhum evento com motivo (pausa/deslocamento/espera/apoio) no filtro atual.")
-    else:
-        components.html(
-            renderizar_embutido(grafico_scatter_duracao_frequencia(dados_motivo)),
-            height=520,
-            scrolling=False,
-        )
-
-with st.expander("HH por colaborador (detalhado por categoria)", expanded=True):
+    st.divider()
+    st.caption("HH por colaborador, detalhado por categoria")
     components.html(
         renderizar_embutido(grafico_hh_por_colaborador(linhas_filtradas)),
         height=560,
         scrolling=False,
     )
 
-with st.expander("HH por motivo/justificativa", expanded=True):
-    _grafico_motivo, _altura_motivo = grafico_hh_por_motivo(linhas_filtradas)
-    components.html(
-        renderizar_embutido(_grafico_motivo),
-        height=_altura_motivo + 30,
-        scrolling=False,
-    )
-
-with st.expander("Fluxo de HH: colaborador → categoria", expanded=True):
-    components.html(
-        renderizar_embutido(grafico_sankey_colaborador_categoria(linhas_filtradas)),
-        height=620,
-        scrolling=False,
-    )
-
-with st.expander("Linha do tempo do colaborador", expanded=True):
+    st.divider()
     st.caption(
-        "Sequência de apontamentos ao longo dos dias, no horário real em que "
-        "aconteceram - todos os dias do período filtrado acima para o "
-        "colaborador escolhido aqui."
+        "Linha do tempo - sequência de apontamentos ao longo dos dias, no "
+        "horário real em que aconteceram, para o colaborador escolhido "
+        "abaixo (todos os dias do período filtrado acima)."
     )
     _sanitizar_selectbox_state("painel_linha_tempo_colaborador", colaboradores_selecionados)
     colaborador_linha_tempo = st.selectbox(
@@ -426,6 +403,43 @@ with st.expander("Linha do tempo do colaborador", expanded=True):
         )
     else:
         st.info("Nenhum apontamento encontrado para este colaborador no período filtrado.")
+
+with aba_tendencias:
+    st.caption("Evolução diária de HH")
+    components.html(
+        renderizar_embutido(grafico_evolucao_diaria(linhas_filtradas)),
+        height=480,
+        scrolling=False,
+    )
+
+    st.divider()
+    st.caption("Duração média x frequência por motivo")
+    dados_motivo = contagem_e_duracao_media_por_motivo(linhas_filtradas)
+    if not dados_motivo:
+        st.info("Nenhum evento com motivo (pausa/deslocamento/espera/apoio) no filtro atual.")
+    else:
+        components.html(
+            renderizar_embutido(grafico_scatter_duracao_frequencia(dados_motivo)),
+            height=520,
+            scrolling=False,
+        )
+
+with aba_fluxo:
+    st.caption("Fluxo de HH: colaborador → categoria")
+    components.html(
+        renderizar_embutido(grafico_sankey_colaborador_categoria(linhas_filtradas)),
+        height=620,
+        scrolling=False,
+    )
+
+    st.divider()
+    st.caption("HH por motivo/justificativa")
+    _grafico_motivo, _altura_motivo = grafico_hh_por_motivo(linhas_filtradas)
+    components.html(
+        renderizar_embutido(_grafico_motivo),
+        height=_altura_motivo + 30,
+        scrolling=False,
+    )
 
 st.subheader("Jornadas carregadas")
 st.dataframe(

@@ -17,9 +17,10 @@ _RAIZ_PROJETO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_RAIZ_PROJETO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import requests
 import streamlit as st
 
-from dados import carregar_jornadas, carregar_pulsos
+from dados import carregar_jornadas_via_api, carregar_pulsos_via_api
 from workforce_export import (
     MetadadosExportacao,
     feature_collection_pontos,
@@ -27,6 +28,14 @@ from workforce_export import (
 )
 from workforce_export.csv_exportacao import linhas_eventos, linhas_falhas, linhas_gps, linhas_jornadas
 from workforce_export.xlsx_exportacao import exportar_xlsx
+
+
+def _obter_secret_seguro(chave: str, default: str = "") -> str:
+    try:
+        return st.secrets.get(chave, default)
+    except Exception:
+        return default
+
 
 st.warning(
     "Piloto tecnico. Layout oficial de colunas, dados pessoais permitidos, "
@@ -36,28 +45,39 @@ st.warning(
 
 st.title("SGO Workforce | Exportacoes (piloto)")
 
-if "painel_diretorio_jornadas" not in st.session_state:
-    st.session_state.painel_diretorio_jornadas = str(_RAIZ_PROJETO / "dados_locais" / "jornadas")
-if "painel_diretorio_pulsos" not in st.session_state:
-    st.session_state.painel_diretorio_pulsos = str(_RAIZ_PROJETO / "dados_locais" / "pulsos")
+# Fonte de dados fixa em API (nuvem, ADR-0041) - mesmo padrao das demais
+# telas; esta tela ainda pedia dois diretorios locais (jornadas/pulsos)
+# que nunca funcionavam no Streamlit Cloud - corrigido junto da lapidacao
+# geral do painel, 2026-08-12.
+url_api = _obter_secret_seguro("SYNC_API_URL")
+token_api = _obter_secret_seguro("SYNC_TOKEN")
 
-diretorio_jornadas = st.text_input("Diretorio de jornadas persistidas", key="painel_diretorio_jornadas")
-diretorio_pulsos = st.text_input("Diretorio de pulsos GPS persistidos", key="painel_diretorio_pulsos")
-
-if not diretorio_jornadas:
-    st.warning("Informe o diretorio de jornadas para continuar.")
+if not url_api or not token_api:
+    st.error(
+        "Backend não configurado. Defina os secrets `SYNC_API_URL` e "
+        "`SYNC_TOKEN` (Streamlit Cloud: Settings → Secrets) para o "
+        "painel funcionar."
+    )
     st.stop()
 
 usuario_responsavel = st.text_input(
     "Usuario responsavel pela exportacao (obrigatorio)", key="painel_export_usuario"
 )
 
-jornadas, com_erro = carregar_jornadas(diretorio_jornadas)
+try:
+    jornadas, com_erro = carregar_jornadas_via_api(url_api, token_api)
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar dados do backend: {exc}")
+    st.stop()
+
 if com_erro:
-    st.error(f"{len(com_erro)} arquivo(s) de jornada corrompido(s), ignorado(s) sem apagar.")
+    st.error(
+        f"{len(com_erro)} jornada(s) recebida(s) do backend com estrutura "
+        f"inválida, ignorada(s): {', '.join(com_erro)}"
+    )
 
 if not jornadas:
-    st.info("Nenhuma jornada encontrada nesse diretorio.")
+    st.info("Nenhuma jornada encerrada no backend ainda.")
     st.stop()
 
 if not usuario_responsavel:
@@ -65,13 +85,26 @@ if not usuario_responsavel:
     st.stop()
 
 pulsos = []
-if diretorio_pulsos:
-    for jornada in jornadas:
-        pulsos.extend(carregar_pulsos(diretorio_pulsos, jornada.id))
+pulsos_por_jornada: dict = {}
+pulsos_com_erro_total = 0
+for jornada in jornadas:
+    try:
+        pulsos_jornada, pulsos_com_erro = carregar_pulsos_via_api(url_api, token_api, jornada.id)
+    except requests.exceptions.RequestException:
+        # Best-effort: exportacao de jornadas/CSV/XLSX nao depende de GPS -
+        # uma falha buscando pulsos de UMA jornada nao pode travar a tela
+        # inteira, so reduz o que sai no GeoJSON.
+        continue
+    pulsos.extend(pulsos_jornada)
+    pulsos_por_jornada[jornada.id] = pulsos_jornada
+    pulsos_com_erro_total += len(pulsos_com_erro)
+
+if pulsos_com_erro_total:
+    st.error(f"{pulsos_com_erro_total} pulso(s) recebido(s) com estrutura inválida, ignorado(s).")
 
 metadados = MetadadosExportacao(
     usuario_responsavel=usuario_responsavel,
-    filtros={"diretorio_jornadas": diretorio_jornadas},
+    filtros={"fonte": "api"},
 )
 
 st.caption(
@@ -123,7 +156,7 @@ with aba_geojson:
         key="painel_export_geojson_matricula",
     )
     if not pulsos:
-        st.info("Nenhum pulso GPS carregado - informe o diretorio de pulsos acima.")
+        st.info("Nenhum pulso GPS disponível para as jornadas carregadas.")
     else:
         colecao_pontos = feature_collection_pontos(
             pulsos, incluir_identificacao_pessoal=incluir_matricula
@@ -135,14 +168,14 @@ with aba_geojson:
             mime="application/geo+json",
         )
 
-        pulsos_por_jornada = {j.id: carregar_pulsos(diretorio_pulsos, j.id) for j in jornadas}
-        distancia = st.slider(
-            "Distancia minima de simplificacao (m) - nao e valor oficial",
-            min_value=0,
-            max_value=500,
-            value=50,
-            key="painel_export_geojson_distancia",
-        )
+        with st.expander("Configurações avançadas da trajetória"):
+            distancia = st.slider(
+                "Distância mínima de simplificação (m)",
+                min_value=0,
+                max_value=500,
+                value=50,
+                key="painel_export_geojson_distancia",
+            )
         colecao_trajetorias = feature_collection_trajetorias(
             pulsos_por_jornada,
             distancia_simplificacao_metros=float(distancia),

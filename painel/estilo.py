@@ -159,17 +159,24 @@ button[kind="primary"]:hover {
     transform: translateY(-2px) !important;
 }
 
-/* Cards de KPI escuros - mesmas classes do Gestao_OS, para reaproveitar
-   em qualquer tela que monte cards via st.markdown(unsafe_allow_html=True) */
+/* Cards de KPI - CLAROS (2026-08-12): a sidebar e' escura de proposito
+   (identidade visual do Gestao_OS), mas o conteudo principal do painel
+   usa o tema claro padrao do Streamlit - os cards de KPI copiados
+   literalmente do Gestao_OS (fundo quase preto, #1A202C) ficavam como
+   "ilhas escuras" boiando num fundo branco, a causa principal do painel
+   parecer duas telas coladas em vez de um sistema so. Reestilizado pra
+   combinar com o resto do conteudo principal (fundo claro, sombra suave),
+   mantendo a borda colorida lateral (unico elemento que ja funcionava
+   bem como codificacao visual por categoria). */
 .kpi-header-wrapper, .kpi-header-card {
     font-family: "Source Sans Pro", sans-serif;
 }
 .kpi-header-card {
     border-radius: 12px;
     padding: 16px 20px;
-    background-color: #1A202C;
-    border: 1px solid #333D4E;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
     height: 140px;
     display: flex;
     flex-direction: column;
@@ -183,18 +190,18 @@ button[kind="primary"]:hover {
 .kpi-border-blue { border-left: 4px solid #3B82F6; }
 
 .kpi-header-title {
-    font-size: 14px; font-weight: 700; color: #94A3B8;
+    font-size: 14px; font-weight: 700; color: #64748B;
     margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
 }
-.kpi-header-val { font-size: 32px; font-weight: 600; color: #F8FAFC; line-height: 1; }
+.kpi-header-val { font-size: 32px; font-weight: 600; color: #0F172A; line-height: 1; }
 .kpi-header-sub {
     font-size: 12px; font-weight: 600; margin-top: 8px;
     padding: 4px 10px; border-radius: 20px; display: inline-block; width: fit-content;
 }
-.badge-gray { background-color: rgba(100, 116, 139, 0.2); color: #CBD5E1; }
-.badge-red { background-color: rgba(239, 68, 68, 0.2); color: #FCA5A5; }
-.badge-green { background-color: rgba(16, 185, 129, 0.2); color: #6EE7B7; }
-.badge-blue { background-color: rgba(59, 130, 246, 0.2); color: #93C5FD; }
+.badge-gray { background-color: rgba(100, 116, 139, 0.12); color: #475569; }
+.badge-red { background-color: rgba(239, 68, 68, 0.12); color: #B91C1C; }
+.badge-green { background-color: rgba(16, 185, 129, 0.12); color: #047857; }
+.badge-blue { background-color: rgba(59, 130, 246, 0.12); color: #1D4ED8; }
 </style>
 """
 

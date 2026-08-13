@@ -238,31 +238,37 @@ if not pulsos_filtrados:
 
 st.caption(f"{len(pulsos_filtrados)} de {len(pulsos)} pulso(s) exibido(s) para esta jornada.")
 
-col_a, col_b, col_c = st.columns(3)
-with col_a:
-    distancia_simplificacao = st.slider(
-        "Distancia minima de simplificacao (m) - nao e valor oficial",
-        min_value=0,
-        max_value=500,
-        value=50,
-        key="painel_mapa_distancia_simplificacao",
-    )
-with col_b:
-    raio_cluster = st.slider(
-        "Raio de cluster de permanencia (m) - nao e valor oficial",
-        min_value=1,
-        max_value=200,
-        value=20,
-        key="painel_mapa_raio_cluster",
-    )
-with col_c:
-    tempo_minimo_cluster_minutos = st.slider(
-        "Tempo minimo de permanencia (min) - nao e valor oficial",
-        min_value=1,
-        max_value=60,
-        value=5,
-        key="painel_mapa_tempo_minimo_cluster",
-    )
+# Parametros de calibracao interna (nunca valor oficial) escondidos num
+# expander recolhido por padrao (lapidacao de UI, 2026-08-12) - antes
+# ficavam 3 sliders tecnicos sempre visiveis entre os filtros e o mapa,
+# sem lugar numa tela pensada pra gestor; continuam disponiveis pra quem
+# precisar ajustar, so nao poluem mais a tela por padrao.
+with st.expander("⚙️ Configurações avançadas do mapa (parâmetros de cálculo, não oficiais)"):
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        distancia_simplificacao = st.slider(
+            "Distância mínima de simplificação (m)",
+            min_value=0,
+            max_value=500,
+            value=50,
+            key="painel_mapa_distancia_simplificacao",
+        )
+    with col_b:
+        raio_cluster = st.slider(
+            "Raio de cluster de permanência (m)",
+            min_value=1,
+            max_value=200,
+            value=20,
+            key="painel_mapa_raio_cluster",
+        )
+    with col_c:
+        tempo_minimo_cluster_minutos = st.slider(
+            "Tempo mínimo de permanência (min)",
+            min_value=1,
+            max_value=60,
+            value=5,
+            key="painel_mapa_tempo_minimo_cluster",
+        )
 
 mapa = construir_mapa(
     pulsos_filtrados,

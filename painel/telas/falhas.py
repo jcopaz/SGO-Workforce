@@ -225,7 +225,12 @@ with c4:
         unsafe_allow_html=True,
     )
 
-with st.expander("Ranking por duração e distribuição por sintoma", expanded=True):
+# Abas em vez de 5 expanders sempre abertos (lapidacao de UI, 2026-08-12) -
+# mesmo motivo do dashboard.py: rolagem sem hierarquia. Agrupado em
+# "Panorama" (quanto/onde) e "Evolução e reincidência" (quando/quem).
+aba_panorama, aba_evolucao = st.tabs(["📊 Panorama", "📈 Evolução e reincidência"])
+
+with aba_panorama:
     col_ranking, col_donut = st.columns([3, 2])
     with col_ranking:
         st.caption("Ranking por duração")
@@ -241,7 +246,8 @@ with st.expander("Ranking por duração e distribuição por sintoma", expanded=
             scrolling=False,
         )
 
-with st.expander("Distribuição por objeto (componente causador)", expanded=True):
+    st.divider()
+    st.caption("Distribuição por objeto (componente causador)")
     components.html(
         renderizar_embutido(
             grafico_donut_contagem("Ocorrências por objeto", contagem_atendimentos_por_objeto(linhas))
@@ -250,7 +256,19 @@ with st.expander("Distribuição por objeto (componente causador)", expanded=Tru
         scrolling=False,
     )
 
-with st.expander("Evolução diária e HH por colaborador", expanded=True):
+    st.divider()
+    st.caption(
+        "Duração de falhas por sintoma - duração total de atendimento por "
+        "sintoma, do maior para o menor (complementar ao donut 'Ocorrências "
+        "por sintoma' acima, que conta ocorrências, não soma duração)."
+    )
+    components.html(
+        renderizar_embutido(grafico_funil_duracao_por_sintoma(agrupar_atendimentos_ativo_sintoma(linhas))),
+        height=580,
+        scrolling=False,
+    )
+
+with aba_evolucao:
     col_evolucao_falhas, col_hh_colaborador_falhas = st.columns(2)
     with col_evolucao_falhas:
         st.caption("Evolução diária")
@@ -267,7 +285,7 @@ with st.expander("Evolução diária e HH por colaborador", expanded=True):
             scrolling=False,
         )
 
-with st.expander("Duração média por sintoma e reincidência de ativos", expanded=True):
+    st.divider()
     col_duracao_media, col_reincidencia = st.columns(2)
     with col_duracao_media:
         st.caption("Duração média por sintoma")
@@ -287,19 +305,6 @@ with st.expander("Duração média por sintoma e reincidência de ativos", expan
             components.html(
                 renderizar_embutido(_grafico_reincidencia), height=_altura_reincidencia + 30, scrolling=False
             )
-
-with st.expander("Duração de falhas por sintoma", expanded=True):
-    st.caption(
-        "Duração total de atendimento por sintoma, do maior para o menor - "
-        "quais sintomas mais consomem HH de atendimento (complementar ao "
-        "donut 'Ocorrências por sintoma' acima, que conta ocorrências, não "
-        "soma duração)."
-    )
-    components.html(
-        renderizar_embutido(grafico_funil_duracao_por_sintoma(agrupar_atendimentos_ativo_sintoma(linhas))),
-        height=580,
-        scrolling=False,
-    )
 
 st.subheader("Ocorrências por ativo")
 contagem_ativo = contagem_atendimentos_por_ativo(linhas)

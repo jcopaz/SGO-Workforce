@@ -296,6 +296,51 @@ aparece nos testes automatizados (não renderizam CSS de verdade), só em
 teste visual real, e só quando dois elementos "escondidos" coincidem na
 mesma tela o suficiente pra notar.
 
+### 2026-08-12 | Duas telas do painel pediam pasta local, nunca funcionaram no Streamlit Cloud
+
+**Causa raiz**: `painel/telas/capacidade_pcm.py` e `dados_exportacoes.py`
+continuavam usando `carregar_jornadas(diretorio)`/`carregar_pulsos(diretorio)`
+(leitura de arquivo local) enquanto as outras 3 telas do painel
+(Dashboard, Falhas, Mapa Operacional) já tinham migrado pra buscar dados
+via API desde o ADR-0041. As duas telas nunca foram atualizadas junto -
+ficaram pedindo `st.text_input("Diretório de jornadas persistidas")`,
+uma caixa de texto que não faz sentido nenhum no Streamlit Cloud (sem
+disco persistente compartilhado com a interface de campo lá).
+
+**Como foi encontrado**: não veio de um relato de bug específico - surgiu
+de uma auditoria de UI pedida pelo responsável do produto ("algumas abas
+estão poluídas, gráficos bizarros"), lendo as 6 telas do painel por
+completo em vez de confiar só na descrição do sintoma.
+
+**Correção**: as duas telas migradas pro mesmo padrão `carregar_jornadas_via_api`/
+`carregar_pulsos_via_api` + `st.secrets` já usado nas outras 3. Ver
+ADR-0066.
+
+**Lição**: quando uma decisão de arquitetura muda (aqui, "fonte de dados
+fixa em API", ADR-0041), migrar só as telas mais usadas/visíveis e
+assumir que as outras "devem ter sido pegas junto" é um risco real -
+vale um grep pelo padrão antigo (`carregar_jornadas(` sem `_via_api`)
+depois de qualquer migração desse tipo, não só confiar na memória de
+quais arquivos foram tocados no commit da migração original.
+
+### 2026-08-12 | Tela de Configurações expunha URL e token do backend em campo editável
+
+**Causa raiz**: `painel/telas/configuracoes_catalogo.py` carregava
+`SYNC_API_URL`/`SYNC_TOKEN` de `st.secrets` só como valor *padrão* de
+dois `st.text_input` editáveis e visíveis na tela - as outras telas do
+painel já tinham a decisão explícita de nunca mostrar/pedir credencial
+na tela (só `st.secrets`, fail closed se ausente), mas esta tela (mais
+antiga, nunca revisada) ficou com o padrão anterior.
+
+**Correção**: mesmo padrão `st.secrets` + `st.error`/`st.stop()` das
+demais telas - nenhum campo de credencial na tela. Ver ADR-0066.
+
+**Lição**: mesma dos incidentes acima (CSS `[hidden]`, pasta local) -
+uma decisão de segurança/arquitetura tomada e aplicada nas telas
+"principais" precisa de uma varredura explícita nas telas menos usadas
+(Configurações, aqui) pra confirmar que também foi aplicada lá, em vez
+de assumir que "decisão tomada" significa "decisão em todo lugar".
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem
