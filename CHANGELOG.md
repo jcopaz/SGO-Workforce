@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-08-14] Corrige bug real: pulso de GPS periódico ficava preso no celular sem sincronizar
+
+Ver `docs/98_ADR_0070_PULSO_GPS_SINCRONIZA_NA_HORA_DA_CAPTURA.md` e
+`docs/84_LICOES_OPERACIONAIS_E_INCIDENTES.md`. Usuário relatou pulsos
+periódicos (1/min) sumidos do Mapa Operacional mesmo com o app em primeiro
+plano contínuo - descartando a hipótese de throttling de segundo plano.
+Causa raiz: `registrarPulsoCapturado` só salvava o pulso localmente
+(IndexedDB); a sincronização só era disparada como efeito colateral de uma
+transição de jornada (iniciar/encerrar algo), então uma atividade longa sem
+outra ação deixava os pulsos presos no celular por horas. Corrigido:
+`registrarPulsoCapturado` agora também chama
+`sincronizarPulsosPendentes(jornadaId)` (fire-and-forget) logo após salvar.
+`interface_campo/js/app.js`. `CACHE_VERSAO`/rodapé bumpados pra v36.
+`node --test tests/js/*.test.mjs`: 158/158 passando.
+
 ## [2026-08-13] Corrige bug real: `exp` float quebrava o sid de SSO desde o primeiro dia
 
 Ver `docs/97_ADR_0069_SID_SSO_VALIDADO_NA_HORA_DO_CLIQUE.md` (seção de

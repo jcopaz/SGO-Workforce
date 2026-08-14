@@ -700,6 +700,17 @@ async function registrarPulsoCapturado(posicao) {
     direcaoGraus: posicao.direcaoGraus,
   });
   await salvarPulso(pulso);
+  // Bug real relatado (2026-08-14): antes disto, o pulso ficava so' salvo
+  // localmente e so' era sincronizado na PROXIMA transicao de jornada
+  // (iniciar/encerrar algo, unico lugar que chamava dispararSincronizacao
+  // ate agora) - numa atividade longa sem nenhuma outra acao, os pulsos
+  // periodicos (1/min) e o de "voltar ao app" ficavam presos no
+  // IndexedDB por tempo indeterminado, e o Mapa Operacional parecia sem
+  // pulso nenhum enquanto isso, mesmo com a captura funcionando direito.
+  // Fire-and-forget (nao awaited) de proposito - sincronizar pulso nunca
+  // pode atrasar quem chamou (inclusive executarComGpsObrigatorio, que
+  // aguarda esta funcao antes de aplicar a transicao de dominio).
+  sincronizarPulsosPendentes(motor.jornada.id);
 }
 
 // Liga/desliga a captura periodica conforme o estado da jornada (1

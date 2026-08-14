@@ -432,6 +432,35 @@ o sintoma relatado, a explicação anterior pode estar simplesmente
 errada** - vale desconfiar da própria hipótese e reler o código do zero,
 em vez de assumir que "só falta mais um ajuste" na mesma teoria.
 
+### 2026-08-14 | Pulso de GPS periódico ficava preso no celular até a próxima transição de jornada
+
+**Causa raiz**: `registrarPulsoCapturado` (chamada pelo `setInterval` da
+captura periódica e pelo retorno ao primeiro plano) só gravava o pulso no
+IndexedDB local (`salvarPulso`). O único disparo de sincronização do app
+(`dispararSincronizacao` → `sincronizarPulsosPendentes`) só rodava dentro de
+`persistir()`, chamado apenas quando uma transição de domínio explícita
+acontecia (iniciar/encerrar jornada, atividade, pausa, evento). Numa
+atividade longa sem nenhuma outra ação, os pulsos periódicos e o de "voltar
+ao app" acumulavam localmente e não apareciam no Mapa Operacional por horas
+- não era limitação de throttling de segundo plano (hipótese inicial,
+descartada depois que o usuário confirmou, via pergunta direta, que os
+pulsos também não sincronizavam com o app em primeiro plano contínuo).
+
+**Correção**: `registrarPulsoCapturado` agora também chama
+`sincronizarPulsosPendentes(jornadaId)` logo após salvar, sem `await`
+(fire-and-forget, pra não atrasar `executarComGpsObrigatorio`, que aguarda
+essa função antes de aplicar a transição). Ver ADR-0070.
+
+**Lição**: separar "captura" de "sincronização" (padrão offline-first
+correto) não basta se só um dos dois caminhos de captura (o vinculado a uma
+transição de domínio) de fato aciona o segundo. Toda função que grava um
+dado pendente de sync precisa disparar (ou já ter garantido) seu próprio
+gatilho de sincronização - não presumir que "alguma outra ação vai
+sincronizar isso depois". E: quando o usuário descarta a primeira hipótese
+com um teste específico (aqui, "primeiro plano contínuo, sem trocar de
+app"), tratar isso como sinal forte de causa raiz diferente, não como "mais
+uma variação do mesmo problema conhecido".
+
 ## Lições transversais
 
 Princípios que já se repetiram em mais de um incidente acima, valem
