@@ -34,7 +34,11 @@ export async function validarLoginSgo(matricula, senha, opcoes = {}) {
       body: corpo,
     });
   } catch (erro) {
-    return { ok: false, mensagem: "Sem conexao com o SGO (app continua funcionando offline)." };
+    // semConexao:true distingue "nao deu nem pra tentar" (fetch nao
+    // completou) de credenciais erradas (401/403 abaixo) - quem chama usa
+    // isso pra decidir se bloqueia (senha errada) ou libera um fallback
+    // (sem sinal nenhum, ADR-0071).
+    return { ok: false, semConexao: true, mensagem: "Sem conexao com o SGO (app continua funcionando offline)." };
   }
 
   if (resposta.status === 401) {

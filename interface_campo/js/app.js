@@ -996,14 +996,15 @@ function configurarEtapasPreJornada() {
         return;
       }
       limparMensagem();
-      // Login real contra o SGO agora bloqueia a Etapa 1 (pedido do
-      // responsavel do produto, 2026-08-12) - diferente do resto do app,
-      // que e' offline-first de proposito: aqui a premissa e' que o
-      // colaborador sempre tem sinal no inicio do turno (ambiente de
-      // producao do SGO nunca "dorme", ao contrario do Render gratuito de
-      // dev usado neste piloto). Reautentica de novo em
-      // aoClicarIniciarJornada (Etapa 2) so' pra renovar o sid com TTL
-      // fresco - essa validacao aqui e' so' o gate de acesso.
+      // Login real contra o SGO valida a Etapa 1 (pedido do responsavel do
+      // produto, 2026-08-12) - diferente do resto do app, que e'
+      // offline-first de proposito. Credenciais erradas (401/403) ainda
+      // bloqueiam - so' a AUSENCIA DE CONEXAO (fetch nem completou) cai pro
+      // fallback abaixo (ADR-0071, 2026-08-14), em vez de travar o
+      // colaborador no inicio do turno sem alternativa nenhuma. Reautentica
+      // de novo em criarBlocoOrdensServico na hora de abrir o apontamento
+      // de OS (JIT, ADR-0069) - entao mesmo o fallback nunca pula a
+      // validacao de verdade, so' adia pra quando houver sinal.
       const textoOriginal = els.btnContinuarLogin.textContent;
       els.btnContinuarLogin.disabled = true;
       els.btnContinuarLogin.textContent = "Validando...";
@@ -1011,7 +1012,21 @@ function configurarEtapasPreJornada() {
       els.btnContinuarLogin.disabled = false;
       els.btnContinuarLogin.textContent = textoOriginal;
       if (!resultado.ok) {
-        mostrarErro(new Error(resultado.mensagem));
+        if (!resultado.semConexao) {
+          mostrarErro(new Error(resultado.mensagem));
+          return;
+        }
+        mostrarAviso(
+          "Sem conexão com o SGO agora - sua entrada foi liberada em modo Offline. " +
+            "O login será validado quando você abrir o apontamento de OS, se a conexão voltar."
+        );
+        carregarEquipeSgo(matricula);
+        etapaPreJornada = "pergunta";
+        mostrarEtapaPreJornada();
+        if (els.modoSgoOffline) {
+          els.modoSgoOffline.checked = true;
+          els.modoSgoOffline.dispatchEvent(new Event("change"));
+        }
         return;
       }
       // Best-effort, nao aguardado (fire-and-forget) - buscar a lista de

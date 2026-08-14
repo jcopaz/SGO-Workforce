@@ -32,7 +32,7 @@ test("validarLoginSgo com configurada:false nao tenta chamar fetch", async () =>
   assert.match(resultado.mensagem, /nao configurada/i);
 });
 
-test("validarLoginSgo nunca lanca quando o fetch falha (offline)", async () => {
+test("validarLoginSgo nunca lanca quando o fetch falha (offline) e sinaliza semConexao:true", async () => {
   const fetchQueFalha = async () => {
     throw new TypeError("Failed to fetch");
   };
@@ -44,9 +44,12 @@ test("validarLoginSgo nunca lanca quando o fetch falha (offline)", async () => {
 
   assert.equal(resultado.ok, false);
   assert.match(resultado.mensagem, /offline/i);
+  // ADR-0071: semConexao distingue "sem sinal" (libera fallback offline) de
+  // credenciais erradas (bloqueia) - ver os testes de 401/403 abaixo.
+  assert.equal(resultado.semConexao, true);
 });
 
-test("validarLoginSgo com HTTP 401 reporta usuario/senha incorretos", async () => {
+test("validarLoginSgo com HTTP 401 reporta usuario/senha incorretos e NAO sinaliza semConexao", async () => {
   const fetchNaoAutorizado = async () => ({ status: 401, ok: false });
 
   const resultado = await validarLoginSgo("12345", "senha-errada", {
@@ -56,6 +59,7 @@ test("validarLoginSgo com HTTP 401 reporta usuario/senha incorretos", async () =
 
   assert.equal(resultado.ok, false);
   assert.match(resultado.mensagem, /incorretas/i);
+  assert.equal(resultado.semConexao, undefined);
 });
 
 test("validarLoginSgo com HTTP 403 repassa o detail do backend (ex.: senha pendente de troca)", async () => {

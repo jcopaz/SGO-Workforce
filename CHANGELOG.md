@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-08-14] Sem conexão no login inicial, entrada cai automaticamente em modo Offline (ADR-0071)
+
+Ver `docs/99_ADR_0071_FALLBACK_OFFLINE_SEM_CONEXAO_NO_LOGIN.md`. Antes, se
+não houvesse conexão nenhuma no exato momento do login obrigatório da
+Etapa 1, o colaborador ficava travado sem alternativa - decisão do
+responsável do produto (via pergunta direta) foi cair pra modo Offline
+automaticamente nesse caso específico, sem bloquear e sem pedir escolha
+manual. Credenciais erradas (401/403) continuam bloqueando normalmente -
+só a ausência de conexão (`semConexao: true`, novo em
+`integracaoSgo.js::validarLoginSgo`) aciona o fallback. O login real ainda
+é revalidado depois, na hora de abrir o apontamento de OS (JIT, ADR-0069) -
+o fallback só adia a validação, nunca pula. `interface_campo/js/app.js`,
+`interface_campo/js/integracaoSgo.js`. `CACHE_VERSAO`/rodapé v37.
+`node --test tests/js/*.test.mjs`: 158/158 passando.
+
 ## [2026-08-14] Corrige bug real: pulso de GPS periódico ficava preso no celular sem sincronizar
 
 Ver `docs/98_ADR_0070_PULSO_GPS_SINCRONIZA_NA_HORA_DA_CAPTURA.md` e

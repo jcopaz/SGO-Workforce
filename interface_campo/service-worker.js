@@ -5,7 +5,7 @@
 // nenhuma chamada de rede (nao ha API real ainda - ver
 // docs/31_ADR_0004_INTERFACE_DE_CAMPO_PROVISORIA.md).
 
-const CACHE_VERSAO = "sgo-workforce-shell-v36";
+const CACHE_VERSAO = "sgo-workforce-shell-v37";
 // Deliberadamente SEM "./assets/logo-workforce.mp4" aqui - cache.addAll e'
 // tudo ou nada, e o video (~2,8MB) e' grande demais pra arriscar derrubar
 // o app shell inteiro se a rede cair no meio do download. Cacheado a parte,
