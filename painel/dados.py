@@ -41,10 +41,11 @@ from workforce_core.consolidacao import (
 )
 from workforce_core.entities import Jornada, PulsoGps
 from workforce_core.fuso_horario import para_horario_brasil
+from workforce_core.patio import Patio
 from workforce_core.qualidade_gps import avaliar_pulso
 from workforce_storage import ArquivoCorrompidoError, RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
-from workforce_storage.serializacao import jornada_de_dict, pulso_gps_de_dict
+from workforce_storage.serializacao import jornada_de_dict, patio_de_dict, pulso_gps_de_dict
 
 # Rotulos legiveis para o gestor (pedido em 2026-07-31: "o gestor nao tem
 # de cabeca os motivos, precisa ser descritivo") - o gestor via as
@@ -518,6 +519,30 @@ def carregar_pulsos_via_api(url_base: str, token: str, jornada_id) -> Tuple[List
         except (KeyError, ValueError, TypeError):
             com_erro.append(str(item.get("id", "desconhecido")))
     return pulsos, com_erro
+
+
+def carregar_patios_via_api(url_base: str, token: str) -> Tuple[List[Patio], List[str]]:
+    """Busca o cadastro de patios do backend real (ADR-0072) - mesmo papel
+    de carregar_jornadas_via_api. So devolve patios ativos (GET /patios ja
+    filtra no backend). Mesma assinatura de retorno (itens validos, codigos
+    com erro de estrutura) - nunca esconde erro silenciosamente."""
+    resposta = requests.get(
+        f"{url_base.rstrip('/')}/patios",
+        headers={"X-Sync-Token": token},
+        # Mesmo motivo do timeout generoso de carregar_jornadas_via_api:
+        # o Render free tier "dorme" o backend apos ~15 min sem uso.
+        timeout=60,
+    )
+    resposta.raise_for_status()
+
+    patios: List[Patio] = []
+    com_erro: List[str] = []
+    for item in resposta.json():
+        try:
+            patios.append(patio_de_dict(item))
+        except (KeyError, ValueError, TypeError):
+            com_erro.append(str(item.get("codigo", "desconhecido")))
+    return patios, com_erro
 
 
 def obter_url_foto_falha(url_base: str, token: str, caminho: str) -> str:

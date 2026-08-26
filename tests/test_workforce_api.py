@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from workforce_core.catalogo import Categoria, ClassificacaoHH, EntradaCatalogo
 from workforce_core.engine import MotorJornada
 from workforce_core.entities import PulsoGps
+from workforce_core.patio import Patio
 from workforce_storage.repositorio_jornada import RepositorioJornadaArquivo
 from workforce_storage.repositorio_pulsos_gps import RepositorioPulsosGpsArquivo
 from workforce_storage.serializacao import pulso_gps_para_dict
@@ -30,6 +31,7 @@ from workforce_api.app import (
     obter_repositorio,
     obter_repositorio_catalogo,
     obter_repositorio_continuacoes,
+    obter_repositorio_patios,
     obter_repositorio_pulsos,
 )
 
@@ -102,6 +104,35 @@ def cliente_catalogo(monkeypatch):
         yield TestClient(app), repositorio
     finally:
         app.dependency_overrides.pop(obter_repositorio_catalogo, None)
+
+
+class _RepositorioPatiosFalso:
+    """Repositorio de patios em memoria, mesmo espirito de
+    _RepositorioCatalogoFalso - permite testar os endpoints /patios sem
+    Postgres real (ADR-0072)."""
+
+    def __init__(self):
+        self._patios: dict[str, Patio] = {}
+
+    def salvar(self, patio: Patio) -> None:
+        self._patios[patio.codigo] = patio
+
+    def listar(self, *, somente_ativos: bool = True):
+        valores = list(self._patios.values())
+        if somente_ativos:
+            valores = [patio for patio in valores if patio.ativo]
+        return sorted(valores, key=lambda patio: patio.codigo)
+
+
+@pytest.fixture
+def cliente_patios(monkeypatch):
+    monkeypatch.setenv("SYNC_TOKEN", TOKEN_TESTE)
+    repositorio = _RepositorioPatiosFalso()
+    app.dependency_overrides[obter_repositorio_patios] = lambda: repositorio
+    try:
+        yield TestClient(app), repositorio
+    finally:
+        app.dependency_overrides.pop(obter_repositorio_patios, None)
 
 
 def _jornada_encerrada_dict():
@@ -451,6 +482,79 @@ def test_post_catalogo_malformado_e_400(cliente_catalogo):
     resposta = cliente.post(
         "/catalogo",
         json={"descricao": "sem codigo obrigatorio"},
+        headers={"X-Sync-Token": TOKEN_TESTE},
+    )
+    assert resposta.status_code == 400
+
+
+# ----------------------------------------------------------------------
+# /patios (cadastro de patios - docs/100_ADR_0072)
+# ----------------------------------------------------------------------
+def test_get_patios_sem_token_e_401(cliente_patios):
+    cliente, _repositorio = cliente_patios
+    resposta = cliente.get("/patios")
+    assert resposta.status_code == 401
+
+
+def test_post_patio_cria_e_aparece_no_get(cliente_patios):
+    cliente, _repositorio = cliente_patios
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    dados = {
+        "codigo": "IPN",
+        "nome": "Pátio Prainha",
+        "coordenacao": "Piaçaguera",
+        "latitude": -23.948095774842265,
+        "longitude": -46.30579661328678,
+        "ativo": True,
+    }
+
+    resposta_post = cliente.post("/patios", json=dados, headers=headers)
+    assert resposta_post.status_code == 200
+    assert resposta_post.json()["codigo"] == "IPN"
+
+    resposta_get = cliente.get("/patios", headers=headers)
+    assert resposta_get.status_code == 200
+    codigos = [patio["codigo"] for patio in resposta_get.json()]
+    assert "IPN" in codigos
+
+
+def test_post_patio_upsert_nao_duplica(cliente_patios):
+    cliente, _repositorio = cliente_patios
+    headers = {"X-Sync-Token": TOKEN_TESTE}
+    dados = {
+        "codigo": "ICQ",
+        "nome": "V1",
+        "coordenacao": "Piaçaguera",
+        "latitude": -23.91531040683147,
+        "longitude": -46.41890410191962,
+    }
+
+    cliente.post("/patios", json=dados, headers=headers)
+    dados["nome"] = "V2"
+    cliente.post("/patios", json=dados, headers=headers)
+
+    resposta_get = cliente.get("/patios", headers=headers)
+    patios = [p for p in resposta_get.json() if p["codigo"] == "ICQ"]
+    assert len(patios) == 1
+    assert patios[0]["nome"] == "V2"
+
+
+def test_get_patios_omite_inativos(cliente_patios):
+    cliente, repositorio = cliente_patios
+    repositorio.salvar(
+        Patio(codigo="ZZZ", nome="Inativo", coordenacao="X", latitude=0.0, longitude=0.0, ativo=False)
+    )
+
+    resposta_get = cliente.get("/patios", headers={"X-Sync-Token": TOKEN_TESTE})
+    codigos = [patio["codigo"] for patio in resposta_get.json()]
+    assert "ZZZ" not in codigos
+
+
+def test_post_patio_malformado_e_400(cliente_patios):
+    cliente, _repositorio = cliente_patios
+    resposta = cliente.post(
+        "/patios",
+        json={"nome": "sem codigo obrigatorio"},
         headers={"X-Sync-Token": TOKEN_TESTE},
     )
     assert resposta.status_code == 400

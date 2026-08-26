@@ -9,6 +9,9 @@
 - `wf_gps_pulsos`: telemetria.
 - `wf_catalogo_eventos`: tipos e regras de cômputo.
 - `wf_catalogo_sintomas`, `wf_catalogo_causas`, `wf_catalogo_acoes`.
+- `wf_patios`: cadastro de pátios (código, nome, coordenação em texto
+  livre, latitude/longitude) - camada fixa do Mapa Operacional, cadastro
+  pelo painel sem precisar de código (ADR-0072).
 - `wf_ativos_ref`, `wf_os_ref`: snapshots de integração.
 - `wf_sync_lotes`: diagnóstico da sincronização.
 - `wf_auditoria`: alterações e correções.

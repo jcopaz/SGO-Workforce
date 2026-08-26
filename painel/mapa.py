@@ -28,6 +28,7 @@ from workforce_core.entities import Jornada, PulsoGps
 from workforce_core.enums import QualidadePulso
 from workforce_core.fuso_horario import para_horario_brasil
 from workforce_core.geo import ClusterPermanencia, agrupar_permanencia, simplificar_trajetoria
+from workforce_core.patio import Patio
 
 # Estilo pedido pelo responsavel pelo produto em 2026-08-04: pulso bruto em
 # amarelo (a qualidade continua disponivel no popup, so deixou de ser
@@ -140,6 +141,14 @@ def _popup_pulso(pulso: PulsoGps, rotulo: Optional[str] = None) -> str:
     return "<br>".join(linhas)
 
 
+def _popup_patio(patio: Patio) -> str:
+    linhas = [
+        f"Pátio: {html.escape(patio.codigo)} - {html.escape(patio.nome)}",
+        f"Coordenação: {html.escape(patio.coordenacao)}",
+    ]
+    return "<br>".join(linhas)
+
+
 def _popup_cluster(cluster: ClusterPermanencia) -> str:
     linhas = [
         "Cluster de permanencia (inferencia, nao prova de presenca)",
@@ -158,7 +167,11 @@ def construir_mapa(
     raio_cluster_metros: float,
     tempo_minimo_cluster: timedelta,
     mostrar_pulsos_brutos: bool = True,
+    mostrar_trajetoria: bool = True,
+    mostrar_clusters_permanencia: bool = True,
+    mostrar_patios: bool = True,
     trilhos_ferrovia: Optional[List[List[Tuple[float, float]]]] = None,
+    patios: Optional[List[Patio]] = None,
     cor_por_pulso: Optional[Dict[UUID, str]] = None,
     rotulo_por_pulso: Optional[Dict[UUID, str]] = None,
     marco_inicio: Optional[PulsoGps] = None,
@@ -184,16 +197,31 @@ def construir_mapa(
     mais volume de dados reais para validar a utilidade de cada camada
     adicional (ver ADR-0010).
 
-    Pedido do responsavel pelo produto em 2026-08-04 (ADR-0049): so a
-    trajetoria simplificada e opcional/togglable - malha ferrea, marcos
-    de inicio/fim, pulsos brutos (ja selecionaveis por atividade/data/
-    horario nos filtros da tela, nao precisam de outro toggle no mapa) e
-    clusters de permanencia sao sempre desenhados direto no mapa, sem
-    passar por `FeatureGroup`/`LayerControl` - mapa mais limpo, e o
-    controle de camadas deixa de listar "escolhas" que na pratica nunca
-    faziam sentido desligar. O tile base tambem nao aparece mais no
-    controle (`TileLayer(..., control=False)`) - so existe um tile, nao e
-    uma escolha real.
+    `mostrar_trajetoria`/`mostrar_clusters_permanencia` (2026-08-13,
+    responsavel pelo produto reportou nao conseguir distinguir os 45
+    pulsos de uma jornada - os circulos roxos do cluster de permanencia,
+    desenhados por ultimo/por cima com raio de ate ~28px e opacidade
+    0.4, cobrem visualmente os pontos individuais do pulso bruto embaixo
+    deles quando muitos pulsos caem no mesmo raio/tempo de permanencia;
+    a trajetoria por cima tambem compete visualmente). Antes so a
+    trajetoria era opcional, e o controle ficava DENTRO do mapa
+    (`FeatureGroup`/`LayerControl` nativo do Folium, canto superior
+    direito) - agora os 2 sao parametros simples de `construir_mapa`,
+    controlados por checkbox do Streamlit FORA do mapa (ver
+    `painel/telas/mapa_operacional.py`), junto dos outros filtros da
+    tela. `mostrar_pulsos_brutos` ja existia como parametro simples
+    (nunca precisou de LayerControl); os 3 juntos agora tem o mesmo
+    tratamento. O tile base nao aparece no controle
+    (`TileLayer(..., control=False)`) - so existe um tile, nao e uma
+    escolha real; malha ferrea e marcos de inicio/fim continuam sempre
+    desenhados quando informados, sem toggle proprio (nunca pediram um).
+
+    `patios`/`mostrar_patios` (ADR-0072): marcadores fixos de patio
+    (codigo/nome/coordenacao no popup), independentes da jornada/pulsos
+    selecionados - continuam desenhados mesmo quando `pulsos` esta vazio,
+    ao contrario das camadas derivadas de pulso abaixo. So a camada
+    "patios" da lista de docs/13_MAPA_OPERACIONAL.md ("ativos e patios")
+    fica coberta aqui - "ativos" continua sem modelo de dados (ADR-0010).
     """
     mapa = folium.Map(location=_centro(pulsos), zoom_start=14 if pulsos else 4, tiles=None)
     folium.TileLayer(tiles=_TILES_BASEMAP, control=False).add_to(mapa)
@@ -229,6 +257,20 @@ def construir_mapa(
             ),
         ).add_to(mapa)
 
+    if mostrar_patios and patios:
+        for patio in patios:
+            folium.Marker(
+                location=(patio.latitude, patio.longitude),
+                icon=folium.Icon(color="darkblue", icon="industry", prefix="fa"),
+                # tooltip (ao contrario do popup) o Folium NAO escapa por
+                # padrao - codigo/nome vem de formulario do painel
+                # (configuracoes_catalogo.py), entao e dado do usuario
+                # como colaborador_matricula em _popup_pulso, precisa do
+                # mesmo html.escape().
+                tooltip=html.escape(f"{patio.codigo} - {patio.nome}"),
+                popup=folium.Popup(_popup_patio(patio), max_width=300),
+            ).add_to(mapa)
+
     if not pulsos:
         return mapa
 
@@ -260,34 +302,34 @@ def construir_mapa(
     # puxando a trajetoria/linha reta ate ele).
     pulsos_confiaveis = [p for p in pulsos if p.qualidade in _QUALIDADES_CONFIAVEIS]
 
-    trajetoria = simplificar_trajetoria(
-        pulsos_confiaveis, distancia_minima_metros=distancia_simplificacao_metros
-    )
-    if len(trajetoria) > 1:
-        camada_trajetoria = folium.FeatureGroup(name="Traçar trajetória", show=True)
-        folium.PolyLine(
-            locations=[(p.latitude, p.longitude) for p in trajetoria],
-            color=_COR_TRAJETORIA,
-            weight=3,
-            opacity=0.8,
-            dash_array="10,6,2,6",
-        ).add_to(camada_trajetoria)
-        camada_trajetoria.add_to(mapa)
-        folium.LayerControl(collapsed=False).add_to(mapa)
-
-    clusters = agrupar_permanencia(
-        pulsos_confiaveis, raio_metros=raio_cluster_metros, tempo_minimo=tempo_minimo_cluster
-    )
-    if clusters:
-        for cluster in clusters:
-            folium.CircleMarker(
-                location=(cluster.latitude_media, cluster.longitude_media),
-                radius=8 + min(cluster.quantidade_pulsos, 20),
-                color="purple",
-                fill=True,
-                fill_opacity=0.4,
-                popup=folium.Popup(_popup_cluster(cluster), max_width=300),
+    if mostrar_trajetoria:
+        trajetoria = simplificar_trajetoria(
+            pulsos_confiaveis, distancia_minima_metros=distancia_simplificacao_metros
+        )
+        if len(trajetoria) > 1:
+            folium.PolyLine(
+                locations=[(p.latitude, p.longitude) for p in trajetoria],
+                color=_COR_TRAJETORIA,
+                weight=3,
+                opacity=0.8,
+                dash_array="10,6,2,6",
+                tooltip="Traçar trajetória",
             ).add_to(mapa)
+
+    if mostrar_clusters_permanencia:
+        clusters = agrupar_permanencia(
+            pulsos_confiaveis, raio_metros=raio_cluster_metros, tempo_minimo=tempo_minimo_cluster
+        )
+        if clusters:
+            for cluster in clusters:
+                folium.CircleMarker(
+                    location=(cluster.latitude_media, cluster.longitude_media),
+                    radius=8 + min(cluster.quantidade_pulsos, 20),
+                    color="purple",
+                    fill=True,
+                    fill_opacity=0.4,
+                    popup=folium.Popup(_popup_cluster(cluster), max_width=300),
+                ).add_to(mapa)
 
     return mapa
 

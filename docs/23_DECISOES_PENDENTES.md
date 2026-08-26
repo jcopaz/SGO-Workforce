@@ -93,5 +93,13 @@
     registrada como provável (manutenção não planejada no OptJob original
     era não rentável). `EE23` (Manutenção Programada Não Concluída) NÃO
     foi incluída nesta decisão — continua `PRODUTIVA`, não foi perguntada.
+18. ~~Modelo de dados de pátio e coordenação~~ (citados desde
+    `docs/13_MAPA_OPERACIONAL.md`, nunca implementados por falta de
+    modelo — ver `docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md`). Decidido
+    em 2026-08-26: pátio vira cadastro dinâmico próprio (`wf_patios`,
+    mesmo padrão do catálogo de motivos do ADR-0019 — tela em
+    Configurações, sem workflow de aprovação), com `coordenacao` como
+    campo texto livre dentro do pátio (não virou entidade própria neste
+    incremento). Ver `docs/100_ADR_0072_CADASTRO_DE_PATIOS_E_CAMADA_NO_MAPA.md`.
 
 Nenhuma decisão deve ser inventada pelo agente. Registrar ADR após validação operacional.

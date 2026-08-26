@@ -135,6 +135,86 @@ if enviado:
             st.rerun()
 
 st.divider()
+st.subheader("Pátios")
+st.caption(
+    "Cadastro de pátios (código, nome, coordenação e coordenadas para o "
+    "Mapa Operacional) - ADR-0072. Pensado para quem não programa: "
+    "gerências futuras cadastram pátios de outras coordenações por aqui, "
+    "sem precisar de código novo."
+)
+
+try:
+    resposta_patios = requests.get(f"{url_base}/patios", headers=headers, timeout=60)
+    resposta_patios.raise_for_status()
+    patios = resposta_patios.json()
+except requests.exceptions.RequestException as exc:
+    st.error(f"Não foi possível buscar os pátios do backend: {exc}")
+    patios = []
+
+if patios:
+    st.dataframe(
+        [
+            {
+                "Código": patio["codigo"],
+                "Nome": patio["nome"],
+                "Coordenação": patio["coordenacao"],
+                "Latitude": patio["latitude"],
+                "Longitude": patio["longitude"],
+            }
+            for patio in patios
+        ],
+        width="stretch",
+    )
+else:
+    st.info("Nenhum pátio cadastrado ainda.")
+
+with st.form("form_patio_catalogo"):
+    st.caption(
+        "Informe um código já existente na tabela acima para editá-lo "
+        "(sobrescreve os campos), ou um código novo para criar um pátio."
+    )
+    codigo_patio = st.text_input("Código (ex.: IPN)")
+    nome_patio = st.text_input("Nome (ex.: Pátio Prainha)")
+    coordenacao_patio = st.text_input("Coordenação (ex.: Piaçaguera)")
+    col_lat, col_lon = st.columns(2)
+    with col_lat:
+        latitude_patio = st.number_input(
+            "Latitude", min_value=-90.0, max_value=90.0, value=0.0, format="%.8f"
+        )
+    with col_lon:
+        longitude_patio = st.number_input(
+            "Longitude", min_value=-180.0, max_value=180.0, value=0.0, format="%.8f"
+        )
+    ativo_patio = st.checkbox("Ativo", value=True, key="painel_patio_ativo")
+
+    enviado_patio = st.form_submit_button("Salvar pátio")
+
+if enviado_patio:
+    if not codigo_patio.strip() or not nome_patio.strip() or not coordenacao_patio.strip():
+        st.error("Código, nome e coordenação são obrigatórios.")
+    elif latitude_patio == 0.0 and longitude_patio == 0.0:
+        st.error("Informe latitude/longitude reais do pátio (0, 0 não é uma coordenada válida aqui).")
+    else:
+        payload_patio = {
+            "codigo": codigo_patio.strip(),
+            "nome": nome_patio.strip(),
+            "coordenacao": coordenacao_patio.strip(),
+            "latitude": latitude_patio,
+            "longitude": longitude_patio,
+            "ativo": ativo_patio,
+        }
+        try:
+            resposta_post_patio = requests.post(
+                f"{url_base}/patios", json=payload_patio, headers=headers, timeout=60
+            )
+            resposta_post_patio.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            st.error(f"Não foi possível salvar o pátio: {exc}")
+        else:
+            st.success(f"Pátio '{payload_patio['codigo']}' salvo.")
+            st.rerun()
+
+st.divider()
 st.subheader("Manutenção de dados")
 with st.expander("Expurgo de pulsos GPS antigos", expanded=False):
     st.warning(

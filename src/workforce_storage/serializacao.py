@@ -32,6 +32,7 @@ from workforce_core.enums import (
     TipoEventoSecundario,
 )
 from workforce_core.integracao_sgo import ReferenciaOS
+from workforce_core.patio import Patio
 
 # v2 adiciona eventos_secundarios (Incremento 5).
 # v3 adiciona dados_falha em Atividade (Incremento 6).
@@ -318,4 +319,26 @@ def entrada_catalogo_de_dict(dados: Dict[str, Any]) -> EntradaCatalogo:
         tipo_evento_secundario=(
             TipoEventoSecundario(tipo_evento_secundario_bruto) if tipo_evento_secundario_bruto else None
         ),
+    )
+
+
+def patio_para_dict(patio: Patio) -> Dict[str, Any]:
+    return {
+        "codigo": patio.codigo,
+        "nome": patio.nome,
+        "coordenacao": patio.coordenacao,
+        "latitude": patio.latitude,
+        "longitude": patio.longitude,
+        "ativo": patio.ativo,
+    }
+
+
+def patio_de_dict(dados: Dict[str, Any]) -> Patio:
+    return Patio(
+        codigo=dados["codigo"],
+        nome=dados["nome"],
+        coordenacao=dados.get("coordenacao", ""),
+        latitude=float(dados["latitude"]),
+        longitude=float(dados["longitude"]),
+        ativo=dados.get("ativo", True),
     )

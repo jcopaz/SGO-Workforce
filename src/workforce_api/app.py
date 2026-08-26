@@ -39,6 +39,8 @@ from workforce_storage.serializacao import (
     entrada_catalogo_para_dict,
     jornada_de_dict,
     jornada_para_dict,
+    patio_de_dict,
+    patio_para_dict,
     pulso_gps_de_dict,
     pulso_gps_para_dict,
 )
@@ -46,6 +48,7 @@ from workforce_storage.serializacao import (
 from . import supabase_storage
 from .repositorio_catalogo_postgres import RepositorioCatalogoPostgres
 from .repositorio_continuacoes_postgres import RepositorioContinuacoesFalhaPostgres
+from .repositorio_patios_postgres import RepositorioPatiosPostgres
 from .repositorio_postgres import RepositorioJornadaPostgres
 from .repositorio_pulsos_postgres import RepositorioPulsosGpsPostgres
 
@@ -134,6 +137,23 @@ def obter_repositorio_catalogo() -> RepositorioCatalogoPostgres:
             )
         _repositorio_catalogo_cache = RepositorioCatalogoPostgres(dsn)
     return _repositorio_catalogo_cache
+
+
+_repositorio_patios_cache: RepositorioPatiosPostgres | None = None
+
+
+def obter_repositorio_patios() -> RepositorioPatiosPostgres:
+    """Mesmo padrao de obter_repositorio()/obter_repositorio_catalogo()."""
+    global _repositorio_patios_cache
+    if _repositorio_patios_cache is None:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise HTTPException(
+                status_code=503,
+                detail="Backend sem DATABASE_URL configurada - nao pode persistir.",
+            )
+        _repositorio_patios_cache = RepositorioPatiosPostgres(dsn)
+    return _repositorio_patios_cache
 
 
 _repositorio_continuacoes_cache: RepositorioContinuacoesFalhaPostgres | None = None
@@ -286,6 +306,29 @@ def upsert_catalogo(
         raise HTTPException(status_code=400, detail=f"Motivo malformado: {exc}") from exc
     repositorio.salvar(entrada)
     return {"status": "salvo", "codigo": entrada.codigo}
+
+
+@app.get("/patios", dependencies=[Depends(exigir_token)])
+def listar_patios(
+    repositorio: RepositorioPatiosPostgres = Depends(obter_repositorio_patios),
+) -> List[Dict[str, Any]]:
+    """So retorna patios ativos - mesmo criterio de GET /catalogo (ADR-0072)."""
+    return [patio_para_dict(patio) for patio in repositorio.listar(somente_ativos=True)]
+
+
+@app.post("/patios", dependencies=[Depends(exigir_token)])
+def upsert_patio(
+    dados: Dict[str, Any],
+    repositorio: RepositorioPatiosPostgres = Depends(obter_repositorio_patios),
+) -> Dict[str, str]:
+    """Upsert por codigo (mesma garantia de idempotencia do ADR-0003) - usado
+    pela tela de administracao de patios no painel (ADR-0072)."""
+    try:
+        patio = patio_de_dict(dados)
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Patio malformado: {exc}") from exc
+    repositorio.salvar(patio)
+    return {"status": "salvo", "codigo": patio.codigo}
 
 
 # Diretorio catalogos/ na raiz do repositorio (levado junto no deploy do

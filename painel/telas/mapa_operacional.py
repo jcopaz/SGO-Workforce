@@ -3,9 +3,11 @@ completa desde o ADR-0042 ao ADR-0045 - backend, captura periodica na
 interface de campo e GPS obrigatorio; estilo visual, malha ferrea da MRS
 e filtro por atividade/data/horario do ADR-0046/ADR-0047).
 
-Camadas, popup e filtros de docs/13_MAPA_OPERACIONAL.md. Filtros que
-dependem de conceitos ainda nao modelados (coordenacao, equipe, patio,
-impacto) nao existem aqui - ver
+Camadas, popup e filtros de docs/13_MAPA_OPERACIONAL.md. A camada de
+patios existe desde o ADR-0072 (marcadores fixos, cadastrados em
+"Configurações" - `painel/telas/configuracoes_catalogo.py`). Filtros que
+dependem de conceitos ainda nao modelados (coordenacao como filtro
+proprio, equipe, impacto) nao existem aqui - ver
 docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md.
 """
 
@@ -28,6 +30,7 @@ from streamlit_folium import st_folium
 
 from dados import (
     carregar_jornadas_via_api,
+    carregar_patios_via_api,
     carregar_pulsos_via_api,
     fatiar_linha_do_tempo_por_dia,
     filtrar_pulsos_por_periodo,
@@ -104,11 +107,18 @@ def _carregar_pulsos_cache(url: str, token: str, jornada_id):
     return reclassificar_qualidade_pulsos(pulsos), com_erro
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _carregar_patios_cache(url: str, token: str):
+    return carregar_patios_via_api(url, token)
+
+
 st.warning(
-    "Piloto tecnico. Filtros de coordenacao, equipe, patio, sintoma e "
-    "impacto ainda nao existem porque esses conceitos ainda nao foram "
-    "modelados no sistema (ver docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md). "
-    "Clusters de permanencia sao inferencia, nunca prova de presenca."
+    "Piloto tecnico. Filtros de coordenacao, equipe, sintoma e impacto "
+    "ainda nao existem porque esses conceitos ainda nao foram modelados "
+    "no sistema (ver docs/37_ADR_0010_MAPA_OPERACIONAL_FOLIUM.md). A "
+    "camada de pátios (marcadores fixos) já existe - cadastro em "
+    "Configurações → Pátios. Clusters de permanencia sao inferencia, "
+    "nunca prova de presenca."
 )
 
 col_titulo, col_sync = st.columns([5, 1])
@@ -119,6 +129,7 @@ with col_sync:
     if st.button("🔄 Sincronizar dados", width="stretch", key="mapa_sincronizar"):
         _carregar_jornadas_cache.clear()
         _carregar_pulsos_cache.clear()
+        _carregar_patios_cache.clear()
         st.toast("Sincronizando com o backend...", icon="🔄")
 
 # Fonte de dados fixa em API (nuvem, ADR-0041) - ver mesmo comentario em
@@ -149,6 +160,17 @@ if com_erro:
 if not jornadas:
     st.info("Nenhuma jornada encerrada no backend ainda.")
     st.stop()
+
+# Patios (ADR-0072) - camada opcional, nunca bloqueia a tela: um backend
+# fora do ar ou erro de rede aqui nao deveria impedir de ver jornada/
+# pulsos, que sao o proposito principal desta tela. Mesmo espirito de
+# tolerancia a falha de catalogo_completo() (comentario mais abaixo).
+try:
+    patios, patios_com_erro = _carregar_patios_cache(url_api, token_api)
+except requests.exceptions.RequestException:
+    patios, patios_com_erro = [], []
+if patios_com_erro:
+    st.error(f"{len(patios_com_erro)} pátio(s) recebido(s) do backend com estrutura inválida, ignorado(s).")
 
 # Colaborador e Jornada separados (pedido do responsavel pelo produto em
 # 2026-08-04) - antes era um selectbox so, misturando matricula e
@@ -279,6 +301,34 @@ if not pulsos_filtrados:
 
 st.caption(f"{len(pulsos_filtrados)} de {len(pulsos)} pulso(s) exibido(s) para esta jornada.")
 
+# Camadas do mapa como checkbox fora dele (2026-08-13, responsavel pelo
+# produto reportou nao conseguir distinguir os 45 pulsos de uma jornada -
+# os circulos roxos do cluster de permanencia e a linha da trajetoria sao
+# desenhados por cima dos pulsos brutos e podem cobrir visualmente pontos
+# individuais quando muitos pulsos caem no mesmo raio/tempo de
+# permanencia). Antes so a trajetoria era togglable, e o controle ficava
+# DENTRO do mapa (LayerControl nativo do Folium, canto superior direito,
+# facil de nao notar) - agora os 3 sao checkboxes do Streamlit junto dos
+# outros filtros da tela. Desligar clusters/trajetoria aqui NAO afeta a
+# contagem "X de Y pulso(s) exibido(s)" acima - so o desenho no mapa.
+col_camada_pulsos, col_camada_clusters, col_camada_trajetoria, col_camada_patios = st.columns(4)
+with col_camada_pulsos:
+    mostrar_pulsos_brutos = st.checkbox(
+        "📍 Mostrar pulsos brutos", value=True, key="painel_mapa_mostrar_pulsos_brutos"
+    )
+with col_camada_clusters:
+    mostrar_clusters_permanencia = st.checkbox(
+        "🟣 Mostrar clusters de permanência", value=True, key="painel_mapa_mostrar_clusters"
+    )
+with col_camada_trajetoria:
+    mostrar_trajetoria = st.checkbox(
+        "🔴 Traçar trajetória", value=True, key="painel_mapa_mostrar_trajetoria"
+    )
+with col_camada_patios:
+    mostrar_patios = st.checkbox(
+        "🏭 Mostrar pátios", value=True, key="painel_mapa_mostrar_patios"
+    )
+
 # Parametros de calibracao interna (nunca valor oficial) escondidos num
 # expander recolhido por padrao (lapidacao de UI, 2026-08-12) - antes
 # ficavam 3 sliders tecnicos sempre visiveis entre os filtros e o mapa,
@@ -316,7 +366,12 @@ mapa = construir_mapa(
     distancia_simplificacao_metros=float(distancia_simplificacao),
     raio_cluster_metros=float(raio_cluster),
     tempo_minimo_cluster=timedelta(minutes=tempo_minimo_cluster_minutos),
+    mostrar_pulsos_brutos=mostrar_pulsos_brutos,
+    mostrar_trajetoria=mostrar_trajetoria,
+    mostrar_clusters_permanencia=mostrar_clusters_permanencia,
+    mostrar_patios=mostrar_patios,
     trilhos_ferrovia=carregar_trilhos_malha_mrs(),
+    patios=patios,
     cor_por_pulso=cor_por_pulso,
     # rotulos_por_pulso ja calculado acima (usado tambem pro filtro de
     # atividade e pra colorir) - so faltava chegar ate o popup (pedido do

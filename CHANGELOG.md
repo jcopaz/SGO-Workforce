@@ -1,5 +1,32 @@
 # Changelog
 
+## [2026-08-26] Cadastro de pátios e camada de pátios no Mapa Operacional (ADR-0072)
+
+Ver `docs/100_ADR_0072_CADASTRO_DE_PATIOS_E_CAMADA_NO_MAPA.md`. Pátio e
+coordenação não existiam como conceito no sistema (`docs/37_ADR_0010`
+registrava isso como ausência de modelo de dados, não omissão). Cadastro
+dinâmico novo (`wf_patios`, mesmo padrão do catálogo de motivos do
+ADR-0019): backend (`GET`/`POST /patios`), tela "Pátios" em Configurações
+(sem precisar de código, pensando em gerências futuras cadastrarem
+pátios sozinhas) e marcadores fixos no Mapa Operacional (`mostrar_patios`,
+independentes de jornada/pulso selecionado). Semeado com os 2 primeiros
+pátios reais (coordenação Piaçaguera): `IPN` - Pátio Prainha e `ICQ` -
+Pátio Casqueiro, coordenadas informadas pelo responsável pelo produto.
+Achado de segurança durante a implementação: `folium.Marker(tooltip=...)`
+não escapa HTML por padrão (ao contrário do popup) - corrigido com
+`html.escape()`, coberto por teste dedicado. `src/workforce_core/patio.py`,
+`src/workforce_api/repositorio_patios_postgres.py`, `src/workforce_api/app.py`,
+`src/workforce_storage/serializacao.py`, `painel/dados.py`, `painel/mapa.py`,
+`painel/telas/mapa_operacional.py`, `painel/telas/configuracoes_catalogo.py`.
+`python -m pytest -q`: 451/451 passando.
+
+**Correção no mesmo dia**: código do Pátio Casqueiro corrigido de `IQC`
+para `ICQ` (confirmado pelo responsável do produto junto de um líder de
+campo - bate com o prefixo real dos ativos `S-ICQ005E1`/`S-ICQ005D1`).
+`IQC` na verdade é outro local, "Extensão Cubatão 1" - cadastrado como
+3º pátio semente, coordenada a ~1m da do `ICQ` (confirmado como esperado,
+não erro). Ver seção "Correção pós-registro" do ADR-0072.
+
 ## [2026-08-14] Sem conexão no login inicial, entrada cai automaticamente em modo Offline (ADR-0071)
 
 Ver `docs/99_ADR_0071_FALLBACK_OFFLINE_SEM_CONEXAO_NO_LOGIN.md`. Antes, se

@@ -34,6 +34,7 @@ from workforce_core import MotorJornada
 from workforce_core.consolidacao import ClassificacaoInstante
 from workforce_core.entities import PulsoGps
 from workforce_core.enums import QualidadePulso
+from workforce_core.patio import Patio
 
 
 def _contido(rotulo: str, html: str) -> bool:
@@ -81,10 +82,14 @@ def test_construir_mapa_sem_pulsos_nao_quebra():
 
 def test_construir_mapa_com_pulsos_gera_camadas(tmp_path):
     # Pedido do responsavel pelo produto em 2026-08-04 (ADR-0049): pulsos
-    # brutos sao sempre desenhados direto no mapa (sem FeatureGroup/toggle
-    # proprio - ja sao selecionaveis pelos filtros de atividade/data/
-    # horario da tela) - so a trajetoria continua como camada nomeada/
-    # togglable no LayerControl.
+    # brutos sao sempre desenhados direto no mapa (ja selecionaveis pelos
+    # filtros de atividade/data/horario da tela). Trajetoria/clusters de
+    # permanencia agora tem toggle proprio via parametro simples
+    # (mostrar_trajetoria/mostrar_clusters_permanencia, 2026-08-13) -
+    # controlado por checkbox do Streamlit FORA do mapa
+    # (painel/telas/mapa_operacional.py), nao mais por LayerControl do
+    # Folium dentro do mapa (ver test_construir_mapa_mostrar_trajetoria_*
+    # abaixo).
     jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
     jornada = jornadas[0]
     pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=180)
@@ -154,6 +159,57 @@ def test_construir_mapa_trajetoria_vermelha_tracejada(tmp_path):
     assert "dashArray" in html  # folium traduz dash_array para a opcao Leaflet dashArray
 
 
+def test_construir_mapa_mostrar_trajetoria_false_esconde_a_linha(tmp_path):
+    # Achado real de 2026-08-13: o toggle de trajetoria era so o
+    # LayerControl do Folium, dentro do proprio mapa - virou parametro
+    # simples, controlado por checkbox do Streamlit fora do mapa.
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=180)
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        mostrar_trajetoria=False,
+    )
+    html = mapa.get_root().render()
+    assert _COR_TRAJETORIA not in html
+    assert not _contido("Traçar trajetória", html)
+
+
+def test_construir_mapa_mostrar_clusters_permanencia_false_esconde_os_circulos(tmp_path):
+    # Mesmo achado: os circulos roxos do cluster de permanencia (raio ate
+    # ~28px, opacidade 0.4), desenhados por cima dos pulsos brutos,
+    # cobriam visualmente pontos individuais quando muitos pulsos caiam
+    # no mesmo raio/tempo de permanencia - agora e' possivel desligar.
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    # Pulsos bem proximos no tempo/espaco pra garantir que forma cluster
+    # (raio_cluster_metros=1000/tempo_minimo=1min cobre qualquer geracao
+    # de exemplo real).
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=60)
+
+    mapa_com_cluster = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=1000,
+        tempo_minimo_cluster=timedelta(minutes=1),
+    )
+    mapa_sem_cluster = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=1000,
+        tempo_minimo_cluster=timedelta(minutes=1),
+        mostrar_clusters_permanencia=False,
+    )
+    html_com = mapa_com_cluster.get_root().render()
+    html_sem = mapa_sem_cluster.get_root().render()
+    assert "Cluster de permanencia" in html_com
+    assert "Cluster de permanencia" not in html_sem
+
+
 def test_construir_mapa_malha_ferrea_sempre_visivel_sem_toggle(tmp_path):
     # ADR-0049: malha ferrea desenhada direto no mapa, nunca como camada
     # nomeada/togglable - "Malha ferrea MRS" aqui e so o texto do tooltip
@@ -191,6 +247,101 @@ def test_construir_mapa_sem_pulsos_ainda_mostra_malha_ferrea():
     )
     html = mapa.get_root().render()
     assert "Malha ferrea MRS" in html
+
+
+# ----------------------------------------------------------------------
+# Camada de patios (ADR-0072)
+# ----------------------------------------------------------------------
+def _patios_exemplo():
+    return [
+        Patio(
+            codigo="IPN",
+            nome="Pátio Prainha",
+            coordenacao="Piaçaguera",
+            latitude=-23.948095774842265,
+            longitude=-46.30579661328678,
+        ),
+        Patio(
+            codigo="ICQ",
+            nome="Pátio Casqueiro",
+            coordenacao="Piaçaguera",
+            latitude=-23.91531040683147,
+            longitude=-46.41890410191962,
+        ),
+    ]
+
+
+def test_construir_mapa_sem_pulsos_ainda_mostra_patios():
+    # Patio e uma camada fixa, independente de jornada/pulso - mesmo
+    # espirito de test_construir_mapa_sem_pulsos_ainda_mostra_malha_ferrea.
+    mapa = construir_mapa(
+        [],
+        distancia_simplificacao_metros=50,
+        raio_cluster_metros=20,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        patios=_patios_exemplo(),
+    )
+    html = mapa.get_root().render()
+    assert "IPN - Pátio Prainha" in html
+    assert "ICQ - Pátio Casqueiro" in html
+    assert "Piaçaguera" in html
+
+
+def test_construir_mapa_sem_patios_informado_nao_quebra(tmp_path):
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+    )
+    html = mapa.get_root().render()
+    assert "Pátio" not in html
+
+
+def test_construir_mapa_mostrar_patios_false_esconde_os_marcadores(tmp_path):
+    jornadas = gerar_jornadas_exemplo(tmp_path / "jornadas", quantidade=1)
+    jornada = jornadas[0]
+    pulsos = gerar_pulsos_exemplo(tmp_path / "pulsos", jornada, intervalo_segundos=600)
+
+    mapa = construir_mapa(
+        pulsos,
+        distancia_simplificacao_metros=30,
+        raio_cluster_metros=25,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        patios=_patios_exemplo(),
+        mostrar_patios=False,
+    )
+    html = mapa.get_root().render()
+    assert "IPN - Pátio Prainha" not in html
+
+
+def test_popup_patio_escapa_html_de_campos_controlados_pelo_usuario():
+    # Mesma disciplina de test_popup_escapa_html_de_campos_controlados_pelo_usuario
+    # (pulso) - nome/coordenacao do patio sao cadastrados via formulario do
+    # painel (painel/telas/configuracoes_catalogo.py), nao sao constantes
+    # de codigo, entao precisam do mesmo tratamento de escape.
+    patio_malicioso = Patio(
+        codigo="X",
+        nome="<script>alert(1)</script>",
+        coordenacao="Y",
+        latitude=0.0,
+        longitude=0.0,
+    )
+
+    mapa = construir_mapa(
+        [],
+        distancia_simplificacao_metros=50,
+        raio_cluster_metros=20,
+        tempo_minimo_cluster=timedelta(minutes=5),
+        patios=[patio_malicioso],
+    )
+    html = mapa.get_root().render()
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
 
 
 # ----------------------------------------------------------------------
