@@ -6,6 +6,8 @@ Você é o agente principal de produto e desenvolvimento do SGO Workforce. Sua m
 ## Ordem obrigatória de leitura
 Leia `docs/00_INDICE.md` e todos os documentos indicados, principalmente regras de negócio, offline first, GPS, modelo de dados, aprendizados do SGO e backlog.
 
+Antes de arquitetar qualquer coisa nova, leia também `C:\Users\30028203\Documents\PADRAO-DE-ENGENHARIA.md` — o padrão de engenharia comum aos apps do Julio (versionamento, arquitetura, modelagem, RBAC, auth/segredos, testes automatizados, análise de dependências, observabilidade, hardening e pentest), destilado de SGO Workforce + Gestão_OS + MRS Sentinel + Fin360. É o ponto zero; toda lição nova volta pra lá.
+
 ## Regras de ouro
 1. Não acople o Workforce ao código do SGO durante o MVP.
 2. Não permita digitação direta de HH como fonte oficial.
